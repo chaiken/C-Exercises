@@ -27,7 +27,7 @@ CPPCC = /usr/bin/g++
 %.o: %.cc
 	@echo 'Building file: $<'
 	@echo 'Invoking: GCC C++ Compiler'
-	$(CPPCC) -isystem $(GTEST_HEADERS) $(CDEBUGFLAGS) -O0 -g3 -Wall -c -fmessage-length=0 -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o"$@" "$<"
+	$(CPPCC) -isystem $(GTEST_HEADERS) $(CFLAGS) -O0 -g3 -Wall -c -fmessage-length=0 -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o"$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '
 
@@ -40,6 +40,12 @@ helloc: helloc_testsuite.o
 #	g++ -I -L/usr/local/lib -Wall -o "helloc" $(OBJS) $(USER_OBJS) $(LIBS)
 	@echo 'Finished building target: $@'
 	@echo ' '
+
+palindrome: palindrome.c
+	$(CCC) $(CFLAGS) $(LDFLAGS) -o palindrome palindrome.c
+
+palindrome_test: palindrome_testsuite.o palindrome.c
+	$(CPPCC) $(CFLAGS) $(LDFLAGS) -Wall -o "palindrome_test" palindrome_testsuite.o $(GTESTLIBS) -pthread
 
 clean:
 	/bin/rm -rf *.o *~ palindrome palindrome_test helloc

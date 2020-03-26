@@ -1,0 +1,6 @@
+Here are some C programs written as coding exercises.  The mechanism
+for invoking googletest unit tests is copied from Mike Long's work at
+
+https://github.com/meekrosoft
+
+The C/C++ code is my own work unless noted otherwise.

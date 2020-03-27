@@ -20,7 +20,7 @@
 #include "gtest/gtest.h"
 // For EXPECT_EXIT and EXPECT_FATAL_FAILURE, as suggested in
 // googletest/googletest/docs/advanced.md.
-#include "gtest/gtest-si.h"
+#include "gtest/gtest-spi.h"
 #include <sys/time.h>
 
 using namespace std;
@@ -61,10 +61,10 @@ void print_list(struct node *list) {
     return;
   }
   while (list) {
-    printf("%c", list->data);
+    cout << list->data;
     list = list->next;
   }
-  printf("\n");
+  cout << endl;
 }
 
 /* Opaque so that it can change. */
@@ -73,9 +73,9 @@ int stack_depth() { return charstack.HEAD; }
 void print_stack() {
   int top = charstack.HEAD;
   while (0 <= top) {
-    printf("%c ", charstack.data[top--]);
+    cout << charstack.data[top--] << " ";
   }
-  printf("\n");
+  cout << endl;
 }
 
 class ListTest : public ::testing::Test {
@@ -187,48 +187,119 @@ TEST_F(StackTest, pop_push_test) {
   EXPECT_FALSE(stack_is_empty());
 }
 
-TEST_F(StackTest, process_list) {
-  struct node *middle = process_list(six_list);
+TEST_F(StackTest, list_to_stack) {
+  struct node *middle = list_to_stack(six_list);
   EXPECT_EQ(3, stack_depth());
   EXPECT_EQ('d', middle->data);
   EXPECT_EQ('c', pop());
 
-  middle = process_list(five_list);
+  middle = list_to_stack(five_list);
   EXPECT_EQ(3, stack_depth());
   EXPECT_EQ('c', middle->data);
   EXPECT_EQ('c', pop());
 
-  middle = process_list(four_list);
+  middle = list_to_stack(four_list);
   EXPECT_EQ(2, stack_depth());
   EXPECT_EQ('c', middle->data);
   EXPECT_EQ('b', pop());
 
-  middle = process_list(three_list);
+  middle = list_to_stack(three_list);
   EXPECT_EQ(2, stack_depth());
   EXPECT_EQ('b', middle->data);
   EXPECT_EQ('b', pop());
 
-  middle = process_list(two_list);
+  middle = list_to_stack(two_list);
   EXPECT_EQ(1, stack_depth());
   EXPECT_EQ('b', middle->data);
   EXPECT_EQ('b', pop());
 
-  middle = process_list(one_list);
+  middle = list_to_stack(one_list);
   EXPECT_EQ(1, stack_depth());
   EXPECT_EQ('a', middle->data);
   EXPECT_EQ('a', pop());
 
-  middle = process_list(empty_list);
+  middle = list_to_stack(empty_list);
   EXPECT_EQ(0, stack_depth());
 }
 
-TEST(PalindromeTest, is_palindrome) {
+TEST_F(StackTest, split_and_partially_reverse_list) {
+  char first[MAXLEN], second[MAXLEN];
+  strncpy(first, "", 1);
+  strncpy(second, "", 1);
+
+  split_and_partially_reverse_list(six_list, first, second);
+  cout << endl << "6: first: " << first << " second: " << second << endl;
+  EXPECT_EQ(3, strlen(first));
+  EXPECT_EQ(3, strlen(second));
+  strncpy(first, "", 1);
+  strncpy(second, "", 1);
+
+  split_and_partially_reverse_list(five_list, first, second);
+  cout << endl << "5: first: " << first << " second: " << second << endl;
+  EXPECT_EQ(3, strlen(first));
+  EXPECT_EQ(3, strlen(second));
+  strncpy(first, "", 1);
+  strncpy(second, "", 1);
+
+  split_and_partially_reverse_list(four_list, first, second);
+  cout << endl << "4: first: " << first << " second: " << second << endl;
+  EXPECT_EQ(2, strlen(first));
+  EXPECT_EQ(2, strlen(second));
+  strncpy(first, "", 1);
+  strncpy(second, "", 1);
+
+  split_and_partially_reverse_list(three_list, first, second);
+  cout << endl << "3: first: " << first << " second: " << second << endl;
+  EXPECT_EQ(2, strlen(first));
+  EXPECT_EQ(2, strlen(second));
+  strncpy(first, "", 1);
+  strncpy(second, "", 1);
+
+  split_and_partially_reverse_list(two_list, first, second);
+  cout << endl << "2: first: " << first << " second: " << second << endl;
+  EXPECT_EQ(1, strlen(first));
+  EXPECT_EQ(1, strlen(second));
+  strncpy(first, "", 1);
+  strncpy(second, "", 1);
+
+  split_and_partially_reverse_list(one_list, first, second);
+  cout << endl << "1: first: " << first << " second: " << second << endl;
+  EXPECT_EQ(1, strlen(first));
+  EXPECT_EQ(1, strlen(second));
+  strncpy(first, "", 1);
+  strncpy(second, "", 1);
+
+  split_and_partially_reverse_list(empty_list, first, second);
+  cout << endl << "empty: first: " << first << " second: " << second << endl;
+  EXPECT_EQ(0, strlen(first));
+  EXPECT_EQ(0, strlen(second));
+}
+
+TEST(PalindromeTest, is_palindrome_stack) {
   bool answers[SIZE];
   int i = 0;
   for (auto thisstring : teststring) {
     struct node *this_list = make_list(thisstring);
-    struct node *middle = process_list(this_list);
-    answers[i++] = is_palindrome(middle);
+    struct node *middle = list_to_stack(this_list);
+    answers[i++] = is_palindrome_stack(middle);
+    delete_list(this_list);
+  }
+  EXPECT_TRUE(answers[0]);
+  EXPECT_TRUE(answers[1]);
+  EXPECT_TRUE(answers[2]);
+  EXPECT_FALSE(answers[3]);
+  EXPECT_FALSE(answers[4]);
+}
+
+TEST(PalindromeTest, is_palindrome_arrays) {
+  bool answers[SIZE];
+  int i = 0;
+  for (auto thisstring : teststring) {
+    struct node *this_list = make_list(thisstring);
+    char first[MAXLEN], second[MAXLEN];
+
+    split_and_partially_reverse_list(this_list, first, second);
+    answers[i++] = is_palindrome_arrays(first, second);
     delete_list(this_list);
   }
   EXPECT_TRUE(answers[0]);

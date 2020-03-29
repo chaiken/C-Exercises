@@ -6,7 +6,10 @@
  *	Contents: Determine if a given sequence of single-character           *
  *		  values stored in a singly-linked list is a palindrome.      *
  *		  Problem and stack approach to solution suggested by         *
- *		  Rizavan Sipai.  "man string" is original work.              *
+ *		  Rizavan Sipai.  "man string" approach is original work.     *
+ *                The string approach is about 15% faster, but the stack      *
+ *                approach is adaptable to other data types and is thus       *
+ *                more reusable.
  *									      *
  *	Copyright (c) 2020 Alison Chaiken.				      *
  *       License: GPLv2 or later.                                             *

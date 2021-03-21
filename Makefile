@@ -12,9 +12,9 @@ CBASICFLAGS = -O0 -fno-inline -g -ggdb -Wall -Wextra -fsanitize=address,undefine
 CFLAGS = $(CBASICFLAGS) -isystem $(GTEST_DIR)/include
 CDEBUGFLAGS = $(CFLAGS) -DDEBUG=1
 
-GTEST_DIR = $(HOME)/gitsrc/googletest/googletest
-GTEST_HEADERS = $(GTEST_DIR)/include
-GTESTLIBPATH=$(GTEST_DIR)/make
+GTEST_DIR = $(HOME)/gitsrc/googletest
+GTEST_HEADERS = $(GTEST_DIR)/googletest/include
+GTESTLIBPATH=$(GTEST_DIR)/build/lib
 GTESTLIBS = $(GTESTLIBPATH)/libgtest.a $(GTESTLIBPATH)/libgtest_main.a
 LDBASICFLAGS= -g -fsanitize=address,undefined -lpthread
 LDFLAGS= $(LDBASICFLAGS) -L$(GTESTLIBPATH)

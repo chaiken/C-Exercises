@@ -9,6 +9,7 @@
 ###############################################################################
 
 CBASICFLAGS = -O0 -fno-inline -g -ggdb -Wall -Wextra -fsanitize=address,undefined
+CVALGRINDFLAGS = -O0 -fno-inline -g -ggdb -Wall -Wextra
 CFLAGS = $(CBASICFLAGS) -isystem $(GTEST_DIR)/include
 CDEBUGFLAGS = $(CFLAGS) -DDEBUG=1
 
@@ -17,6 +18,7 @@ GTEST_HEADERS = $(GTEST_DIR)/googletest/include
 GTESTLIBPATH=$(GTEST_DIR)/build/lib
 GTESTLIBS = $(GTESTLIBPATH)/libgtest.a $(GTESTLIBPATH)/libgtest_main.a
 LDBASICFLAGS= -g -fsanitize=address,undefined -lpthread
+LDVALGRINDFLAGS= -g
 LDFLAGS= $(LDBASICFLAGS) -L$(GTESTLIBPATH)
 LDDEBUGFLAGS = $(LDFLAGS) -DDEBUG=1
 
@@ -46,6 +48,18 @@ palindrome: palindrome.c
 
 palindrome_test: palindrome_testsuite.o palindrome.c
 	$(CPPCC) $(CFLAGS) $(LDFLAGS) -Wall -o "palindrome_test" palindrome_testsuite.o $(GTESTLIBS) -pthread
+
+kernel-doubly-linked-macros: kernel-doubly-linked-macros.c
+	$(CCC) $(CFLAGS) $(LDFLAGS) -o kernel-doubly-linked-macros kernel-doubly-linked-macros.c
+
+kernel-doubly-linked-macros-valgrind: kernel-doubly-linked-macros.c
+	$(CCC) $(CVALGRINDFLAGS) $(LDVALGRINDFLAGS) -o kernel-doubly-linked-macros-valgrind kernel-doubly-linked-macros.c
+
+kernel-hlist-macros: kernel-hlist-macros.c
+	$(CCC) $(CFLAGS) $(LDFLAGS) -o kernel-hlist-macros kernel-hlist-macros.c
+
+kernel-hlist-macros-valgrind: kernel-hlist-macros.c
+	$(CCC) $(CVALGRINDFLAGS) $(LDVALGRINDFLAGS) -o kernel-hlist-macros-valgrind kernel-hlist-macros.c
 
 clean:
 	/bin/rm -rf *.o *~ palindrome palindrome_test helloc

@@ -21,6 +21,8 @@ LDBASICFLAGS= -g -fsanitize=address,undefined -lpthread
 LDVALGRINDFLAGS= -g
 LDFLAGS= $(LDBASICFLAGS) -L$(GTESTLIBPATH)
 LDDEBUGFLAGS = $(LDFLAGS) -DDEBUG=1
+#https://gist.github.com/kwk/4171e37f4bcdf7705329
+#ASAN_SYMBOLIZER_PATH=/usr/bin/llvm-symbolizer
 
 CCC = /usr/bin/gcc
 CPPCC = /usr/bin/g++
@@ -54,12 +56,7 @@ kernel-doubly-linked-macros: kernel-doubly-linked-macros.c
 
 kernel-doubly-linked-macros-valgrind: kernel-doubly-linked-macros.c
 	$(CCC) $(CVALGRINDFLAGS) $(LDVALGRINDFLAGS) -o kernel-doubly-linked-macros-valgrind kernel-doubly-linked-macros.c
-
-kernel-hlist-macros: kernel-hlist-macros.c
-	$(CCC) $(CFLAGS) $(LDFLAGS) -o kernel-hlist-macros kernel-hlist-macros.c
-
-kernel-hlist-macros-valgrind: kernel-hlist-macros.c
-	$(CCC) $(CVALGRINDFLAGS) $(LDVALGRINDFLAGS) -o kernel-hlist-macros-valgrind kernel-hlist-macros.c
+	valgrind kernel-doubly-linked-macros-valgrind
 
 clean:
 	/bin/rm -rf *.o *~ palindrome palindrome_test helloc

@@ -45,9 +45,6 @@ helloc: helloc_testsuite.o
 	@echo 'Finished building target: $@'
 	@echo ' '
 
-palindrome: palindrome.c
-	$(CCC) $(CFLAGS) $(LDFLAGS) -o palindrome palindrome.c
-
 palindrome_test: palindrome_testsuite.o palindrome.c
 	$(CPPCC) $(CFLAGS) $(LDFLAGS) -Wall -o "palindrome_test" palindrome_testsuite.o $(GTESTLIBS) -pthread
 
@@ -57,6 +54,10 @@ kernel-doubly-linked-macros: kernel-doubly-linked-macros.c
 kernel-doubly-linked-macros-valgrind: kernel-doubly-linked-macros.c
 	$(CCC) $(CVALGRINDFLAGS) $(LDVALGRINDFLAGS) -o kernel-doubly-linked-macros-valgrind kernel-doubly-linked-macros.c
 	valgrind kernel-doubly-linked-macros-valgrind
+
+reverse-list-valgrind: reverse-list.c
+	$(CCC) $(CVALGRINDFLAGS) $(LDVALGRINDFLAGS) -o reverse-list-valgrind reverse-list.c
+	valgrind reverse-list-valgrind
 
 clean:
 	/bin/rm -rf *.o *~ palindrome palindrome_test helloc

@@ -59,5 +59,12 @@ reverse-list-valgrind: reverse-list.c
 	$(CCC) $(CVALGRINDFLAGS) $(LDVALGRINDFLAGS) -o reverse-list-valgrind reverse-list.c
 	valgrind reverse-list-valgrind
 
+matrix-determinant: matrix-determinant.c
+	$(CCC) $(CFLAGS) $(LDFLAGS) -o matrix-determinant matrix-determinant.c -lm
+
+matrix-determinant-valgrind: matrix-determinant.c
+	$(CCC) $(CVALGRINDFLAGS) $(LDVALGRINDFLAGS) -o matrix-determinant-valgrind matrix-determinant.c -lm
+	valgrind matrix-determinant-valgrind
+
 clean:
 	/bin/rm -rf *.o *~ palindrome palindrome_test helloc

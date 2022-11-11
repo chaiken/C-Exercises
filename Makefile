@@ -55,6 +55,9 @@ kernel-doubly-linked-macros-valgrind: kernel-doubly-linked-macros.c
 	$(CCC) $(CVALGRINDFLAGS) $(LDVALGRINDFLAGS) -o kernel-doubly-linked-macros-valgrind kernel-doubly-linked-macros.c
 	valgrind kernel-doubly-linked-macros-valgrind
 
+reverse-list_test: reverse-list_testsuite.o reverse-list.c
+	$(CPPCC) $(CFLAGS) $(LDFLAGS) -Wall -o reverse-list_test reverse-list_testsuite.o $(GTESTLIBS)
+
 reverse-list-valgrind: reverse-list.c
 	$(CCC) $(CVALGRINDFLAGS) $(LDVALGRINDFLAGS) -o reverse-list-valgrind reverse-list.c
 	valgrind reverse-list-valgrind

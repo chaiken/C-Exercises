@@ -1,18 +1,16 @@
 #include <assert.h>
 #include <errno.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#define DEBUG
 
 /* The maximum number of characters in a name is MAXNAME-1.*/
 #define MAXNAME 32u
 
 #define LISTLEN 8u
-const char *namelist[LISTLEN] = {
-    "it", "turns", "out", "that", "you", "have", "our", "oil",
-};
+const char *namelist[LISTLEN] = {"it",  "turns", "out", "that",
+                                 "you", "have",  "our", "oil"};
 
 struct node {
   char *name;
@@ -32,7 +30,8 @@ struct node *alloc_node(const char *name) {
 
   size_t namelen = (strlen(name) < (MAXNAME - 1)) ? strlen(name) : MAXNAME - 1;
   if (!namelen) {
-    perror("Empty name\n");
+    free(newnode);
+    printf("Empty name not allowed.\n");
     return NULL;
   }
   if (namelen < strlen(name)) {
@@ -83,7 +82,8 @@ void reverse_list(struct node **headp) {
     return;
   }
   struct node *cursor = (*headp)->next;
-  /* Prevent a loop at the end of the list, which is needed since only HEAD is not prepended.*/
+  /* Prevent a loop at the end of the list, which is needed since only HEAD is
+   * not prepended.*/
   (*headp)->next = NULL;
   while (cursor) {
     /* Save the value of the next pointer of the node to be prepended. */
@@ -94,11 +94,12 @@ void reverse_list(struct node **headp) {
   }
 }
 
-/* Create nodes from each successive name in the array, prepending them to the HEAD node. */
-struct node *create_list() {
+/* Create nodes from each successive name in the array, prepending them to the
+ * HEAD node. */
+struct node *create_list(const char *charlist[], size_t len) {
   struct node *headp = NULL;
-  for (int i = 0; i < (int)LISTLEN; i++) {
-    struct node *newnode = alloc_node(namelist[i]);
+  for (int i = 0; i < (int)len; i++) {
+    struct node *newnode = alloc_node(charlist[i]);
     if (!newnode) {
       exit(EXIT_FAILURE);
     }
@@ -107,9 +108,10 @@ struct node *create_list() {
   return headp;
 }
 
-/* Delete nodes following HEAD one-by-one, then delete HEAD when end of list is reached. */
+/* Delete nodes following HEAD one-by-one, then delete HEAD when end of list is
+ * reached. */
 void delete_list(struct node **headp) {
-  if (!headp) {
+  if ((!headp) || (!(*headp))) {
     return;
   }
   struct node *cursor = (*headp)->next;
@@ -121,8 +123,56 @@ void delete_list(struct node **headp) {
   delete_node(headp);
 }
 
+bool are_equal(const struct node *alist, const struct node *blist) {
+  if ((NULL == alist) || (NULL == blist)) {
+    return false;
+  }
+  struct node *copya = alloc_node(alist->name);
+  struct node *savea = copya;
+  if (NULL == copya) {
+    perror(strerror(ENOMEM));
+    exit(EXIT_FAILURE);
+  }
+  copya->next = alist->next;
+  struct node *copyb = alloc_node(blist->name);
+  struct node *saveb = copyb;
+  if (NULL == copyb) {
+    free(copya);
+    perror(strerror(ENOMEM));
+    exit(EXIT_FAILURE);
+  }
+  copyb->next = blist->next;
+  while (copya != NULL) {
+    if (NULL == copyb) {
+      goto falseout;
+    }
+    if (strcmp(copya->name, copyb->name)) {
+      goto falseout;
+    }
+    copya = copya->next;
+    copyb = copyb->next;
+  }
+  // copya is shorter.
+  if (copyb != NULL) {
+    goto falseout;
+  }
+  free(savea->name);
+  free(savea);
+  free(saveb->name);
+  free(saveb);
+  return true;
+falseout:
+  free(saveb->name);
+  free(saveb);
+  free(savea->name);
+  free(savea);
+  return false;
+}
+
+#ifndef TESTING
+
 int main(void) {
-  struct node *HEAD = create_list();
+  struct node *HEAD = create_list(namelist, LISTLEN);
   assert(NULL != HEAD);
   assert(LISTLEN == count_nodes(HEAD));
   reverse_list(&HEAD);
@@ -132,3 +182,5 @@ int main(void) {
   assert(0U == count_nodes(HEAD));
   exit(EXIT_SUCCESS);
 }
+
+#endif

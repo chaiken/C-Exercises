@@ -15,21 +15,17 @@ const char *reversed_namelist[LISTLEN] = {"oil",  "our", "have",  "you",
 struct ReverseListTest : public ::testing::Test {
   ReverseListTest()
       : alist(create_list(namelist, LISTLEN)),
-        reversed(create_list(reversed_namelist, LISTLEN)) {
-    savea = alist;
-    saver = reversed;
-  }
-
+        reversed(create_list(reversed_namelist, LISTLEN)) {}
   ~ReverseListTest() {
-    delete_list(&savea);
-    delete_list(&saver);
+    delete_list(&alist);
+    delete_list(&reversed);
   }
-
-  struct node *alist, *reversed, *savea, *saver;
+  struct node *alist, *reversed;
 };
 
 TEST_F(ReverseListTest, CreationIsCorrect) {
   size_t ctr = 0U;
+  struct node *const savea = alist;
   // The prepend()-based method of creating the list results in reversal.
   for (const char *name : reversed_namelist) {
     EXPECT_EQ(0, strcmp(name, alist->name));
@@ -37,6 +33,8 @@ TEST_F(ReverseListTest, CreationIsCorrect) {
     ctr++;
   }
   EXPECT_EQ(ctr, LISTLEN);
+  // Restore for the dtor.
+  alist = savea;
 }
 
 TEST_F(ReverseListTest, AreEqual) {
@@ -51,4 +49,16 @@ TEST_F(ReverseListTest, DoubleReverseIsIdempotent) {
   EXPECT_TRUE(are_equal(reversed, alist));
   reverse_list(&alist);
   EXPECT_FALSE(are_equal(reversed, alist));
+}
+
+TEST_F(ReverseListTest, CountNodes) { EXPECT_EQ(LISTLEN, count_nodes(alist)); }
+
+TEST_F(ReverseListTest, DeletedList) {
+  delete_list(&alist);
+  EXPECT_EQ(0, count_nodes(alist));
+}
+
+TEST_F(ReverseListTest, DeletedNode) {
+  relink_and_delete_node(alist);
+  EXPECT_EQ(LISTLEN - 1, count_nodes(alist));
 }

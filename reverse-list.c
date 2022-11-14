@@ -48,6 +48,15 @@ void delete_node(struct node **oldnode) {
   *oldnode = NULL;
 }
 
+void relink_and_delete_node(struct node *parent) {
+  if ((!parent) || (!parent->next)) {
+    return;
+  }
+  struct node *to_delete = parent->next;
+  parent->next = parent->next->next;
+  delete_node(&to_delete);
+}
+
 struct node *prepend_node(struct node *prepended, struct node *headp) {
   if (!prepended) {
     return headp;
@@ -128,14 +137,14 @@ bool are_equal(const struct node *alist, const struct node *blist) {
     return false;
   }
   struct node *copya = alloc_node(alist->name);
-  struct node *savea = copya;
+  struct node *const savea = copya;
   if (NULL == copya) {
     perror(strerror(ENOMEM));
     exit(EXIT_FAILURE);
   }
   copya->next = alist->next;
   struct node *copyb = alloc_node(blist->name);
-  struct node *saveb = copyb;
+  struct node *const saveb = copyb;
   if (NULL == copyb) {
     free(copya);
     perror(strerror(ENOMEM));

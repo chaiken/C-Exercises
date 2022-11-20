@@ -59,6 +59,6 @@ TEST_F(ReverseListTest, DeletedList) {
 }
 
 TEST_F(ReverseListTest, DeletedNode) {
-  relink_and_delete_node(alist);
+  relink_and_delete_successor(alist);
   EXPECT_EQ(LISTLEN - 1, count_nodes(alist));
 }

@@ -48,7 +48,7 @@ void delete_node(struct node **oldnode) {
   *oldnode = NULL;
 }
 
-void relink_and_delete_node(struct node *parent) {
+void relink_and_delete_successor(struct node *parent) {
   if ((!parent) || (!parent->next)) {
     return;
   }

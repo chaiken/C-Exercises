@@ -184,11 +184,27 @@ int main(void) {
   struct node *HEAD = create_list(namelist, LISTLEN);
   assert(NULL != HEAD);
   assert(LISTLEN == count_nodes(HEAD));
+
   reverse_list(&HEAD);
   assert(LISTLEN == count_nodes(HEAD));
+
+  relink_and_delete_successor(HEAD);
+  assert(LISTLEN - 1 == count_nodes(HEAD));
+
   delete_list(&HEAD);
   assert(NULL == HEAD);
   assert(0U == count_nodes(HEAD));
+
+  HEAD = create_list(namelist, LISTLEN);
+  struct node *HEAD2 = create_list(namelist, LISTLEN);
+  assert(are_equal(HEAD, HEAD2));
+
+  struct node *anode = alloc_node("!");
+  HEAD2 = prepend_node(anode, HEAD2);
+  assert(!are_equal(HEAD, HEAD2));
+  delete_list(&HEAD);
+  delete_list(&HEAD2);
+
   exit(EXIT_SUCCESS);
 }
 

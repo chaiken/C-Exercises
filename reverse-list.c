@@ -133,6 +133,9 @@ void delete_list(struct node **headp) {
 }
 
 bool are_equal(const struct node *alist, const struct node *blist) {
+  if ((NULL == alist) && (NULL == blist)) {
+    return true;
+  }
   if ((NULL == alist) || (NULL == blist)) {
     return false;
   }

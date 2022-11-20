@@ -23,6 +23,18 @@ struct ReverseListTest : public ::testing::Test {
   struct node *alist, *reversed;
 };
 
+TEST(SimpleListTest, EmptyInput) {
+  struct node *HEAD = create_list(NULL, 0);
+  EXPECT_EQ(NULL, HEAD);
+  EXPECT_EQ(0U, count_nodes(HEAD));
+  reverse_list(&HEAD);
+  EXPECT_TRUE(are_equal(NULL, HEAD));
+  relink_and_delete_successor(HEAD);
+  EXPECT_TRUE(are_equal(NULL, HEAD));
+  struct node *HEAD2 = create_list(namelist, 0);
+  EXPECT_TRUE(are_equal(HEAD2, HEAD));
+}
+
 TEST_F(ReverseListTest, CreationIsCorrect) {
   size_t ctr = 0U;
   struct node *const savea = alist;

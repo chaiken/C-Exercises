@@ -2,6 +2,7 @@
 
 #include <assert.h>
 #include <math.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -59,9 +60,24 @@ double determinant() {
   return sum;
 }
 
+bool are_equal(const double (*mat1)[SIZE], const double (*mat2)[SIZE]) {
+  for (int i = 0; i < SIZE; i++) {
+    for (int j = 0; j < SIZE; j++) {
+      if (mat1[i][j] != mat2[i][j]) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+#ifndef TESTING
+
 /* det = 0*(4*8 - 4*14)  - 2*(6*8 - 6*10) + 2*(6*14 - 4*6) = 24 + 120 = 144
  */
 int main(void) {
   assert(144.0 == determinant());
   exit(EXIT_SUCCESS);
 }
+
+#endif

@@ -8,7 +8,7 @@
 ##	$Log$								     ##
 ###############################################################################
 
-CBASICFLAGS = -O0 -fno-inline -g -ggdb -Wall -Wextra -fsanitize=address,undefined
+CBASICFLAGS = -O0 -fno-inline -g -ggdb -Wall -Wextra -fsanitize=address,undefined -Werror
 CVALGRINDFLAGS = -O0 -fno-inline -g -ggdb -Wall -Wextra
 CFLAGS = $(CBASICFLAGS) -isystem $(GTEST_DIR)/include
 CDEBUGFLAGS = $(CFLAGS) -DDEBUG=1
@@ -69,5 +69,9 @@ matrix-determinant-valgrind: matrix-determinant.c
 	$(CCC) $(CVALGRINDFLAGS) $(LDVALGRINDFLAGS) -o matrix-determinant-valgrind matrix-determinant.c -lm
 	valgrind matrix-determinant-valgrind
 
+matrix-determinant_test: matrix-determinant_testsuite.o matrix-determinant.c
+	$(CPPCC) $(CFLAGS) $(LDFLAGS) -Wall -o matrix-determinant_test matrix-determinant_testsuite.o $(GTESTLIBS)
+
 clean:
 	/bin/rm -rf *.o *~ palindrome palindrome_test helloc
+

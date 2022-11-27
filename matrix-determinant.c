@@ -61,6 +61,15 @@ double determinant() {
 }
 
 bool are_equal(const double (*mat1)[SIZE], const double (*mat2)[SIZE]) {
+  /*
+Fails to have intended effect since the function receives a SIZExSIZE object no
+matter what is is passed.
+clang-format off
+  if ((SIZE*SIZE != (sizeof(mat1)/sizeof(double))) || (SIZE*SIZE !=
+(sizeof(mat2)/sizeof(double)))) { return false;
+  }
+clang-format on
+  */
   for (int i = 0; i < SIZE; i++) {
     for (int j = 0; j < SIZE; j++) {
       if (mat1[i][j] != mat2[i][j]) {

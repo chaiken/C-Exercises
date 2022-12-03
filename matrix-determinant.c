@@ -55,7 +55,16 @@ double determinant(const double (*source)[SIZE]) {
   return sum;
 }
 
-bool are_equal(const double (*mat1)[SIZE], const double (*mat2)[SIZE]) {
+bool vector_are_equal(const double *mat1, const double *mat2, size_t len) {
+  while (len--) {
+    if (*mat1 != *mat2) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool square_are_equal(const double (*mat1)[SIZE], const double (*mat2)[SIZE]) {
   /*
 Fails to have intended effect since the function receives a SIZExSIZE object no
 matter what is is passed.

@@ -60,6 +60,8 @@ bool vector_are_equal(const double *mat1, const double *mat2, size_t len) {
     if (*mat1 != *mat2) {
       return false;
     }
+    mat1++;
+    mat2++;
   }
   return true;
 }

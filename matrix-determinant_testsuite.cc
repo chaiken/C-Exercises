@@ -29,7 +29,7 @@ TEST(SimpleMatrixTest, Equality) {
 
 TEST(SimpleMatrixTest, Submatrix) {
   double upperleft[] = {0, 0, 0, 0};
-  get_submatrix(upperleft, SIZE - 1, SIZE - 1, test_matrix);
+  ASSERT_EQ(0, get_submatrix(upperleft, SIZE - 1, SIZE - 1, test_matrix));
   const double ans[]{
       test_matrix[0][0],
       test_matrix[0][1],
@@ -41,7 +41,12 @@ TEST(SimpleMatrixTest, Submatrix) {
   double middle[] = {0, 0, 0, 0};
   const double ans2[]{test_matrix[0][0], test_matrix[0][2], test_matrix[2][0],
                       test_matrix[2][2]};
-  get_submatrix(middle, 1, 1, test_matrix);
+  ASSERT_EQ(0, get_submatrix(middle, 1, 1, test_matrix));
   EXPECT_FALSE(vector_are_equal(upperleft, ans2, 4U));
   EXPECT_TRUE(vector_are_equal(middle, ans2, 4U));
+}
+
+TEST(SimpleMatrixTest, SubmatrixBadInput) {
+  double submatrix[] = {0, 0, 0, 0};
+  EXPECT_EQ(-EINVAL, get_submatrix(submatrix, -1, SIZE - 1, test_matrix));
 }

@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define SIZE 3
 
@@ -19,9 +20,19 @@ int find_column_index(const double *elementp, const double (*source)[SIZE]) {
   return (offset % SIZE);
 }
 
+bool bounds_ok(const int i) {
+  return ((i < 0) || (i > (SIZE - 1))) ? false : true;
+}
+
 /* Change the value of  what submatrix points to, not the submatrix pointer. */
-void get_submatrix(double *submatrix, const int excluded_row,
-                   const int excluded_column, const double (*source)[SIZE]) {
+int get_submatrix(double *submatrix, const int excluded_row,
+                  const int excluded_column, const double (*source)[SIZE]) {
+  /* Without this check, invalid input would cause submatrix pointer to  iterate
+   * past array end. */
+  if (!bounds_ok(excluded_row) || !bounds_ok(excluded_column)) {
+    fprintf(stderr, "%s: excluded row or column.\n", strerror(EINVAL));
+    return -EINVAL;
+  }
   for (int i = 0; i < SIZE; i++) {
     for (int j = 0; j < SIZE; j++) {
       if ((excluded_row == i) || (excluded_column == j)) {
@@ -31,6 +42,7 @@ void get_submatrix(double *submatrix, const int excluded_row,
       submatrix++;
     }
   }
+  return 0;
 }
 
 /* For the 2x2 matrix,
@@ -49,7 +61,9 @@ double determinant(const double (*source)[SIZE]) {
   for (int j = 0; j < SIZE; j++) {
     //  Flatten the 2x2 submatrix for convenience.
     double submatrix[4] = {0, 0, 0, 0};
-    get_submatrix(submatrix, 0, j, source);
+    if (get_submatrix(submatrix, 0, j, source)) {
+      return NAN;
+    }
     sum += pow(-1.0, j) * source[0][j] * submatrix_determinant(submatrix);
   }
   return sum;

@@ -1,6 +1,7 @@
 /* Calculate the determinant of a random 3x3 matrix. */
 
 #include <assert.h>
+#include <errno.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -69,6 +70,7 @@ double determinant(const double (*source)[SIZE]) {
   return sum;
 }
 
+// Compare two row or column vectors for equality, returning TRUE if they are empty.
 bool vector_are_equal(const double *mat1, const double *mat2, size_t len) {
   while (len--) {
     if (*mat1 != *mat2) {

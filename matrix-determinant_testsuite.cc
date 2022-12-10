@@ -27,16 +27,24 @@ TEST(SimpleMatrixTest, Equality) {
   ASSERT_FALSE(square_are_equal(test_matrix2, test_matrix3));
 }
 
-TEST(SimpleMatrixTest, Submatrix) {
+TEST(SimpleMatrixTest, VectorAreEqual) {
   double upperleft[] = {0, 0, 0, 0};
-  ASSERT_EQ(0, get_submatrix(upperleft, SIZE - 1, SIZE - 1, test_matrix));
   const double ans[]{
       test_matrix[0][0],
       test_matrix[0][1],
       test_matrix[1][0],
       test_matrix[1][1],
   };
-  EXPECT_TRUE(vector_are_equal(upperleft, ans, 4U));
+  EXPECT_FALSE(vector_are_equal(upperleft, ans, 4U));
+  EXPECT_FALSE(const_vector_are_equal(upperleft, ans, 4U));
+  // Performs no comparisons: empty matrices are equal.
+  EXPECT_TRUE(vector_are_equal(upperleft, ans, 0U));
+  EXPECT_TRUE(const_vector_are_equal(upperleft, ans, 0U));
+}
+
+TEST(SimpleMatrixTest, Submatrix) {
+  double upperleft[] = {0, 0, 0, 0};
+  ASSERT_EQ(0, get_submatrix(upperleft, SIZE - 1, SIZE - 1, test_matrix));
 
   double middle[] = {0, 0, 0, 0};
   const double ans2[]{test_matrix[0][0], test_matrix[0][2], test_matrix[2][0],

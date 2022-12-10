@@ -70,7 +70,8 @@ double determinant(const double (*source)[SIZE]) {
   return sum;
 }
 
-// Compare two row or column vectors for equality, returning TRUE if they are empty.
+// Compare two row or column vectors for equality, returning TRUE if they are
+// empty.
 bool vector_are_equal(const double *mat1, const double *mat2, size_t len) {
   while (len--) {
     if (*mat1 != *mat2) {
@@ -78,6 +79,21 @@ bool vector_are_equal(const double *mat1, const double *mat2, size_t len) {
     }
     mat1++;
     mat2++;
+  }
+  return true;
+}
+
+// Constant pointers can be iterated via copies.
+bool const_vector_are_equal(const double *const mat1, const double *const mat2,
+                            size_t len) {
+  const double *cursor1 = mat1;
+  const double *cursor2 = mat2;
+  while (len--) {
+    if (*cursor1 != *cursor2) {
+      return false;
+    }
+    cursor1++;
+    cursor2++;
   }
   return true;
 }

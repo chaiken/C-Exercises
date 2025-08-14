@@ -27,7 +27,14 @@
 #define MAXTOKENS 256
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 
-enum token_class { delimiter = 1, type, qualifier, identifier };
+
+const char delimiters[] = {'(', ')', '[', ']', '{', '}', ','};
+const char *types[] = {"char", "short",  "unsigned", "int",   "float", "double",
+                   "long", "struct", "enum",     "union", "void"};
+const char *qualifiers[] = {"const",  "register", "volatile",
+                        "static", "*",        "extern"};
+
+enum token_class { invalid = 0, delimiter, type, qualifier, identifier };
 
 struct token {
   enum token_class kind;
@@ -35,7 +42,7 @@ struct token {
 };
 
 struct token stack[MAXTOKENS];
-struct token this;
+struct token this_token;
 
 void usage(void) {
   printf("cdecl prints out the English language form of a C declaration.\n");
@@ -55,20 +62,15 @@ void usage(void) {
 }
 
 enum token_class get_kind(const char *intoken) {
-
-  char *delimiters[] = {"(", ")", "[", "]", "{", "}", ","};
-  char *types[] = {"char", "short",  "unsigned", "int",   "float", "double",
-                   "long", "struct", "enum",     "union", "void"};
-  char *qualifiers[] = {"const",  "register", "volatile",
-                        "static", "*",        "extern"};
   size_t numel = 0, ctr;
 
   assert(intoken);
 
   numel = ARRAY_SIZE(delimiters);
   for (ctr = 0; ctr < numel; ctr++) {
-    if (!strcmp(intoken, delimiters[ctr]))
+    if ((1 == strlen(intoken)) && (*intoken == delimiters[ctr])) {
       return (delimiter);
+    }
   }
 
   numel = ARRAY_SIZE(types);
@@ -181,36 +183,11 @@ void process_array(char startstring[], size_t *sizelen) {
   exit(-1);
 }
 
-void classify_string(struct token *newtoken) {
-
-  assert(newtoken);
-
-  /* default is identifier */
-  newtoken->kind = get_kind(newtoken->string);
-
-  switch (newtoken->kind) {
-  case type:
-    printf("token %s is a type.\n", newtoken->string);
-    break;
-  case qualifier:
-    printf("token %s is a qualifier.\n", newtoken->string);
-    break;
-  case identifier:
-    printf("token %s is an identifier.\n", newtoken->string);
-    break;
-  default:
-    fprintf(stderr, "Illegal token kind.\n");
-    exit(-1);
-  }
-
-  return;
-}
-
 /* move to the right through the declaration */
 size_t gettoken(char **declstring) {
 
   int tokenlen, ctr = 0, tokenoffset = 0;
-  memset(this.string, '\0', MAXTOKENLEN);
+  memset(this_token.string, '\0', MAXTOKENLEN);
 
   if ((tokenlen = strlen(*declstring)) > MAXTOKENLEN) {
     fprintf(stderr, "\nToken too long %s.\n", *declstring);
@@ -225,24 +202,25 @@ size_t gettoken(char **declstring) {
     tokenoffset++;
   }
 
-  /* use first non-blank character whether its alphanumeric or no */
-  this.string[0] = **declstring;
+  /* use first non-blank character whether it is alphanumeric or no */
+  this_token.string[0] = **declstring;
   (*declstring)++;
   tokenoffset++;
 
   /* non-alphanumeric token has is always a single-char */
-  if (!(isalnum(this.string[0])))
+  /* Are we disallowing dash and underscore in identifiers? */
+  if (!(isalnum(this_token.string[0])))
     goto out;
 
   for (ctr = 0; (isalnum(**declstring) && (ctr <= tokenlen)); ctr++) {
-    this.string[ctr + 1] = **declstring;
+    this_token.string[ctr + 1] = **declstring;
     (*declstring)++;
     tokenoffset++;
   }
 
 out:
-  this.string[ctr + 1] = '\0';
-  this.kind = get_kind(this.string);
+  this_token.string[ctr + 1] = '\0';
+  this_token.kind = get_kind(this_token.string);
   return (tokenoffset);
 }
 
@@ -253,8 +231,8 @@ void push_stack(size_t tokennum) {
     exit(-ENOMEM);
   }
 
-  stack[tokennum].kind = this.kind;
-  strcpy(stack[tokennum].string, this.string);
+  stack[tokennum].kind = this_token.kind;
+  strcpy(stack[tokennum].string, this_token.string);
   return;
 }
 
@@ -282,7 +260,7 @@ void pop_stack(size_t *tokennum) {
       printf("%s ", stack[*tokennum].string);
       break;
     case delimiter:
-      /* Ignore this token, which should be the
+      /* Ignore this_token token, which should be the
          opening parenthesis of a function pointer.
          There should be no array delimiters on the stack */
       (*tokennum)--;
@@ -290,12 +268,12 @@ void pop_stack(size_t *tokennum) {
       break;
     default:
       fprintf(stderr, "\nError: element %s is of unknown type %d.\n",
-              this.string, this.kind);
+              this_token.string, this_token.kind);
       exit(-1);
     }
 
   memset(stack[*tokennum].string, '\0', MAXTOKENLEN);
-  stack[*tokennum].kind = 0;
+  stack[*tokennum].kind = invalid;
   if (*tokennum)
     (*tokennum)--;
   return;
@@ -328,10 +306,16 @@ size_t process_stdin(char *stdinp) {
 void parse_declarator(char input[], size_t *slen) {
 
   /* strstr() shouldn't return NULL since we've already determined
-  that this.string is present */
-  char *declp = strstr((const char *)input, (const char *)this.string);
+  that this_token.string is present */
+  const char *strp = strstr((const char *)input, (const char *)this_token.string);
+  char *declp = strdup(strp);
+  if (!declp) {
+    printf("OOM\n");
+    exit(-ENOMEM);
+  }
+  char* saveptr = declp;
   char *commapos;
-  size_t offset;
+  size_t offset = 0;
   static int declnum = 0;
   size_t *argoffset = (size_t *)malloc(sizeof(size_t));
 
@@ -340,16 +324,19 @@ void parse_declarator(char input[], size_t *slen) {
 #endif
   /* advance past the end of the identifier the first time we're called */
   if (!declnum)
-    declp += strlen(this.string);
+    declp += strlen(this_token.string);
   declnum++;
-  offset = (declp - input);
+  offset = strlen(this_token.string);
 
   /* process arguments on the right of identifier */
   while ((strlen(declp)) && (offset > 0)) {
     offset += gettoken(&declp);
-    switch (this.kind) {
+    switch (this_token.kind) {
+    case invalid:
+      printf("Unitialized token kind\n");
+      exit (EXIT_FAILURE);
     case delimiter:
-      if (!(strcmp(this.string, "["))) {
+      if (!(strcmp(this_token.string, "["))) {
         process_array(&input[offset], argoffset);
         offset += *argoffset;
         /* go past array size specification */
@@ -358,11 +345,11 @@ void parse_declarator(char input[], size_t *slen) {
         *argoffset = 0;
         break;
       }
-      if (!(strcmp(this.string, "]")))
+      if (!(strcmp(this_token.string, "]")))
         break;
-      /* this opening parenthesis is to the right of the
+      /* this_token opening parenthesis is to the right of the
       identifier, so it can only enclose functions args */
-      if (!(strcmp(this.string, "("))) {
+      if (!(strcmp(this_token.string, "("))) {
         process_function_args(&input[offset], argoffset);
         offset += *argoffset;
         /* go past any function args */
@@ -378,12 +365,12 @@ void parse_declarator(char input[], size_t *slen) {
          as the closing ')' of function args was
          discarded above
       */
-      if (!(strcmp(this.string, ")"))) {
+      if (!(strcmp(this_token.string, ")"))) {
         pop_stack(slen);
         break;
       }
 
-      if (!strcmp(this.string, ",")) {
+      if (!strcmp(this_token.string, ",")) {
         /* Function args come after parentheses
         and shouldn't be processed here */
         commapos = strrchr(input, ',');
@@ -399,20 +386,20 @@ void parse_declarator(char input[], size_t *slen) {
       fprintf(stderr,
               "\nType declaration to the right of the identifier in %s is "
               "illegal.\n",
-              this.string);
+              this_token.string);
       break;
     case qualifier:
       push_stack(++(*slen));
       break;
     case identifier:
-      fprintf(stderr, "\nSecond identifier %s is illegal.\n", this.string);
+      fprintf(stderr, "\nSecond identifier %s is illegal.\n", this_token.string);
       if (argoffset)
         free(argoffset);
       exit(-1);
     }
   }
-  memset(this.string, '\0', MAXTOKENLEN);
-  this.kind = 0;
+  memset(this_token.string, '\0', MAXTOKENLEN);
+  this_token.kind = invalid;
 
   /* (!(*slen)) means empty stack */
   while (*slen) {
@@ -423,14 +410,12 @@ void parse_declarator(char input[], size_t *slen) {
       parse_declarator(input, slen);
   }
 
+  free(saveptr);
   free(argoffset);
   return;
 }
 
-int main(int argc, char **argv) {
-
-  /* char inputstr[] = "char* extern *(*bar), int foo; "; */
-  char inputstr[MAXTOKENLEN];
+void parse_input(char inputstr[]) {
   char *nexttoken = (char *)malloc(MAXTOKENLEN);
   /* preserve original pointer so that it can be freed */
   char *saveptr = nexttoken;
@@ -438,6 +423,41 @@ int main(int argc, char **argv) {
   but initialize to zero because counter is incremented before
   calling push_stack */
   size_t stacklen = 0;
+
+  if (strstr(inputstr, "=")) {
+    nexttoken = strtok(inputstr, "=");
+    strcpy(inputstr, nexttoken); /* dump chars after '=' */
+  } else if (strstr(inputstr, ";")) {
+    nexttoken = strtok(inputstr, ";");
+    if (!nexttoken) {
+      fprintf(stderr, "Zero-length input string.\n");
+      exit(EXIT_FAILURE);
+    }
+  } else {
+    printf("\nImproperly terminated declaration.\n");
+    exit(EXIT_FAILURE);
+  }
+
+  while ((gettoken(&nexttoken)) && (this_token.kind != identifier))
+    push_stack((++stacklen)); /* moving to the right */
+
+  if (this_token.kind == identifier)
+    printf("%s is a(n) ", this_token.string);
+  else {
+    printf("\nNo identifiers in input string '%s'\n", inputstr);
+    exit(EXIT_FAILURE);
+  }
+
+  /* if there's stuff on the stack or to the right of the identifier */
+  if ((stacklen) || (nexttoken < (strlen(inputstr) + &(inputstr[0]))))
+    parse_declarator(inputstr, &stacklen);
+
+  free(saveptr);
+}
+
+#ifndef TESTING
+int main(int argc, char **argv) {
+  char inputstr[MAXTOKENLEN];
   int retval = 0;
 
   if (argc == 1)
@@ -454,36 +474,10 @@ int main(int argc, char **argv) {
   } else /* read input from CLI */
     strcpy(inputstr, argv[1]);
 
-  if (strstr(inputstr, "=")) {
-    nexttoken = strtok(inputstr, "=");
-    strcpy(inputstr, nexttoken); /* dump chars after '=' */
-  } else if (strstr(inputstr, ";")) {
-    nexttoken = strtok(inputstr, ";");
-    if (!nexttoken) {
-      fprintf(stderr, "Zero-length input string.\n");
-      exit(-1);
-    }
-  } else {
-    printf("\nImproperly terminated declaration.\n");
-    exit(-1);
-  }
-
-  while ((gettoken(&nexttoken)) && (get_kind(this.string) != identifier))
-    push_stack((++stacklen)); /* moving to the right */
-
-  if (this.kind == identifier)
-    printf("%s is a(n) ", this.string);
-  else {
-    printf("\nNo identifiers in input string '%s'\n", inputstr);
-    exit(-1);
-  }
-
-  /* if there's stuff on the stack or to the right of the identifier */
-  if ((stacklen) || (nexttoken < (strlen(inputstr) + &(inputstr[0]))))
-    parse_declarator(inputstr, &stacklen);
+  parse_input(inputstr);
 
   /*	showstack(); */
   printf("\n");
-  free(saveptr);
-  exit(0);
+  exit(EXIT_SUCCESS);
 }
+#endif

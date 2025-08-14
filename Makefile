@@ -8,18 +8,16 @@
 ##	$Log$								     ##
 ###############################################################################
 
-CBASICFLAGS = -O0 -fno-inline -g -ggdb -Wall -Wextra -fsanitize=address,undefined -Werror
-CVALGRINDFLAGS = -O0 -fno-inline -g -ggdb -Wall -Wextra
-CFLAGS = $(CBASICFLAGS) -isystem $(GTEST_DIR)/include
+CBASICFLAGS = -O0 -fno-inline -g -ggdb -Wall -Wextra -Werror -isystem $(GTEST_DIR)/include
+CFLAGS = $(CBASICFLAGS) -fsanitize=address,undefined
 CDEBUGFLAGS = $(CFLAGS) -DDEBUG=1
 
 GTEST_DIR = $(HOME)/gitsrc/googletest
 GTEST_HEADERS = $(GTEST_DIR)/googletest/include
 GTESTLIBPATH=$(GTEST_DIR)/build/lib
 GTESTLIBS = $(GTESTLIBPATH)/libgtest.a $(GTESTLIBPATH)/libgtest_main.a
-LDBASICFLAGS= -g -fsanitize=address,undefined -lpthread
-LDVALGRINDFLAGS= -g
-LDFLAGS= $(LDBASICFLAGS) -L$(GTESTLIBPATH)
+LDBASICFLAGS= -g -L$(GTESTLIBPATH)
+LDFLAGS= $(LDBASICFLAGS) -fsanitize=address,undefined
 LDDEBUGFLAGS = $(LDFLAGS) -DDEBUG=1
 #https://gist.github.com/kwk/4171e37f4bcdf7705329
 #ASAN_SYMBOLIZER_PATH=/usr/bin/llvm-symbolizer
@@ -46,32 +44,42 @@ helloc: helloc_testsuite.o
 	@echo ' '
 
 palindrome_test: palindrome_testsuite.o palindrome.c
-	$(CPPCC) $(CFLAGS) $(LDFLAGS) -Wall -o "palindrome_test" palindrome_testsuite.o $(GTESTLIBS) -pthread
+	$(CPPCC) $(CFLAGS) $(LDFLAGS)  -o "palindrome_test" palindrome_testsuite.o $(GTESTLIBS) -pthread
 
 kernel-doubly-linked-macros: kernel-doubly-linked-macros.c
 	$(CCC) $(CFLAGS) $(LDFLAGS) -o kernel-doubly-linked-macros kernel-doubly-linked-macros.c
 
 kernel-doubly-linked-macros-valgrind: kernel-doubly-linked-macros.c
-	$(CCC) $(CVALGRINDFLAGS) $(LDVALGRINDFLAGS) -o kernel-doubly-linked-macros-valgrind kernel-doubly-linked-macros.c
+	$(CCC) $(CBASICFLAGS) $(LDBASICFLAGS) -o kernel-doubly-linked-macros-valgrind kernel-doubly-linked-macros.c
 	valgrind kernel-doubly-linked-macros-valgrind
 
 reverse-list_test: reverse-list_testsuite.o reverse-list.c
-	$(CPPCC) $(CFLAGS) $(LDFLAGS) -Wall -o reverse-list_test reverse-list_testsuite.o $(GTESTLIBS)
+	$(CPPCC) $(CFLAGS) $(LDFLAGS)  -o reverse-list_test reverse-list_testsuite.o $(GTESTLIBS)
 
 reverse-list-valgrind: reverse-list.c
-	$(CCC) $(CVALGRINDFLAGS) $(LDVALGRINDFLAGS) -o reverse-list-valgrind reverse-list.c
+	$(CCC) $(CBASICFLAGS) $(LDBASICFLAGS) -o reverse-list-valgrind reverse-list.c
 	valgrind reverse-list-valgrind
 
 matrix-determinant: matrix-determinant.c
 	$(CCC) $(CFLAGS) $(LDFLAGS) -o matrix-determinant matrix-determinant.c -lm
 
 matrix-determinant-valgrind: matrix-determinant.c
-	$(CCC) $(CVALGRINDFLAGS) $(LDVALGRINDFLAGS) -o matrix-determinant-valgrind matrix-determinant.c -lm
+	$(CCC) $(CBASICFLAGS) $(LDBASICFLAGS) -o matrix-determinant-valgrind matrix-determinant.c -lm
 	valgrind matrix-determinant-valgrind
 
 matrix-determinant_test: matrix-determinant_testsuite.o matrix-determinant.c
-	$(CPPCC) $(CFLAGS) $(LDFLAGS) -Wall -o matrix-determinant_test matrix-determinant_testsuite.o $(GTESTLIBS)
+	$(CPPCC) $(CFLAGS) $(LDFLAGS)  -o matrix-determinant_test matrix-determinant_testsuite.o $(GTESTLIBS)
+
+cdecl: cdecl.c
+	$(CCC) $(CFLAGS) $(LDFLAGS) -o cdecl cdecl.c
+
+cdecl-valgrind: cdecl.c
+	$(CCC) $(CBASICFLAGS) $(LDBASICFLAGS) -o cdecl-valgrind cdecl.c
+	valgrind cdecl-valgrind
+
+cdecl_test: cdecl_testsuite.o cdecl.c
+	$(CPPCC) $(CFLAGS) $(LDFLAGS)  -o cdecl_test cdecl_testsuite.o $(GTESTLIBS)
 
 clean:
-	/bin/rm -rf *.o *~ palindrome palindrome_test helloc
+	/bin/rm -rf *.o *~ *.d *test *-valgrind palindrome palindrome_test helloc matrix-determinant cdecl kernel-doubly-linked-macros
 

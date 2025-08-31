@@ -8,7 +8,7 @@
 ##	$Log$								     ##
 ###############################################################################
 
-CBASICFLAGS = -O0 -fno-inline -g -ggdb -Wall -Wextra -Werror -isystem $(GTEST_DIR)/include
+CBASICFLAGS = -O0 -fno-inline -g -ggdb -Wall -Wextra -Werror -isystem $(GTEST_HEADERS) -isystem $(GMOCK_HEADERS)
 CFLAGS = $(CBASICFLAGS) -fsanitize=address,undefined
 CDEBUGFLAGS = $(CFLAGS) -DDEBUG=1
 
@@ -21,6 +21,10 @@ LDFLAGS= $(LDBASICFLAGS) -fsanitize=address,undefined
 LDDEBUGFLAGS = $(LDFLAGS) -DDEBUG=1
 #https://gist.github.com/kwk/4171e37f4bcdf7705329
 #ASAN_SYMBOLIZER_PATH=/usr/bin/llvm-symbolizer
+# 'make' in the README.md above doesn't create libgtest_main.a.  'make all' does.
+GMOCK_HEADERS=$(GTEST_DIR)/googlemock/include
+# Reordering the list below will cause a linker failure.  libgmock_main.a must apparently appear before libgmock.a.
+GMOCKLIBS=$(GTESTLIBPATH)/libgmock_main.a $(GTESTLIBPATH)/libgmock.a  $(GTESTLIBPATH)/libgtest.a
 
 CCC = /usr/bin/gcc
 CPPCC = /usr/bin/g++
@@ -29,7 +33,7 @@ CPPCC = /usr/bin/g++
 %.o: %.cc
 	@echo 'Building file: $<'
 	@echo 'Invoking: GCC C++ Compiler'
-	$(CPPCC) -isystem $(GTEST_HEADERS) $(CFLAGS) -O0 -g3 -Wall -c -fmessage-length=0 -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o"$@" "$<"
+	$(CPPCC) $(CFLAGS) -O0 -g3 -Wall -c -fmessage-length=0 -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o"$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '
 
@@ -78,7 +82,7 @@ cdecl-valgrind: cdecl.c
 	valgrind cdecl-valgrind
 
 cdecl_test: cdecl_testsuite.o cdecl.c
-	$(CPPCC) $(CFLAGS) $(LDFLAGS)  -o cdecl_test cdecl_testsuite.o $(GTESTLIBS)
+	$(CPPCC) $(CFLAGS) $(LDFLAGS)  -o cdecl_test -I$(GMOCK_HEADERS) cdecl_testsuite.o $(GTESTLIBS) $(GMOCKLIBS)
 
 clean:
 	/bin/rm -rf *.o *~ *.d *test *-valgrind palindrome palindrome_test helloc matrix-determinant cdecl kernel-doubly-linked-macros

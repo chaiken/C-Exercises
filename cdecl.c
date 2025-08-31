@@ -279,15 +279,15 @@ void pop_stack(size_t *tokennum) {
   return;
 }
 
-size_t process_stdin(char *stdinp) {
+// The FILE* parameter is provided for the unit test.
+size_t process_stdin(char *stdinp, FILE *input_stream) {
   char *stringp = (char *)malloc(MAXTOKENLEN);
   char *savep = stringp;
 
   size_t ctr = 0;
-  if (fgets(stdinp, MAXTOKENLEN, stdin) != NULL) {
+  if (fgets(stdinp, MAXTOKENLEN, input_stream) != NULL) {
     strcpy(stringp, stdinp);
-    /* line from stdin ends in '\n' */
-    /* while ((*stringp++ = getchar())!= '\n') */
+    /* A line from stdin always ends in '\n'. */
     while (*stringp++ != '\n')
       ctr++;
     /* make last character a null instead of '\n' */
@@ -455,27 +455,35 @@ void parse_input(char inputstr[]) {
   free(saveptr);
 }
 
-#ifndef TESTING
-int main(int argc, char **argv) {
-  char inputstr[MAXTOKENLEN];
+void find_input_string(char **argv, char inputstr[]) {
   int retval = 0;
-
-  if (argc == 1)
-    usage();
 
   if (argv[1][0] == '-') {
     /* extract a single declaration from possible multiple
        declarations and initialization of the input string */
-    if (!(retval = process_stdin(inputstr))) {
+    if (!(retval = process_stdin(inputstr, stdin))) {
       printf("Bad input from stdin\n");
       usage();
-      exit(-1);
+      return;
     }
-  } else /* read input from CLI */
+  } else{
+    /* read input from CLI */
     strcpy(inputstr, argv[1]);
+  }
+}
 
+#ifndef TESTING
+int main(int argc, char **argv) {
+  char inputstr[MAXTOKENLEN] = {0};
+
+  if (argc == 1)
+    usage();
+  find_input_string(argv, inputstr);
+  if (!strlen(inputstr)) {
+    fprintf(stderr, "Input is empty.\n");
+    exit(EINVAL);
+  }
   parse_input(inputstr);
-
   /*	showstack(); */
   printf("\n");
   exit(EXIT_SUCCESS);

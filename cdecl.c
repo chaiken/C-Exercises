@@ -296,11 +296,11 @@ size_t process_stdin(char *stdinp, FILE *input_stream) {
     fprintf(stderr, "No input.\n");
     if (stringp)
       free(stringp);
-    exit(-1);
+    return 0;
   }
 
   free(savep);
-  return (ctr);
+  return ctr;
 }
 
 void parse_declarator(char input[], size_t *slen) {

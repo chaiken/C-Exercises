@@ -83,8 +83,10 @@ cdecl-valgrind: cdecl.c
 
 # Listing cdecl_testsuite.cc as a dependency results in linker failure.
 cdecl_test: cdecl_testsuite.o cdecl.c
+	rm -f cdecl
+	make cdecl
 	$(CPPCC) $(CFLAGS) $(LDFLAGS)  -o cdecl_test -I$(GMOCK_HEADERS) cdecl_testsuite.o $(GTESTLIBS) $(GMOCKLIBS)
 
 clean:
-	/bin/rm -rf *.o *~ *.d *test *-valgrind palindrome palindrome_test helloc matrix-determinant cdecl kernel-doubly-linked-macros
+	/bin/rm -rf *.o *~ *.d *test *-valgrind palindrome palindrome_test helloc matrix-determinant cdecl cdecl_test kernel-doubly-linked-macros
 

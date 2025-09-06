@@ -283,32 +283,6 @@ void pop_stack(size_t *tokennum) {
   return;
 }
 
-/* The FILE* parameter is provided for the unit test.
- * The function expects storage of size MAXTOKENLEN and a pointer to an open
- * stream.
- * The function returns the first newline-terminated line of the stream in stdinp,
- * unless that line is longer than MAXTOKENLEN, in which it is truncated.
-*/
-size_t process_stdin(char *stdinp, FILE *input_stream) {
-  char raw_input[MAXTOKENLEN];
-  if (fgets(raw_input, MAXTOKENLEN, input_stream) != NULL) {
-    /* A line from stdin which will always end in '\n'. */
-    char *newline_pos = strstr(raw_input, "\n");
-    if (NULL == newline_pos) {
-      // Input was truncated by fgets().
-      fprintf(stderr, "Input from stdin must be less than %u characters long.\n",
-	      MAXTOKENLEN-1);
-    } else {
-      const size_t offset = stdinp - newline_pos;
-      // strlcpy() includes the terminating NULL in the count.
-      return (strlcpy(stdinp, raw_input, offset) - 1);
-    }
-  } else {
-    fprintf(stderr, "Malformed input.\n");
-  }
-  return 0;
-}
-
 void parse_declarator(char input[], size_t *slen) {
 
   /* strstr() shouldn't return NULL since we've already determined
@@ -461,18 +435,40 @@ void parse_input(char inputstr[]) {
   free(saveptr);
 }
 
-void find_input_string(const char from_user[], char inputstr[]) {
-  int retval = 0;
-
-  if (from_user[0] == '-') {
-    /* extract a single declaration from possible multiple
-       declarations and initialization of the input string */
-    if (!(retval = process_stdin(inputstr, stdin))) {
-      return;
+/* The FILE* parameter is provided for the unit test.
+ * The function expects storage of size MAXTOKENLEN and a pointer to an open
+ * stream.
+ * The function returns the first newline-terminated line of the stream in stdinp,
+ * unless that line is longer than MAXTOKENLEN, in which it is truncated.
+*/
+size_t process_stdin(char stdinp[], FILE *input_stream) {
+  char raw_input[MAXTOKENLEN];
+  if (fgets(raw_input, MAXTOKENLEN, input_stream) != NULL) {
+    /* A line from stdin which will always end in '\n'. */
+    char *newline_pos = strstr(raw_input, "\n");
+    if (NULL == newline_pos) {
+      // Input was truncated by fgets().
+      fprintf(stderr, "Input from stdin must be less than %u characters long.\n",
+	      MAXTOKENLEN-1);
+    } else {
+      const size_t offset = newline_pos - &raw_input[0];
+      /* Adding 1 to offset ensures that the returned string includes ';'.
+       */
+      return strlcpy(stdinp, raw_input, offset + 1);
     }
+  } else {
+    fprintf(stderr, "Malformed input.\n");
+  }
+  return 0;
+}
+
+/* The stream parameter is for the unit tests. */
+void find_input_string(const char from_user[], char inputstr[], FILE *stream) {
+  if (from_user[0] == '-') {
+    process_stdin(inputstr, stream);
   } else{
     /* read input from CLI */
-    strcpy(inputstr, from_user);
+    strlcpy(inputstr, from_user, MAXTOKENLEN);
   }
 }
 
@@ -489,7 +485,7 @@ int main(int argc, char **argv) {
     limitations();
     exit(-E2BIG);
   }
-  find_input_string(argv[1], inputstr);
+  find_input_string(argv[1], inputstr, stdin);
   if (!strlen(inputstr)) {
     fprintf(stderr, "Input is either malformed or empty.\n");
     usage();

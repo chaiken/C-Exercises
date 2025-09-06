@@ -37,17 +37,36 @@ struct ProcessInputSuite : public ::testing::Test {
 };
 
 // Make certain that the
-TEST_F(ProcessInputSuite, WellFormedStdin) {
+TEST_F(ProcessInputSuite, WellFormedStdin0) {
   // Without the newline, the code will seek past the end of the buffer.
-  std::string well_formed("int x;\n");
+  const std::string well_formed("int x;\n");
   WriteStdin(well_formed.c_str());
-  EXPECT_THAT(process_stdin(&inputstr[0], fake_stdin), ::testing::Eq(well_formed.size() - 1));
+  /* strlcpy()'s return value includes the trailing '\0'. */
+  EXPECT_THAT(process_stdin(inputstr, fake_stdin), ::testing::Eq(well_formed.size()));
 }
 
-TEST_F(ProcessInputSuite, EmptyStdin) {
-  std::string empty_input("\n;");
+TEST_F(ProcessInputSuite, WellFormedStdin1) {
+  const char stdin_indicator[2] = {'-', 0};
+  char inputstr[MAXTOKENLEN] = {0};
+  const std::string well_formed("int x;\n");
+  WriteStdin(well_formed.c_str());
+  find_input_string(stdin_indicator, inputstr, fake_stdin);
+  EXPECT_THAT(strlen(inputstr), ::testing::Eq(well_formed.size() - 1));
+}
+
+TEST_F(ProcessInputSuite, EmptyStdin0) {
+  const std::string empty_input(";\n");
   WriteStdin(empty_input.c_str());
-  EXPECT_THAT(process_stdin(&inputstr[0], fake_stdin), ::testing::Eq(0));
+  /* strlcpy()'s return value includes the trailing '\0'. */
+  EXPECT_THAT(process_stdin(&inputstr[0], fake_stdin), ::testing::Eq(empty_input.size()));
+}
+
+TEST_F(ProcessInputSuite, EmptyStdin1) {
+  const char stdin_indicator[2] = {'-', 0};
+  const std::string empty_input(";\n");
+  WriteStdin(empty_input.c_str());
+  find_input_string(stdin_indicator, inputstr, fake_stdin);
+  EXPECT_THAT(strlen(inputstr), ::testing::Eq(empty_input.size() - 1));
 }
 
 /* This test interacts badly with the sanitizers. The following command works

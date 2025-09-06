@@ -45,11 +45,15 @@ struct token stack[MAXTOKENS];
 struct token this_token;
 
 void usage(void) {
-  printf("cdecl prints out the English language form of a C declaration.\n");
+  printf("\ncdecl prints out the English language form of a C declaration.\n");
   printf("Invoke as 'cdecl <declaration>' or\n");
   printf("provide input on stdin and use '-' as the single command-line "
          "argument.\n");
+  printf("Input must be terminated with a semicolon and enclosed in quotation marks.\n");
+}
 
+void limitations() {
+  printf("Input must be shorter than %u characters, not including quotation marks and semicolon\n", MAXTOKENLEN);
   printf("Known deficiencies:\n\ta) doesn't handle multi-line struct and union "
          "declarations;\n");
   printf("\tb) doesn't handle multiple comma-separated identifiers;\n");
@@ -279,28 +283,30 @@ void pop_stack(size_t *tokennum) {
   return;
 }
 
-// The FILE* parameter is provided for the unit test.
+/* The FILE* parameter is provided for the unit test.
+ * The function expects storage of size MAXTOKENLEN and a pointer to an open
+ * stream.
+ * The function returns the first newline-terminated line of the stream in stdinp,
+ * unless that line is longer than MAXTOKENLEN, in which it is truncated.
+*/
 size_t process_stdin(char *stdinp, FILE *input_stream) {
-  char *stringp = (char *)malloc(MAXTOKENLEN);
-  char *savep = stringp;
-
-  size_t ctr = 0;
-  if (fgets(stdinp, MAXTOKENLEN, input_stream) != NULL) {
-    strcpy(stringp, stdinp);
-    /* A line from stdin always ends in '\n'. */
-    while (*stringp++ != '\n')
-      ctr++;
-    /* make last character a null instead of '\n' */
-    *--stringp = '\0';
+  char raw_input[MAXTOKENLEN];
+  if (fgets(raw_input, MAXTOKENLEN, input_stream) != NULL) {
+    /* A line from stdin which will always end in '\n'. */
+    char *newline_pos = strstr(raw_input, "\n");
+    if (NULL == newline_pos) {
+      // Input was truncated by fgets().
+      fprintf(stderr, "Input from stdin must be less than %u characters long.\n",
+	      MAXTOKENLEN-1);
+    } else {
+      const size_t offset = stdinp - newline_pos;
+      // strlcpy() includes the terminating NULL in the count.
+      return (strlcpy(stdinp, raw_input, offset) - 1);
+    }
   } else {
-    fprintf(stderr, "No input.\n");
-    if (stringp)
-      free(stringp);
-    return 0;
+    fprintf(stderr, "Malformed input.\n");
   }
-
-  free(savep);
-  return ctr;
+  return 0;
 }
 
 void parse_declarator(char input[], size_t *slen) {
@@ -455,20 +461,18 @@ void parse_input(char inputstr[]) {
   free(saveptr);
 }
 
-void find_input_string(char **argv, char inputstr[]) {
+void find_input_string(const char from_user[], char inputstr[]) {
   int retval = 0;
 
-  if (argv[1][0] == '-') {
+  if (from_user[0] == '-') {
     /* extract a single declaration from possible multiple
        declarations and initialization of the input string */
     if (!(retval = process_stdin(inputstr, stdin))) {
-      printf("Bad input from stdin\n");
-      usage();
       return;
     }
   } else{
     /* read input from CLI */
-    strcpy(inputstr, argv[1]);
+    strcpy(inputstr, from_user);
   }
 }
 
@@ -476,11 +480,19 @@ void find_input_string(char **argv, char inputstr[]) {
 int main(int argc, char **argv) {
   char inputstr[MAXTOKENLEN] = {0};
 
-  if (argc == 1)
+  if ((argc != 2)) {
     usage();
-  find_input_string(argv, inputstr);
+    exit(EXIT_SUCCESS);
+  }
+  /* For the case where input is provided on stdin, the strlen is 1 for '-'. */
+  if (strlen(argv[1]) > (MAXTOKENLEN - 1)) {
+    limitations();
+    exit(-E2BIG);
+  }
+  find_input_string(argv[1], inputstr);
   if (!strlen(inputstr)) {
-    fprintf(stderr, "Input is empty.\n");
+    fprintf(stderr, "Input is either malformed or empty.\n");
+    usage();
     exit(EINVAL);
   }
   parse_input(inputstr);

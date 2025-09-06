@@ -81,6 +81,7 @@ cdecl-valgrind: cdecl.c
 	$(CCC) $(CBASICFLAGS) $(LDBASICFLAGS) -o cdecl-valgrind cdecl.c
 	valgrind cdecl-valgrind
 
+# Listing cdecl_testsuite.cc as a dependency results in linker failure.
 cdecl_test: cdecl_testsuite.o cdecl.c
 	$(CPPCC) $(CFLAGS) $(LDFLAGS)  -o cdecl_test -I$(GMOCK_HEADERS) cdecl_testsuite.o $(GTESTLIBS) $(GMOCKLIBS)
 

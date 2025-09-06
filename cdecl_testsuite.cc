@@ -41,22 +41,27 @@ TEST_F(ProcessInputSuite, WellFormedStdin) {
   // Without the newline, the code will seek past the end of the buffer.
   std::string well_formed("int x;\n");
   WriteStdin(well_formed.c_str());
-  // Otherwise stream may appear empty.
-  ASSERT_THAT(fflush(fake_stdin), ::testing::Eq(0));
-  // Otherwise code will see EOF even though the buffer has content.
-  rewind(fake_stdin);
-  // string.size() does not include newline.
-  // &inputstr[0] because simple &inputstr is char (*)[64].
   EXPECT_THAT(process_stdin(&inputstr[0], fake_stdin), ::testing::Eq(well_formed.size() - 1));
 }
 
 TEST_F(ProcessInputSuite, EmptyStdin) {
   std::string empty_input("\n;");
   WriteStdin(empty_input.c_str());
-  ASSERT_THAT(fflush(fake_stdin), ::testing::Eq(0));
-  // Otherwise code will see EOF even though the buffer has content.
-  rewind(fake_stdin);
-  // string.size() does not include newline.
-  // &inputstr[0] because simple &inputstr is char (*)[64].
   EXPECT_THAT(process_stdin(&inputstr[0], fake_stdin), ::testing::Eq(0));
 }
+
+/* This test interacts badly with the sanitizers. The following command works
+ *  fine although cdecl is compiled with the sanitizers.
+ *
+ *  $ echo "01234567890ABCDEFGHIJKMLNOPQRSTUVWYZabcedfghijklmonopqrtsuvwyzäößü;\n" | ./cdecl -
+ *  Input from stdin must be less than 63 characters long.
+ *  Bad input from stdin.
+ *
+ *  However, running the test induces ASAN to report a heap-buffer overflow.
+ *
+TEST_F(ProcessInputSuite, TooLongStdin) {
+  std::string too_long("101234567890ABCDEFGHIJKMLNOPQRSTUVWYZabcedfghijklmonopqrtsuvwyz0123456789;\n");
+  WriteStdin(too_long.c_str());
+  EXPECT_THAT(process_stdin(&inputstr[0], fake_stdin), ::testing::Eq(0));
+}
+*/

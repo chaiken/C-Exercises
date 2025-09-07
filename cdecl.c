@@ -456,10 +456,20 @@ size_t process_stdin(char stdinp[], FILE *input_stream) {
       fprintf(stderr, "Input from stdin must be less than %u characters long.\n",
 	      MAXTOKENLEN-1);
     } else {
+      /* Because fgets() writes to the array on the stack rather than stdinp,
+	 the pointer arithmetic is well-defined.
+      */
       const size_t offset = newline_pos - &raw_input[0];
-      /* Adding 1 to offset ensures that the returned string includes ';'.
+      /*
+       * strlcpy() returns the source length, not the number of written bytes.
+       * The +1 allows for the NULL.   Otherwise the last character will be
+       * truncated.
        */
-      return strlcpy(stdinp, raw_input, offset + 1);
+      (void)strlcpy(stdinp, raw_input, offset + 1);
+      /*
+	Return the lesser of the destination capacity and the requested copy length.
+       */
+      return ((MAXTOKENLEN -1) <(offset + 1)) ? (MAXTOKENLEN - 1) : (offset + 1);
     }
   } else {
     fprintf(stderr, "Malformed input.\n");
@@ -468,12 +478,17 @@ size_t process_stdin(char stdinp[], FILE *input_stream) {
 }
 
 /* The stream parameter is for the unit tests. */
-void find_input_string(const char from_user[], char inputstr[], FILE *stream) {
+size_t find_input_string(const char from_user[], char inputstr[], FILE *stream) {
   if (from_user[0] == '-') {
-    process_stdin(inputstr, stream);
+    return process_stdin(inputstr, stream);
   } else{
     /* read input from CLI */
-    strlcpy(inputstr, from_user, MAXTOKENLEN);
+    const size_t requested = strlcpy(inputstr, from_user, MAXTOKENLEN-1);
+    /*
+     * Subtract 1 since strlcpy() ALWAYS apppends a NULL.
+     * Return the lesser of the input length and the destination capacity.
+     */
+    return (requested < MAXTOKENLEN - 1) ? requested : MAXTOKENLEN - 1;
   }
 }
 
@@ -490,8 +505,7 @@ int main(int argc, char **argv) {
     limitations();
     exit(-E2BIG);
   }
-  find_input_string(argv[1], inputstr, stdin);
-  if (!strlen(inputstr)) {
+  if (!find_input_string(argv[1], inputstr, stdin)) {
     fprintf(stderr, "Input is either malformed or empty.\n");
     usage();
     exit(EINVAL);

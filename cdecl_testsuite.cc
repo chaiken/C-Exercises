@@ -10,8 +10,23 @@
 
 #include "cdecl.c"
 
+TEST(ProcessStringInputSuite, WellFormed) {
+  char inputstr[MAXTOKENLEN];
+  const std::string well_formed{"int x;"};
+  EXPECT_THAT(find_input_string(well_formed.c_str(), inputstr,stdin),
+              ::testing::Eq(well_formed.size()));
+}
+
+TEST(ProcessStringInputSuite, Empty) {
+  char inputstr[MAXTOKENLEN];
+  const std::string empty{""};
+  EXPECT_THAT(find_input_string(empty.c_str(), inputstr,stdin),
+              ::testing::Eq(empty.size()));
+}
+
 struct ProcessInputSuite : public ::testing::Test {
-  ProcessInputSuite() : ftemplate("/tmp/fake_stdin_path.XXXXXX"), fpath(mktemp(const_cast<char*>(ftemplate.c_str()))) {
+  ProcessInputSuite() : ftemplate("/tmp/fake_stdin_path.XXXXXX"),
+                        fpath(mktemp(const_cast<char*>(ftemplate.c_str()))) {
     fake_stdin = fopen(fpath, std::string("w+").c_str());
   }
   ~ProcessInputSuite() override {
@@ -53,8 +68,8 @@ TEST_F(ProcessInputSuite, WellFormedStdin1) {
   char inputstr[MAXTOKENLEN] = {0};
   const std::string well_formed("int x;\n");
   WriteStdin(well_formed.c_str());
-  find_input_string(stdin_indicator, inputstr, fake_stdin);
-  EXPECT_THAT(strlen(inputstr), ::testing::Eq(well_formed.size() - 1));
+  EXPECT_THAT(  find_input_string(stdin_indicator, inputstr, fake_stdin),
+                ::testing::Eq(well_formed.size()));
 }
 
 TEST_F(ProcessInputSuite, EmptyStdin0) {
@@ -68,22 +83,13 @@ TEST_F(ProcessInputSuite, EmptyStdin1) {
   const char stdin_indicator[2] = {'-', 0};
   const std::string empty_input(";\n");
   WriteStdin(empty_input.c_str());
-  find_input_string(stdin_indicator, inputstr, fake_stdin);
-  EXPECT_THAT(strlen(inputstr), ::testing::Eq(empty_input.size() - 1));
+  EXPECT_THAT(find_input_string(stdin_indicator, inputstr, fake_stdin),
+              ::testing::Eq(empty_input.size()));
 }
 
-/* This test interacts badly with the sanitizers. The following command works
- *  fine although cdecl is compiled with the sanitizers.
- *
- *  $ echo "01234567890ABCDEFGHIJKMLNOPQRSTUVWYZabcedfghijklmonopqrtsuvwyzäößü;\n" | ./cdecl -
- *  Input from stdin must be less than 63 characters long.
- *  Bad input from stdin.
- *
- *  However, running the test induces ASAN to report a heap-buffer overflow.
- *
 TEST_F(ProcessInputSuite, TooLongStdin) {
-  std::string too_long("101234567890ABCDEFGHIJKMLNOPQRSTUVWYZabcedfghijklmonopqrtsuvwyz0123456789;\n");
+  std::string
+    too_long("01234567890ABCDEFGHIJKMLNOPQRSTUVWYZabcedfghijklmonopqrtsuvwyz0123456789;\n");
   WriteStdin(too_long.c_str());
   EXPECT_THAT(process_stdin(&inputstr[0], fake_stdin), ::testing::Eq(0));
 }
-*/

@@ -17,6 +17,9 @@ struct ProcessInputSuite : public ::testing::Test {
   ~ProcessInputSuite() override {
     fclose(fake_stdin);
   }
+  void TearDown() override {
+    ASSERT_THAT(unlink(fpath), ::testing::Eq(0));
+  }
   void WriteStdin(const std::string& input) {
     ASSERT_THAT(fake_stdin, ::testing::Ne(nullptr));
     // Without the newline, the code will seek past the end of the buffer.

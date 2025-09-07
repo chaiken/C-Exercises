@@ -20,6 +20,8 @@
 #include <assert.h>
 #include <ctype.h>
 #include <stdio.h>
+/* For __fpurge() */
+#include <stdio_ext.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -373,6 +375,9 @@ void parse_declarator(char input[], size_t *slen) {
       break;
     case identifier:
       fprintf(stderr, "\nSecond identifier %s is illegal.\n", this_token.string);
+      fflush(stderr);
+      /* Prevent chars speculatively written to stdout from printing. */
+      __fpurge(stdout);
       if (argoffset)
         free(argoffset);
       exit(-1);

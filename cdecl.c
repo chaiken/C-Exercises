@@ -477,7 +477,12 @@ size_t process_stdin(char stdinp[], FILE *input_stream) {
   return 0;
 }
 
-/* The stream parameter is for the unit tests. */
+/*
+ * The stream parameter is for the unit tests. from_user[] is the prompt.  That
+ * part of the prompt which the program should analyze further is returned in
+ * the inputstr[] array.  The function returns the number of characters in input_str[].
+ */
+
 size_t find_input_string(const char from_user[], char inputstr[], FILE *stream) {
   if (from_user[0] == '-') {
     return process_stdin(inputstr, stream);

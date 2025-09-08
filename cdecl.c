@@ -19,6 +19,7 @@
 #include <asm-generic/errno.h>
 #include <assert.h>
 #include <ctype.h>
+#include <stdbool.h>
 #include <stdio.h>
 /* For __fpurge() */
 #include <stdio_ext.h>
@@ -32,9 +33,9 @@
 
 const char delimiters[] = {'(', ')', '[', ']', '{', '}', ','};
 const char *types[] = {"char", "short",  "unsigned", "int",   "float", "double",
-                   "long", "struct", "enum",     "union", "void"};
+                   "long", "struct", "enum", "union", "void"};
 const char *qualifiers[] = {"const",  "register", "volatile",
-                        "static", "*",        "extern"};
+                        "static", "*", "extern"};
 
 enum token_class { invalid = 0, delimiter, type, qualifier, identifier };
 
@@ -400,7 +401,10 @@ void parse_declarator(char input[], size_t *slen) {
   return;
 }
 
-void parse_input(char inputstr[]) {
+/*
+ * Returns true iff input is successfully parsed.  Actual parsing begins here.
+ */
+bool input_parsing_successful(char inputstr[]) {
   char *nexttoken = (char *)malloc(MAXTOKENLEN);
   /* preserve original pointer so that it can be freed */
   char *saveptr = nexttoken;
@@ -408,20 +412,28 @@ void parse_input(char inputstr[]) {
   but initialize to zero because counter is incremented before
   calling push_stack */
   size_t stacklen = 0;
+  char *input_end = NULL;
 
-  if (strstr(inputstr, "=")) {
-    nexttoken = strtok(inputstr, "=");
-    strcpy(inputstr, nexttoken); /* dump chars after '=' */
-  } else if (strstr(inputstr, ";")) {
-    nexttoken = strtok(inputstr, ";");
-    if (!nexttoken) {
+  strlcpy(nexttoken, inputstr, MAXTOKENLEN);
+  /* Dump chars after '=', if any. */
+  input_end = strstr(nexttoken, "=");
+  /* If the input after '='is not lopped off, the input should terminate with ';'. */
+  if (!input_end) {
+    input_end = strstr(nexttoken, ";");
+   /* Input with two semicolons could reach this point. */
+    if (input_end == nexttoken) {
       fprintf(stderr, "Zero-length input string.\n");
-      exit(EXIT_FAILURE);
+      free(saveptr);
+      return false;
     }
-  } else {
-    printf("\nImproperly terminated declaration.\n");
-    exit(EXIT_FAILURE);
   }
+ if (!input_end) {
+    printf("\nImproperly terminated declaration.\n");
+    free(saveptr);
+    return false;
+  }
+  strlcpy(inputstr, nexttoken, (input_end - nexttoken) + 1);
+  nexttoken = inputstr;
 
   while ((gettoken(&nexttoken)) && (this_token.kind != identifier))
     push_stack((++stacklen)); /* moving to the right */
@@ -430,7 +442,7 @@ void parse_input(char inputstr[]) {
     printf("%s is a(n) ", this_token.string);
   else {
     printf("\nNo identifiers in input string '%s'\n", inputstr);
-    exit(EXIT_FAILURE);
+    return false;
   }
 
   /* if there's stuff on the stack or to the right of the identifier */
@@ -438,6 +450,7 @@ void parse_input(char inputstr[]) {
     parse_declarator(inputstr, &stacklen);
 
   free(saveptr);
+  return true;
 }
 
 /* The FILE* parameter is provided for the unit test.
@@ -515,7 +528,9 @@ int main(int argc, char **argv) {
     usage();
     exit(EINVAL);
   }
-  parse_input(inputstr);
+  if (!input_parsing_successful(inputstr)) {
+    exit(EXIT_FAILURE);
+  }
   /*	showstack(); */
   printf("\n");
   exit(EXIT_SUCCESS);

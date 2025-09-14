@@ -69,6 +69,24 @@ void limitations() {
   exit(-1);
 }
 
+bool is_all_blanks(const char* input) {
+  if (!input || !strlen(input)) {
+    return false;
+  }
+  char* token_copy = strdup(input);
+  char *saveptr = token_copy;
+  while (token_copy && isprint(*token_copy) && isblank(*token_copy)) {
+      token_copy++;
+  }
+  // Reached end of the string.
+  if (!strlen(token_copy)) {
+    free(saveptr);
+    return true;
+  }
+  free(saveptr);
+  return false;
+}
+
 enum token_class get_kind(const char *intoken) {
   size_t numel = 0, ctr;
 

@@ -93,3 +93,11 @@ TEST_F(ProcessInputSuite, TooLongStdin) {
   WriteStdin(too_long.c_str());
   EXPECT_THAT(process_stdin(&inputstr[0], fake_stdin), ::testing::Eq(0));
 }
+
+TEST(StringManipulateSuite, IsAllBlanks) {
+  EXPECT_THAT(is_all_blanks(" "), ::testing::IsTrue());
+  EXPECT_THAT(is_all_blanks("a"), ::testing::IsFalse());
+  EXPECT_THAT(is_all_blanks(" a "), ::testing::IsFalse());
+  EXPECT_THAT(is_all_blanks(""), ::testing::IsFalse());
+  EXPECT_THAT(is_all_blanks("\0"), ::testing::IsFalse());
+}

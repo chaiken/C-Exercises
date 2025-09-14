@@ -38,7 +38,7 @@ const char *types[] = {"char", "short",  "unsigned", "int",   "float", "double",
 const char *qualifiers[] = {"const",  "register", "volatile",
                         "static", "*", "extern"};
 
-enum token_class { invalid = 0, delimiter, type, qualifier, identifier };
+enum token_class { invalid = 0, delimiter, type, qualifier, identifier, whitespace };
 
 struct token {
   enum token_class kind;
@@ -90,7 +90,12 @@ bool is_all_blanks(const char* input) {
 enum token_class get_kind(const char *intoken) {
   size_t numel = 0, ctr;
 
-  assert(intoken);
+  if (!intoken) {
+    return invalid;
+  }
+  if (is_all_blanks(intoken)) {
+    return whitespace;
+  }
 
   numel = ARRAY_SIZE(delimiters);
   for (ctr = 0; ctr < numel; ctr++) {
@@ -278,10 +283,10 @@ void pop_stack(size_t *tokennum) {
   /* print all qualifiers but pointer */
   else
     switch (stack[*tokennum].kind) {
+    case whitespace:
+      __attribute__((fallthrough));
     case qualifier:
-      /* next two lines are deleted on laptop */
-      printf("%s ", stack[*tokennum].string);
-      break;
+      __attribute__((fallthrough));
     case type:
       printf("%s ", stack[*tokennum].string);
       break;
@@ -292,6 +297,7 @@ void pop_stack(size_t *tokennum) {
       (*tokennum)--;
       pop_stack(tokennum);
       break;
+    case invalid:
     default:
       fprintf(stderr, "\nError: element %s is of unknown type %d.\n",
               this_token.string, this_token.kind);
@@ -392,6 +398,8 @@ void parse_declarator(char input[], size_t *slen) {
       break;
     case qualifier:
       push_stack(++(*slen));
+      break;
+    case whitespace:
       break;
     case identifier:
       fprintf(stderr, "\nSecond identifier %s is illegal.\n", this_token.string);

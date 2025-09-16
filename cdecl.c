@@ -87,10 +87,75 @@ bool is_all_blanks(const char* input) {
   return false;
 }
 
+/* Caller must allocate trimmed. */
+bool trimmed_trailing_whitespace(const char* input, char* trimmed) {
+  if (!input || (0 == strlen(input)) || (is_all_blanks(input))) {
+    return false;
+  }
+  char* copy = strdup(input);
+  char* last_char = copy + (strlen(copy) - 1);
+  // last_char should be greater than input when the loop exits, as otherwise input is all blanks.
+  while ((last_char > copy) && (isblank(*last_char))) {
+    last_char--;
+  }
+  if ((copy + (strlen(copy) - 1)) == last_char) {
+    free(copy);
+    return false;
+  }
+  for (char* cptr = copy; cptr <= last_char; cptr++ ) {
+    *trimmed = *cptr;
+    trimmed++;
+  }
+  *trimmed = '\0';
+  free(copy);
+  return true;
+}
+
+/* Caller must allocate trimmed. */
+bool trimmed_leading_whitespace(const char* input, char* trimmed) {
+  if (!input || (0 == strlen(input)) || (is_all_blanks(input))) {
+    return false;
+  }
+  if (!isblank(*input)) {
+    return false;
+  }
+  char* copy = strdup(input);
+  char* saveptr = copy;
+  while (copy && isblank(*copy)) {
+    copy++;
+  }
+  while (*copy) {
+    *trimmed = *copy;
+    trimmed++;
+    copy++;
+  }
+  *trimmed = '\0';
+  free(saveptr);
+  return true;
+}
+
+bool has_alnum_chars(const char* input) {
+  if (!input || !strlen(input)) {
+    return false;
+  }
+  char *copy = strdup(input);
+  char *saveptr = copy;
+  while (*copy && (!isalnum(*copy))) {
+    copy++;
+  }
+  /* Reached the end without finding alphanumeric characters. */
+  if (!*copy) {
+    free(saveptr);
+    return false;
+  }
+  free(saveptr);
+  return true;
+}
+
 enum token_class get_kind(const char *intoken) {
   size_t numel = 0, ctr;
 
-  if (!intoken) {
+  if ((!intoken) || (!strlen(intoken))) {
     return invalid;
   }
   if (is_all_blanks(intoken)) {
@@ -102,6 +167,14 @@ enum token_class get_kind(const char *intoken) {
     if ((1 == strlen(intoken)) && (*intoken == delimiters[ctr])) {
       return (delimiter);
     }
+  }
+
+  /*
+   * A string without alphanumeric chars must be whitespace, a delimiter, or
+   * garbage.
+   */
+  if (!has_alnum_chars(intoken)) {
+    return invalid;
   }
 
   numel = ARRAY_SIZE(types);
@@ -312,10 +385,10 @@ void pop_stack(size_t *tokennum) {
 }
 
 void parse_declarator(char input[], size_t *slen) {
-
-  /* strstr() shouldn't return NULL since we've already determined
+ /* strstr() shouldn't return NULL since we've already determined
   that this_token.string is present */
   const char *strp = strstr((const char *)input, (const char *)this_token.string);
+
   char *declp = strdup(strp);
   if (!declp) {
     printf("OOM\n");
@@ -469,6 +542,7 @@ bool input_parsing_successful(char inputstr[]) {
     printf("%s is a(n) ", this_token.string);
   else {
     printf("\nNo identifiers in input string '%s'\n", inputstr);
+    free(saveptr);
     return false;
   }
 

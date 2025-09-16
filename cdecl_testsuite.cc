@@ -101,3 +101,54 @@ TEST(StringManipulateSuite, IsAllBlanks) {
   EXPECT_THAT(is_all_blanks(""), ::testing::IsFalse());
   EXPECT_THAT(is_all_blanks("\0"), ::testing::IsFalse());
 }
+
+TEST(StringManipulateSuite, TrimmedTrailingWhitepace) {
+  char *trimmed = (char *) malloc(MAXTOKENLEN);
+  EXPECT_THAT(trimmed_trailing_whitespace("a", trimmed),::testing::IsFalse());
+  EXPECT_THAT(trimmed_trailing_whitespace(" b", trimmed), ::testing::IsFalse());
+  EXPECT_THAT(trimmed_trailing_whitespace("c    ", trimmed), ::testing::IsTrue());
+  EXPECT_THAT(std::string(trimmed), ::testing::StrEq("c"));
+  free(trimmed);
+}
+
+TEST(StringManipulateSuite, TrimmedLeadingWhitepace) {
+  char *trimmed = (char *) malloc(MAXTOKENLEN);
+  EXPECT_THAT(trimmed_leading_whitespace("a", trimmed),::testing::IsFalse());
+  EXPECT_THAT(trimmed_leading_whitespace("c    ", trimmed), ::testing::IsFalse());
+  EXPECT_THAT(trimmed_leading_whitespace(" b", trimmed), ::testing::IsTrue());
+  EXPECT_THAT(std::string(trimmed), ::testing::StrEq("b"));
+  free(trimmed);
+}
+
+TEST(StringManipulateSuite, HasAlnumChars) {
+  EXPECT_THAT(has_alnum_chars(""), ::testing::IsFalse());
+  EXPECT_THAT(has_alnum_chars("\0"), ::testing::IsFalse());
+  EXPECT_THAT(has_alnum_chars(";"), ::testing::IsFalse());
+  EXPECT_THAT(has_alnum_chars("\n"), ::testing::IsFalse());
+  EXPECT_THAT(has_alnum_chars("a"), ::testing::IsTrue());
+  EXPECT_THAT(has_alnum_chars("(a"), ::testing::IsTrue());
+}
+
+TEST(StringManipulateSuite, GetKindBad) {
+  EXPECT_THAT(get_kind(""), ::testing::Eq(invalid));
+  EXPECT_THAT(get_kind(";"), ::testing::Eq(invalid));
+  EXPECT_THAT(get_kind("@"), ::testing::Eq(invalid));
+  EXPECT_THAT(get_kind("\0"), ::testing::Eq(invalid));
+}
+
+TEST(StringManipulateSuite, GetKindDelimiters) {
+  EXPECT_THAT(get_kind("("), ::testing::Eq(delimiter));
+  EXPECT_THAT(get_kind(")"), ::testing::Eq(delimiter));
+  EXPECT_THAT(get_kind("["), ::testing::Eq(delimiter));
+  EXPECT_THAT(get_kind("{"), ::testing::Eq(delimiter));
+  EXPECT_THAT(get_kind("}"), ::testing::Eq(delimiter));
+  EXPECT_THAT(get_kind(","), ::testing::Eq(delimiter));
+  //  EXPECT_THAT(get_kind("())"), ::testing::Eq(delimiter));
+  char *trimmed = (char *) malloc(MAXTOKENLEN);
+  EXPECT_THAT(trimmed_trailing_whitespace(", ", trimmed), ::testing::IsTrue());
+  EXPECT_THAT(get_kind(trimmed), ::testing::Eq(delimiter));
+  bzero(trimmed, strlen(trimmed));
+  EXPECT_THAT(trimmed_leading_whitespace(" ,", trimmed), ::testing::IsTrue());
+  EXPECT_THAT(get_kind(trimmed), ::testing::Eq(delimiter));
+  free(trimmed);
+}

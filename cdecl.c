@@ -17,6 +17,7 @@
  ******************************************************************************/
 
 #include <asm-generic/errno.h>
+#include <bsd/string.h>
 #include <assert.h>
 #include <ctype.h>
 #include <stdbool.h>

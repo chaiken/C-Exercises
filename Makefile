@@ -16,7 +16,7 @@ GTEST_DIR = $(HOME)/gitsrc/googletest
 GTEST_HEADERS = $(GTEST_DIR)/googletest/include
 GTESTLIBPATH=$(GTEST_DIR)/build/lib
 GTESTLIBS = $(GTESTLIBPATH)/libgtest.a $(GTESTLIBPATH)/libgtest_main.a
-LDBASICFLAGS= -g -L$(GTESTLIBPATH)
+LDBASICFLAGS= -g -L$(GTESTLIBPATH) -lbsd
 LDFLAGS= $(LDBASICFLAGS) -fsanitize=address,undefined
 LDDEBUGFLAGS = $(LDFLAGS) -DDEBUG=1
 #https://gist.github.com/kwk/4171e37f4bcdf7705329

@@ -136,6 +136,11 @@ TEST(StringManipulateSuite, GetKindBad) {
   EXPECT_THAT(get_kind("\0"), ::testing::Eq(invalid));
 }
 
+/* Tab is classified as invalid. */
+TEST(StringManipulateSuite, GetKindWhitespace) {
+  EXPECT_THAT(get_kind(" "), ::testing::Eq(whitespace));
+}
+
 TEST(StringManipulateSuite, GetKindDelimiters) {
   EXPECT_THAT(get_kind("("), ::testing::Eq(delimiter));
   EXPECT_THAT(get_kind(")"), ::testing::Eq(delimiter));
@@ -181,4 +186,10 @@ TEST(StringManipulateSuite, GetKindTypes) {
   EXPECT_THAT(get_kind("uint32_t"), ::testing::Eq(type));
   EXPECT_THAT(get_kind("int64_t"), ::testing::Eq(type));
   EXPECT_THAT(get_kind("uint64_t"), ::testing::Eq(type));
+}
+
+TEST(StringManipulateSuite, GetKindIdentifiers) {
+  EXPECT_THAT(get_kind(" myvar "), ::testing::Eq(identifier));
+  EXPECT_THAT(get_kind(" myvar\n"), ::testing::Eq(identifier));
+  EXPECT_THAT(get_kind(" myvar;"), ::testing::Eq(identifier));
 }

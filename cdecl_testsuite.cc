@@ -104,18 +104,18 @@ TEST(StringManipulateSuite, IsAllBlanks) {
 
 TEST(StringManipulateSuite, TrimmedTrailingWhitepace) {
   char *trimmed = (char *) malloc(MAXTOKENLEN);
-  EXPECT_THAT(trimmed_trailing_whitespace("a", trimmed),::testing::IsFalse());
-  EXPECT_THAT(trimmed_trailing_whitespace(" b", trimmed), ::testing::IsFalse());
-  EXPECT_THAT(trimmed_trailing_whitespace("c    ", trimmed), ::testing::IsTrue());
+  EXPECT_THAT(trim_trailing_whitespace("a", trimmed),::testing::Eq(0));
+  EXPECT_THAT(trim_trailing_whitespace(" b", trimmed), ::testing::Eq(0));
+  EXPECT_THAT(trim_trailing_whitespace("c    ", trimmed), ::testing::Eq(4));
   EXPECT_THAT(std::string(trimmed), ::testing::StrEq("c"));
   free(trimmed);
 }
 
 TEST(StringManipulateSuite, TrimmedLeadingWhitepace) {
   char *trimmed = (char *) malloc(MAXTOKENLEN);
-  EXPECT_THAT(trimmed_leading_whitespace("a", trimmed),::testing::IsFalse());
-  EXPECT_THAT(trimmed_leading_whitespace("c    ", trimmed), ::testing::IsFalse());
-  EXPECT_THAT(trimmed_leading_whitespace(" b", trimmed), ::testing::IsTrue());
+  EXPECT_THAT(trim_leading_whitespace("a", trimmed),::testing::Eq(0));
+  EXPECT_THAT(trim_leading_whitespace("c    ", trimmed), ::testing::Eq(0));
+  EXPECT_THAT(trim_leading_whitespace(" b", trimmed), ::testing::Eq(1));
   EXPECT_THAT(std::string(trimmed), ::testing::StrEq("b"));
   free(trimmed);
 }
@@ -150,10 +150,10 @@ TEST(StringManipulateSuite, GetKindDelimiters) {
   EXPECT_THAT(get_kind(","), ::testing::Eq(delimiter));
   //  EXPECT_THAT(get_kind("())"), ::testing::Eq(delimiter));
   char *trimmed = (char *) malloc(MAXTOKENLEN);
-  EXPECT_THAT(trimmed_trailing_whitespace(", ", trimmed), ::testing::IsTrue());
+  EXPECT_THAT(trim_trailing_whitespace(", ", trimmed), ::testing::IsTrue());
   EXPECT_THAT(get_kind(trimmed), ::testing::Eq(delimiter));
   bzero(trimmed, strlen(trimmed));
-  EXPECT_THAT(trimmed_leading_whitespace(" ,", trimmed), ::testing::IsTrue());
+  EXPECT_THAT(trim_leading_whitespace(" ,", trimmed), ::testing::IsTrue());
   EXPECT_THAT(get_kind(trimmed), ::testing::Eq(delimiter));
   free(trimmed);
 }

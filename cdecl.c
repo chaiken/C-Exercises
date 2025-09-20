@@ -89,42 +89,48 @@ bool is_all_blanks(const char* input) {
 }
 
 /* Caller must allocate trimmed. */
-bool trimmed_trailing_whitespace(const char* input, char* trimmed) {
+size_t trim_trailing_whitespace(const char* input, char* trimmed) {
   if (!input || (0 == strlen(input)) || (is_all_blanks(input))) {
-    return false;
+    return 0;
   }
   char* copy = strdup(input);
   char* last_char = copy + (strlen(copy) - 1);
   // last_char should be greater than input when the loop exits, as otherwise input is all blanks.
+  size_t removed = 0;
   while ((last_char > copy) && (isblank(*last_char))) {
     last_char--;
+    removed++;
   }
   if ((copy + (strlen(copy) - 1)) == last_char) {
     free(copy);
-    return false;
+    return 0;
   }
+  /* Copy the non-blank part of the input to the output.*/
   for (char* cptr = copy; cptr <= last_char; cptr++ ) {
     *trimmed = *cptr;
     trimmed++;
   }
   *trimmed = '\0';
   free(copy);
-  return true;
+  return removed;
 }
 
 /* Caller must allocate trimmed. */
-bool trimmed_leading_whitespace(const char* input, char* trimmed) {
+size_t trim_leading_whitespace(const char* input, char* trimmed) {
   if (!input || (0 == strlen(input)) || (is_all_blanks(input))) {
-    return false;
+    return 0;
   }
   if (!isblank(*input)) {
-    return false;
+    return 0;
   }
   char* copy = strdup(input);
   char* saveptr = copy;
+  size_t removed = 0;
   while (copy && isblank(*copy)) {
     copy++;
+    removed++;
   }
+  /* Copy the non-blank part of the input to the output.*/
   while (*copy) {
     *trimmed = *copy;
     trimmed++;
@@ -132,7 +138,7 @@ bool trimmed_leading_whitespace(const char* input, char* trimmed) {
   }
   *trimmed = '\0';
   free(saveptr);
-  return true;
+  return removed;
 }
 
 bool has_alnum_chars(const char* input) {
@@ -291,21 +297,20 @@ void process_array(char startstring[], size_t *sizelen) {
 /* move to the right through the declaration */
 size_t gettoken(char **declstring) {
 
-  int tokenlen, ctr = 0, tokenoffset = 0;
+  int tokenlen = 0, ctr = 0, tokenoffset = 0;
   memset(this_token.string, '\0', MAXTOKENLEN);
 
   if ((tokenlen = strlen(*declstring)) > MAXTOKENLEN) {
     fprintf(stderr, "\nToken too long %s.\n", *declstring);
-    exit(-EOVERFLOW);
+     return 0;
   }
-  if (!tokenlen)
-    return (0);
-
-  while (isblank(**declstring)) {
-    (*declstring)++;
-    /* include whitespace in tokenoffset */
-    tokenoffset++;
+  if (!tokenlen) {
+    return 0;
   }
+  char trimmed[MAXTOKENLEN];
+  const size_t trimnum = trim_leading_whitespace(*declstring, trimmed);
+  (*declstring) += trimnum;
+  tokenoffset += trimnum;
 
   /* use first non-blank character whether it is alphanumeric or no */
   this_token.string[0] = **declstring;
@@ -549,6 +554,7 @@ bool input_parsing_successful(char inputstr[]) {
 
   /* if there's stuff on the stack or to the right of the identifier */
   if ((stacklen) || (nexttoken < (strlen(inputstr) + &(inputstr[0]))))
+
     parse_declarator(inputstr, &stacklen);
 
   free(saveptr);

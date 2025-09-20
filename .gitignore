@@ -1,3 +1,6 @@
+*test
+.gdb_history
+
 # Prerequisites
 *.d
 

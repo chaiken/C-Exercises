@@ -152,3 +152,33 @@ TEST(StringManipulateSuite, GetKindDelimiters) {
   EXPECT_THAT(get_kind(trimmed), ::testing::Eq(delimiter));
   free(trimmed);
 }
+
+TEST(StringManipulateSuite, GetKindQualifiers) {
+  EXPECT_THAT(get_kind("const"), ::testing::Eq(qualifier));
+  EXPECT_THAT(get_kind("volatile"), ::testing::Eq(qualifier));
+  EXPECT_THAT(get_kind("static"), ::testing::Eq(qualifier));
+  EXPECT_THAT(get_kind("extern"), ::testing::Eq(qualifier));
+  EXPECT_THAT(get_kind("*"), ::testing::Eq(qualifier));
+  EXPECT_THAT(get_kind("unsigned"), ::testing::Eq(qualifier));
+}
+
+TEST(StringManipulateSuite, GetKindTypes) {
+  EXPECT_THAT(get_kind("char"), ::testing::Eq(type));
+  EXPECT_THAT(get_kind("short"), ::testing::Eq(type));
+  EXPECT_THAT(get_kind("int"), ::testing::Eq(type));
+  EXPECT_THAT(get_kind("float"), ::testing::Eq(type));
+  EXPECT_THAT(get_kind("double"), ::testing::Eq(type));
+  EXPECT_THAT(get_kind("long"), ::testing::Eq(type));
+  EXPECT_THAT(get_kind("struct"), ::testing::Eq(type));
+  EXPECT_THAT(get_kind("enum"), ::testing::Eq(type));
+  EXPECT_THAT(get_kind("union"), ::testing::Eq(type));
+  EXPECT_THAT(get_kind("void"), ::testing::Eq(type));
+  EXPECT_THAT(get_kind("int8_t"), ::testing::Eq(type));
+  EXPECT_THAT(get_kind("uint8_t"), ::testing::Eq(type));
+  EXPECT_THAT(get_kind("int16_t"), ::testing::Eq(type));
+  EXPECT_THAT(get_kind("uint16_t"), ::testing::Eq(type));
+  EXPECT_THAT(get_kind("int32_t"), ::testing::Eq(type));
+  EXPECT_THAT(get_kind("uint32_t"), ::testing::Eq(type));
+  EXPECT_THAT(get_kind("int64_t"), ::testing::Eq(type));
+  EXPECT_THAT(get_kind("uint64_t"), ::testing::Eq(type));
+}

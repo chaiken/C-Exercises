@@ -33,10 +33,11 @@
 
 
 const char delimiters[] = {'(', ')', '[', ']', '{', '}', ','};
-const char *types[] = {"char", "short",  "unsigned", "int",   "float", "double",
-                   "long", "struct", "enum", "union", "void"};
-const char *qualifiers[] = {"const",  "register", "volatile",
-                        "static", "*", "extern"};
+const char *types[] = {"char", "short", "int", "float", "double",
+		       "long", "struct", "enum", "union", "void", "int8_t", "uint8_t",
+		       "int8_t", "uint16_t", "int16_t", "uint32_t", "int32_t", "uint64_t",
+		       "int64_t"};
+const char *qualifiers[] = {"const", "volatile", "static", "*", "extern", "unsigned"};
 
 enum token_class { invalid = 0, delimiter, type, qualifier, identifier, whitespace };
 
@@ -169,14 +170,6 @@ enum token_class get_kind(const char *intoken) {
     }
   }
 
-  /*
-   * A string without alphanumeric chars must be whitespace, a delimiter, or
-   * garbage.
-   */
-  if (!has_alnum_chars(intoken)) {
-    return invalid;
-  }
-
   numel = ARRAY_SIZE(types);
   for (ctr = 0; ctr < numel; ctr++) {
     if (!strcmp(intoken, types[ctr]))
@@ -187,6 +180,14 @@ enum token_class get_kind(const char *intoken) {
   for (ctr = 0; ctr < numel; ctr++) {
     if (!strcmp(intoken, qualifiers[ctr]))
       return (qualifier);
+  }
+
+  /*
+   * A string without alphanumeric chars must be whitespace, a delimiter, or
+   * garbage.
+   */
+  if (!has_alnum_chars(intoken)) {
+    return invalid;
   }
 
   return (identifier);

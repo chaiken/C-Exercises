@@ -193,3 +193,59 @@ TEST(StringManipulateSuite, GetKindIdentifiers) {
   EXPECT_THAT(get_kind(" myvar\n"), ::testing::Eq(identifier));
   EXPECT_THAT(get_kind(" myvar;"), ::testing::Eq(identifier));
 }
+
+struct ParserSuite : public ::testing::Test {
+  ParserSuite() : ftemplate("/tmp/fake_stdout_path.XXXXXX"),
+                  fpath(mktemp(const_cast<char*>(ftemplate.c_str()))) {
+    // Opening with "r+" means that the file is not created if it doesn't exist.
+    fake_stdout = fopen(fpath, std::string("w+").c_str());
+    EXPECT_THAT(fake_stdout, ::testing::Ne(nullptr));
+  }
+  ~ParserSuite() override {
+    free(output_str);
+    fclose(fake_stdout);
+  }
+  void TearDown() override {
+    ASSERT_THAT(unlink(fpath), ::testing::Eq(0));
+  }
+  bool StdoutMatches(const std::string &expected) {
+    // Cannot have an assertion in a googletest function which returns a value, as then the function returns the wrong kind of value.
+    // cdecl_testsuite.cc:216:5: error: void value not ignored as it ought to be
+    //  216 |     ASSERT_THAT(fflush(fake_stdout), ::testing::Gt(0));
+    if (fflush(fake_stdout) || fseek(fake_stdout, 0, SEEK_SET)) {
+      return false;
+    }
+    if (feof(fake_stdout) || ferror(fake_stdout)) {
+      return false;
+    }
+    // If the stream doesn't contain the requested number of bytes, fread()
+    // reads nothing and returns 0.
+    // std::size_t num_read = fread(output_str, MAXTOKENLEN -1 , 1, fake_stdout);
+    size_t buffer_size = 0;
+    // Cannot call std::getline() since there is no way to turn FILE* into a C++ stream.
+    EXPECT_THAT(getline(&output_str, &buffer_size, fake_stdout), ::testing::Eq(expected.size()));
+    return (std::string::npos != std::string(output_str).find(expected));
+  }
+  std::string ftemplate;
+  char *fpath;
+  FILE* fake_stdout;
+  // The following causes a memory leak:
+  // char* output_str = (char*)malloc(MAXTOKENLEN);
+  //
+  // The reason is that getline() changes the address of output_str.  One can
+  // save the initial value of output_str and free() that, but memory which
+  // glibc allocated will still leak:
+  // ==2131242==ERROR: LeakSanitizer: detected memory leaks
+  // Direct leak of 120 byte(s) in 1 object(s) allocated from:
+  // #0 0x7f8587cf4c57 in malloc ../../../../src/libsanitizer/asan/asan_malloc_linux.cpp:69
+  // #1 0x7f8586e896dd in __GI___getdelim libio/iogetdelim.c:65
+  char *output_str;
+};
+
+TEST_F(ParserSuite, SimpleExpression) {
+  struct token this_token;
+  char inputstr[] = "int x;";
+  EXPECT_THAT(input_parsing_successful(inputstr, &this_token, fake_stdout), ::testing::IsTrue());
+  // The output has a trailng space in case there's output after the type.
+  EXPECT_THAT(StdoutMatches("x is a(n) int "), ::testing::IsTrue());
+}

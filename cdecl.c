@@ -193,7 +193,7 @@ enum token_class get_kind(const char *intoken) {
     return invalid;
   }
 
-  return (identifier);
+  return identifier;
 }
 
 void showstack(const struct token* stack) {
@@ -212,7 +212,7 @@ void showstack(const struct token* stack) {
 }
 
 /* fails for multiple arguments */
-void process_function_args(char startstring[], size_t *arglength, const struct token* stack) {
+void process_function_args(char startstring[], size_t *arglength, const struct token* stack, FILE* output_stream) {
   char endstring[MAXTOKENLEN];
   char *argstring = (char *)malloc(strlen(startstring));
   char *saveptr = argstring;
@@ -234,36 +234,36 @@ void process_function_args(char startstring[], size_t *arglength, const struct t
   printargs = *arglength;
 
   if (strstr(endstring, ". . .")) {
-    printf("a variadic function ");
+    fprintf(output_stream, "a variadic function ");
     /* 3 '.', 3 spaces, one comma */
     printargs -= 7;
   } else
-    printf("a function ");
+    fprintf(output_stream, "a function ");
 
   if (printargs) {
-    printf("that takes ");
+    fprintf(output_stream, "that takes ");
 
     for (ctr = 0; ctr < printargs; ctr++) {
       if (endstring[ctr] == ',')
-        printf(" and");
+        fprintf(output_stream, " and");
       else
         putchar(endstring[ctr]);
     }
-    printf(" args and ");
+    fprintf(output_stream, " args and ");
   }
 
-  printf("that returns ");
+  fprintf(output_stream, "that returns ");
   free(saveptr);
   return;
 
   showstack(stack);
-  printf("\nMismatched function arg delimiters.\n");
+  fprintf(stderr, "\nMismatched function arg delimiters.\n");
   if (argstring)
     free(saveptr);
   exit(-1);
 }
 
-void process_array(char startstring[], size_t *sizelen, const struct token* stack) {
+void process_array(char startstring[], size_t *sizelen, const struct token* stack, FILE* output_stream) {
   char endstring[MAXTOKENLEN];
   size_t ctr = 0;
   *sizelen = 0;
@@ -271,7 +271,7 @@ void process_array(char startstring[], size_t *sizelen, const struct token* stac
   assert(startstring);
 
   strcpy(endstring, (const char *)startstring);
-  printf("array of ");
+  fprintf(output_stream, "array of ");
 
   while ((*sizelen < strlen(startstring)) && (endstring[*sizelen] != ']'))
     (*sizelen)++;
@@ -280,14 +280,14 @@ void process_array(char startstring[], size_t *sizelen, const struct token* stac
     /* print any array size values */
     if (*sizelen >= 1) {
       while (ctr++ < *sizelen)
-        printf("%c", startstring[ctr - 1]);
+        fprintf(output_stream, "%c", startstring[ctr - 1]);
     }
-    printf(" ");
+    fprintf(output_stream, " ");
     return;
   }
 
   showstack(stack);
-  printf("\nMismatched array delimiters.\n");
+  fprintf(stderr, "\nMismatched array delimiters.\n");
   exit(-1);
 }
 
@@ -334,7 +334,7 @@ out:
 void push_stack(size_t tokennum, struct token* this_token, struct token* stack) {
 
   if (tokennum >= MAXTOKENS) {
-    printf("\nStack overflow.\n");
+    fprintf(stderr, "\nStack overflow.\n");
     exit(-ENOMEM);
   }
 
@@ -344,10 +344,10 @@ void push_stack(size_t tokennum, struct token* this_token, struct token* stack) 
 }
 
 /* move back to the left */
-void pop_stack(size_t *tokennum, struct token* this_token, struct token* stack) {
+void pop_stack(size_t *tokennum, struct token* this_token, struct token* stack, FILE* output_stream) {
 
   if (!(*tokennum)) {
-    printf("\nAttempt to pop empty stack.\n");
+    fprintf(stderr, "\nAttempt to pop empty stack.\n");
     exit(-ENODATA);
   }
 
@@ -355,7 +355,7 @@ void pop_stack(size_t *tokennum, struct token* this_token, struct token* stack) 
      rather than to the object to which the pointer points.
   */
   if (!strcmp(stack[*tokennum].string, "*"))
-    printf("pointer(s) to ");
+    fprintf(output_stream, "pointer(s) to ");
   /* print all qualifiers but pointer */
   else
     switch (stack[*tokennum].kind) {
@@ -364,16 +364,17 @@ void pop_stack(size_t *tokennum, struct token* this_token, struct token* stack) 
     case qualifier:
       __attribute__((fallthrough));
     case type:
-      printf("%s ", stack[*tokennum].string);
+      fprintf(output_stream, "%s ", stack[*tokennum].string);
       break;
     case delimiter:
       /* Ignore this_token token, which should be the
          opening parenthesis of a function pointer.
          There should be no array delimiters on the stack */
       (*tokennum)--;
-      pop_stack(tokennum, this_token, stack);
+      pop_stack(tokennum, this_token, stack, output_stream);
       break;
     case invalid:
+      __attribute__((fallthrough));
     default:
       fprintf(stderr, "\nError: element %s is of unknown type %d.\n",
               this_token->string, this_token->kind);
@@ -387,14 +388,14 @@ void pop_stack(size_t *tokennum, struct token* this_token, struct token* stack) 
   return;
 }
 
-void parse_declarator(char input[], size_t *slen, struct token* this_token, struct token* stack) {
+void parse_declarator(char input[], size_t *slen, struct token* this_token, struct token* stack, FILE* output_stream) {
  /* strstr() shouldn't return NULL since we've already determined
   that this_token->string is present */
   const char *strp = strstr((const char *)input, (const char *)this_token->string);
 
   char *declp = strdup(strp);
   if (!declp) {
-    printf("OOM\n");
+    fprintf(stderr, "OOM\n");
     exit(-ENOMEM);
   }
   char* saveptr = declp;
@@ -402,6 +403,7 @@ void parse_declarator(char input[], size_t *slen, struct token* this_token, stru
   size_t offset = 0;
   static int declnum = 0;
   size_t *argoffset = (size_t *)malloc(sizeof(size_t));
+  *argoffset = 0;
 
 #ifdef DEBUG
   printf("\n\tDeclarator number %d\n", declnum);
@@ -417,11 +419,11 @@ void parse_declarator(char input[], size_t *slen, struct token* this_token, stru
     offset += gettoken(&declp, this_token);
     switch (this_token->kind) {
     case invalid:
-      printf("Unitialized token kind\n");
+      fprintf(stderr, "Invalid input.\n");
       exit (EXIT_FAILURE);
     case delimiter:
       if (!(strcmp(this_token->string, "["))) {
-        process_array(&input[offset], argoffset, stack);
+        process_array(&input[offset], argoffset, stack, output_stream);
         offset += *argoffset;
         /* go past array size specification */
         while ((*argoffset)--)
@@ -434,7 +436,7 @@ void parse_declarator(char input[], size_t *slen, struct token* this_token, stru
       /* this_token opening parenthesis is to the right of the
       identifier, so it can only enclose functions args */
       if (!(strcmp(this_token->string, "("))) {
-        process_function_args(&input[offset], argoffset, stack);
+        process_function_args(&input[offset], argoffset, stack, output_stream);
         offset += *argoffset;
         /* go past any function args */
         while ((*argoffset)--)
@@ -450,7 +452,7 @@ void parse_declarator(char input[], size_t *slen, struct token* this_token, stru
          discarded above
       */
       if (!(strcmp(this_token->string, ")"))) {
-        pop_stack(slen, this_token, stack);
+        pop_stack(slen, this_token, stack, output_stream);
         break;
       }
 
@@ -494,9 +496,9 @@ void parse_declarator(char input[], size_t *slen, struct token* this_token, stru
   while (*slen) {
     if ((strcmp(stack[*slen].string, ")")) ||
         (strcmp(stack[*slen].string, "*")) || (stack[*slen].kind == qualifier))
-      pop_stack(slen, this_token, stack);
+      pop_stack(slen, this_token, stack, output_stream);
     if (slen)
-      parse_declarator(input, slen, this_token, stack);
+      parse_declarator(input, slen, this_token, stack, output_stream);
   }
 
   free(saveptr);
@@ -507,7 +509,7 @@ void parse_declarator(char input[], size_t *slen, struct token* this_token, stru
 /*
  * Returns true iff input is successfully parsed.  Actual parsing begins here.
  */
-bool input_parsing_successful(char inputstr[], struct token* this_token) {
+bool input_parsing_successful(char inputstr[], struct token* this_token, FILE *output_stream) {
   char *nexttoken = (char *)malloc(MAXTOKENLEN);
   /* preserve original pointer so that it can be freed */
   char *saveptr = nexttoken;
@@ -531,7 +533,7 @@ bool input_parsing_successful(char inputstr[], struct token* this_token) {
     }
   }
  if (!input_end) {
-    printf("\nImproperly terminated declaration.\n");
+    fprintf(stderr, "\nImproperly terminated declaration.\n");
     free(saveptr);
     return false;
   }
@@ -541,18 +543,22 @@ bool input_parsing_successful(char inputstr[], struct token* this_token) {
   struct token stack[MAXTOKENS];
   while ((gettoken(&nexttoken, this_token)) && (this_token->kind != identifier))
     push_stack(++stacklen, this_token, &stack[0]); /* moving to the right */
+  if (0 == strlen(this_token->string)) {
+    fprintf(stderr, "Unable to read garbled input.\n");
+    return false;
+  }
 
-  if (this_token->kind == identifier)
-    printf("%s is a(n) ", this_token->string);
-  else {
-    printf("\nNo identifiers in input string '%s'\n", inputstr);
+  if (this_token->kind == identifier) {
+    fprintf(output_stream, "%s is a(n) ", this_token->string);
+  } else {
+    fprintf(stderr, "\nNo identifiers in input string '%s'\n", inputstr);
     free(saveptr);
     return false;
   }
 
   /* if there's stuff on the stack or to the right of the identifier */
   if ((stacklen) || (nexttoken < (strlen(inputstr) + &(inputstr[0]))))
-    parse_declarator(inputstr, &stacklen, this_token, &stack[0]);
+    parse_declarator(inputstr, &stacklen, this_token, &stack[0], output_stream);
 
   free(saveptr);
   return true;
@@ -636,7 +642,7 @@ int main(int argc, char **argv) {
   struct token this_token;
   this_token.kind = invalid;
   strcpy(this_token.string, "");
-  if (!input_parsing_successful(inputstr, &this_token)) {
+  if (!input_parsing_successful(inputstr, &this_token, stdout)) {
     exit(EXIT_FAILURE);
   }
   /*	showstack(); */

@@ -212,7 +212,7 @@ void showstack(const struct token* stack) {
 }
 
 /* fails for multiple arguments */
-void process_function_args(char startstring[], size_t *arglength, const struct token* stack, FILE* output_stream) {
+bool processed_function_args(char startstring[], size_t *arglength, FILE* output_stream) {
   char endstring[MAXTOKENLEN];
   char *argstring = (char *)malloc(strlen(startstring));
   char *saveptr = argstring;
@@ -228,7 +228,7 @@ void process_function_args(char startstring[], size_t *arglength, const struct t
 
   if (endstring[*arglength] != ')') {
     fprintf(stderr, "Malformed function arguments %s\n", argstring);
-    exit(-1);
+    return false;
   }
 
   printargs = *arglength;
@@ -254,16 +254,11 @@ void process_function_args(char startstring[], size_t *arglength, const struct t
 
   fprintf(output_stream, "that returns ");
   free(saveptr);
-  return;
 
-  showstack(stack);
-  fprintf(stderr, "\nMismatched function arg delimiters.\n");
-  if (argstring)
-    free(saveptr);
-  exit(-1);
+  return true;
 }
 
-void process_array(char startstring[], size_t *sizelen, const struct token* stack, FILE* output_stream) {
+bool processed_array(char startstring[], size_t *sizelen, const struct token* stack, FILE* output_stream) {
   char endstring[MAXTOKENLEN];
   size_t ctr = 0;
   *sizelen = 0;
@@ -283,49 +278,55 @@ void process_array(char startstring[], size_t *sizelen, const struct token* stac
         fprintf(output_stream, "%c", startstring[ctr - 1]);
     }
     fprintf(output_stream, " ");
-    return;
+    return true;
   }
 
   showstack(stack);
   fprintf(stderr, "\nMismatched array delimiters.\n");
-  exit(-1);
+  return false;
 }
 
-/* move to the right through the declaration */
-size_t gettoken(char **declstring, struct token *this_token) {
+/* Moves to the right through the declaration, returning space- or
+ * delimiter-separated token at a time.
+ * The parameter this_token returns the next token in the string.
+ * The return value is the offset where parsing should resume in the next pass.
+ */
+size_t gettoken(char *declstring, struct token *this_token) {
 
-  int tokenlen = 0, ctr = 0, tokenoffset = 0;
+  const size_t tokenlen = strlen(declstring);
+  size_t ctr = 0, tokenoffset = 0;
+  char trimmed[MAXTOKENLEN];
   memset(this_token->string, '\0', MAXTOKENLEN);
 
-  if ((tokenlen = strlen(*declstring)) > MAXTOKENLEN) {
-    fprintf(stderr, "\nToken too long %s.\n", *declstring);
-     return 0;
-  }
   if (!tokenlen) {
     return 0;
   }
-  char trimmed[MAXTOKENLEN];
-  const size_t trimnum = trim_leading_whitespace(*declstring, trimmed);
-  (*declstring) += trimnum;
+  if (tokenlen > (MAXTOKENLEN-1)) {
+    fprintf(stderr, "\nToken too long %s.\n", declstring);
+    return 0;
+  }
+
+  /* Move past leading whitespace. */
+  const size_t trimnum = trim_leading_whitespace(declstring, trimmed);
+  declstring += trimnum;
   tokenoffset += trimnum;
 
   /* use first non-blank character whether it is alphanumeric or no */
-  this_token->string[0] = **declstring;
-  (*declstring)++;
+  this_token->string[0] = *declstring;
+  declstring++;
   tokenoffset++;
 
-  /* non-alphanumeric token has is always a single-char */
-  /* Are we disallowing dash and underscore in identifiers? */
+  /* Non-alphanumeric token has is always a single char. */
+  /* Here we implicitly disallow dash and underscore in identifiers. */
   if (!(isalnum(this_token->string[0])))
-    goto out;
+    goto done;
 
-  for (ctr = 0; (isalnum(**declstring) && (ctr <= tokenlen)); ctr++) {
-    this_token->string[ctr + 1] = **declstring;
-    (*declstring)++;
+  for (ctr = 0; (isalnum(*declstring) && (ctr <= tokenlen)); ctr++) {
+    this_token->string[ctr + 1] = *(declstring++);
     tokenoffset++;
   }
 
-out:
+done:
   this_token->string[ctr + 1] = '\0';
   this_token->kind = get_kind(this_token->string);
   return (tokenoffset);
@@ -344,11 +345,12 @@ void push_stack(size_t tokennum, struct token* this_token, struct token* stack) 
 }
 
 /* move back to the left */
-void pop_stack(size_t *tokennum, struct token* this_token, struct token* stack, FILE* output_stream) {
+/* Return 0 on success, an error code on failure */
+int pop_stack(size_t *tokennum, struct token* this_token, struct token* stack, FILE* output_stream) {
 
   if (!(*tokennum)) {
     fprintf(stderr, "\nAttempt to pop empty stack.\n");
-    exit(-ENODATA);
+    return -ENODATA;
   }
 
   /* Qualifiers following * apply to the pointer itself,
@@ -378,20 +380,23 @@ void pop_stack(size_t *tokennum, struct token* this_token, struct token* stack, 
     default:
       fprintf(stderr, "\nError: element %s is of unknown type %d.\n",
               this_token->string, this_token->kind);
-      exit(-1);
+      return -EINVAL;
     }
 
   memset(stack[*tokennum].string, '\0', MAXTOKENLEN);
   stack[*tokennum].kind = invalid;
   if (*tokennum)
     (*tokennum)--;
-  return;
+  return 0;
 }
 
-void parse_declarator(char input[], size_t *slen, struct token* this_token, struct token* stack, FILE* output_stream) {
- /* strstr() shouldn't return NULL since we've already determined
-  that this_token->string is present */
+/* Return 0 on on success, an error code on failure. */
+int parse_declarator(char input[], size_t *slen, struct token* this_token, struct token* stack, FILE* output_stream) {
   const char *strp = strstr((const char *)input, (const char *)this_token->string);
+  if (!strp) {
+      fprintf(stderr, "Bad token: %s\n", this_token->string);
+      return -EINVAL;
+  }
 
   char *declp = strdup(strp);
   if (!declp) {
@@ -416,14 +421,17 @@ void parse_declarator(char input[], size_t *slen, struct token* this_token, stru
 
   /* process arguments on the right of identifier */
   while ((strlen(declp)) && (offset > 0)) {
-    offset += gettoken(&declp, this_token);
+    offset += gettoken(declp, this_token);
+    declp += offset;
     switch (this_token->kind) {
     case invalid:
       fprintf(stderr, "Invalid input.\n");
-      exit (EXIT_FAILURE);
+      return -EINVAL;
     case delimiter:
       if (!(strcmp(this_token->string, "["))) {
-        process_array(&input[offset], argoffset, stack, output_stream);
+        if (!processed_array(&input[offset], argoffset, stack, output_stream)) {
+	  return -EINVAL;
+	}
         offset += *argoffset;
         /* go past array size specification */
         while ((*argoffset)--)
@@ -436,7 +444,9 @@ void parse_declarator(char input[], size_t *slen, struct token* this_token, stru
       /* this_token opening parenthesis is to the right of the
       identifier, so it can only enclose functions args */
       if (!(strcmp(this_token->string, "("))) {
-        process_function_args(&input[offset], argoffset, stack, output_stream);
+        if (!processed_function_args(&input[offset], argoffset, output_stream)) {
+	  return -EINVAL;
+	}
         offset += *argoffset;
         /* go past any function args */
         while ((*argoffset)--)
@@ -452,7 +462,10 @@ void parse_declarator(char input[], size_t *slen, struct token* this_token, stru
          discarded above
       */
       if (!(strcmp(this_token->string, ")"))) {
-        pop_stack(slen, this_token, stack, output_stream);
+        int err = pop_stack(slen, this_token, stack, output_stream);
+	if (err) {
+	  return err;
+	}
         break;
       }
 
@@ -484,9 +497,10 @@ void parse_declarator(char input[], size_t *slen, struct token* this_token, stru
       fflush(stderr);
       /* Prevent chars speculatively written to stdout from printing. */
       __fpurge(stdout);
-      if (argoffset)
+      if (argoffset) {
         free(argoffset);
-      exit(-1);
+      }
+      return -EINVAL;
     }
   }
   memset(this_token->string, '\0', MAXTOKENLEN);
@@ -501,9 +515,13 @@ void parse_declarator(char input[], size_t *slen, struct token* this_token, stru
       parse_declarator(input, slen, this_token, stack, output_stream);
   }
 
-  free(saveptr);
-  free(argoffset);
-  return;
+  if (saveptr) {
+    free(saveptr);
+  }
+  if (argoffset) {
+    free(argoffset);
+  }
+  return 0;
 }
 
 /*
@@ -511,8 +529,11 @@ void parse_declarator(char input[], size_t *slen, struct token* this_token, stru
  */
 bool input_parsing_successful(char inputstr[], struct token* this_token, FILE *output_stream) {
   char *nexttoken = (char *)malloc(MAXTOKENLEN);
-  /* preserve original pointer so that it can be freed */
-  char *saveptr = nexttoken;
+  /*
+   * ptr_offset is the difference between the current value of nexttoken and the
+   * allocated value on the heap.
+   */
+  size_t ptr_offset = 0;
   /* stack starts at 1 so that (!stacklen) means an empty stack,
   but initialize to zero because counter is incremented before
   calling push_stack */
@@ -528,23 +549,24 @@ bool input_parsing_successful(char inputstr[], struct token* this_token, FILE *o
    /* Input with two semicolons could reach this point. */
     if (input_end == nexttoken) {
       fprintf(stderr, "Zero-length input string.\n");
-      free(saveptr);
+      free(nexttoken);
       return false;
     }
   }
  if (!input_end) {
     fprintf(stderr, "\nImproperly terminated declaration.\n");
-    free(saveptr);
+    free(nexttoken);
     return false;
   }
   strlcpy(inputstr, nexttoken, (input_end - nexttoken) + 1);
-  nexttoken = inputstr;
+  strlcpy(nexttoken, inputstr, MAXTOKENLEN);
 
   struct token stack[MAXTOKENS];
-  while ((gettoken(&nexttoken, this_token)) && (this_token->kind != identifier))
+  while ((ptr_offset = gettoken(nexttoken + ptr_offset, this_token) > 0) && (this_token->kind != identifier))
     push_stack(++stacklen, this_token, &stack[0]); /* moving to the right */
   if (0 == strlen(this_token->string)) {
     fprintf(stderr, "Unable to read garbled input.\n");
+    free(nexttoken - ptr_offset);
     return false;
   }
 
@@ -552,15 +574,18 @@ bool input_parsing_successful(char inputstr[], struct token* this_token, FILE *o
     fprintf(output_stream, "%s is a(n) ", this_token->string);
   } else {
     fprintf(stderr, "\nNo identifiers in input string '%s'\n", inputstr);
-    free(saveptr);
+    free(nexttoken - ptr_offset);
     return false;
   }
 
   /* if there's stuff on the stack or to the right of the identifier */
-  if ((stacklen) || (nexttoken < (strlen(inputstr) + &(inputstr[0]))))
-    parse_declarator(inputstr, &stacklen, this_token, &stack[0], output_stream);
+  if ((stacklen) || (nexttoken < (strlen(inputstr) + &(inputstr[0])))) {
+    if(parse_declarator(inputstr, &stacklen, this_token, &stack[0], output_stream)) {
+      return false;
+    }
+  }
 
-  free(saveptr);
+  free(nexttoken - ptr_offset);
   return true;
 }
 

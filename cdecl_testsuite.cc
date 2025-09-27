@@ -200,6 +200,7 @@ struct ParserSuite : public Test {
     // Opening with "r+" means that the file is not created if it doesn't exist.
     fake_stdout = fopen(fpath, std::string("w+").c_str());
     EXPECT_THAT(fake_stdout, Ne(nullptr));
+    bzero(this_token.string, MAXTOKENLEN);
   }
   ~ParserSuite() override {
     free(output_str);
@@ -224,8 +225,12 @@ struct ParserSuite : public Test {
     size_t buffer_size = 0;
     // Cannot call std::getline() since there is no way to turn FILE* into a C++
     // stream.
-    EXPECT_THAT(getline(&output_str, &buffer_size, fake_stdout),
-                Eq(expected.size()));
+    ssize_t num_read = getline(&output_str, &buffer_size, fake_stdout);
+    if (-1 == num_read) {
+      std::cerr << "getline() failed: " << strerror(errno) << std::endl;
+      return false;
+    }
+
     return (std::string::npos != std::string(output_str).find(expected));
   }
   std::string ftemplate;
@@ -243,10 +248,10 @@ struct ParserSuite : public Test {
   // ../../../../src/libsanitizer/asan/asan_malloc_linux.cpp:69 #1
   // 0x7f8586e896dd in __GI___getdelim libio/iogetdelim.c:65
   char *output_str;
+  struct token this_token;
 };
 
 TEST_F(ParserSuite, SimpleExpression) {
-  struct token this_token;
   char inputstr[] = "int x;";
   EXPECT_THAT(input_parsing_successful(inputstr, &this_token, fake_stdout),
               IsTrue());

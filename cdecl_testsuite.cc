@@ -292,31 +292,46 @@ TEST(StackTest, Push2ndElement) {
   EXPECT_THAT(stack[2].string, StrEq("const"));
 }
 
+bool reset_stream_is_ok(FILE *stream) {
+  if (fflush(stream) || fseek(stream, 0, SEEK_SET)) {
+    return false;
+  }
+  if (feof(stream) || ferror(stream)) {
+    return false;
+  }
+  return true;
+}
+
 struct ParserSuite : public Test {
   ParserSuite()
       : ftemplate("/tmp/fake_stdout_path.XXXXXX"),
-        fpath(mktemp(const_cast<char *>(ftemplate.c_str()))) {
+        fopath(mktemp(const_cast<char *>(ftemplate.c_str()))),
+        fepath(mktemp(const_cast<char *>(ftemplate.c_str()))) {
     // Opening with "r+" means that the file is not created if it doesn't exist.
-    fake_stdout = fopen(fpath, std::string("w+").c_str());
+    fake_stdout = fopen(fopath, std::string("w+").c_str());
     EXPECT_THAT(fake_stdout, Ne(nullptr));
+    fake_stderr = fopen(fepath, std::string("w+").c_str());
+    EXPECT_THAT(fake_stderr, Ne(nullptr));
     this_token.kind = invalid;
     bzero(this_token.string, MAXTOKENLEN);
   }
 
   ~ParserSuite() override {
-    free(output_str);
+    free(out_str);
+    free(err_str);
     fclose(fake_stdout);
+    fclose(fake_stderr);
   }
-  void TearDown() override { ASSERT_THAT(unlink(fpath), Eq(0)); }
+  void TearDown() override {
+    ASSERT_THAT(unlink(fopath), Eq(0));
+    ASSERT_THAT(unlink(fepath), Eq(0));
+  }
   bool StdoutMatches(const std::string &expected) {
     // Cannot have an assertion in a googletest function which returns a value,
     // as then the function returns the wrong kind of value.
     // cdecl_testsuite.cc:216:5: error: void value not ignored as it ought to be
     //  216 |     ASSERT_THAT(fflush(fake_stdout), Gt(0));
-    if (fflush(fake_stdout) || fseek(fake_stdout, 0, SEEK_SET)) {
-      return false;
-    }
-    if (feof(fake_stdout) || ferror(fake_stdout)) {
+    if (!reset_stream_is_ok(fake_stdout)) {
       return false;
     }
     // If the stream doesn't contain the requested number of bytes, fread()
@@ -326,17 +341,37 @@ struct ParserSuite : public Test {
     size_t buffer_size = 0;
     // Cannot call std::getline() since there is no way to turn FILE* into a C++
     // stream.
-    ssize_t num_read = getline(&output_str, &buffer_size, fake_stdout);
+    ssize_t num_read = getline(&out_str, &buffer_size, fake_stdout);
     if (-1 == num_read) {
       std::cerr << "getline() failed: " << strerror(errno) << std::endl;
       return false;
     }
 
-    return (std::string::npos != std::string(output_str).find(expected));
+    return (std::string::npos != std::string(out_str).find(expected));
+  }
+  bool StderrMatches(const std::string &expected) {
+    if (!reset_stream_is_ok(fake_stderr)) {
+      return false;
+    }
+    // If the stream doesn't contain the requested number of bytes, fread()
+    // reads nothing and returns 0.
+    // std::size_t num_read = fread(output_str, MAXTOKENLEN -1 , 1,
+    // fake_stdout);
+    size_t buffer_size = 0;
+    // Cannot call std::getline() since there is no way to turn FILE* into a C++
+    // stream.
+    ssize_t num_read = getline(&err_str, &buffer_size, fake_stdout);
+    if (-1 == num_read) {
+      std::cerr << "getline() failed: " << strerror(errno) << std::endl;
+      return false;
+    }
+    return (std::string::npos != std::string(err_str).find(expected));
   }
   std::string ftemplate;
-  char *fpath;
+  char *fopath;
+  char *fepath;
   FILE *fake_stdout;
+  FILE *fake_stderr;
   // The following causes a memory leak:
   // char* output_str = (char*)malloc(MAXTOKENLEN);
   //
@@ -348,14 +383,43 @@ struct ParserSuite : public Test {
   // #0 0x7f8587cf4c57 in malloc
   // ../../../../src/libsanitizer/asan/asan_malloc_linux.cpp:69 #1
   // 0x7f8586e896dd in __GI___getdelim libio/iogetdelim.c:65
-  char *output_str;
+  char *out_str;
+  char *err_str;
   struct token this_token;
 };
 
+TEST_F(ParserSuite, PopEmpty) {
+  struct token stack[MAXTOKENS];
+  stack[0].kind = invalid;
+  strcpy(stack[0].string, "");
+  size_t tokennum = 0;
+  struct token this_token;
+  EXPECT_THAT(pop_stack(&tokennum, &this_token, &stack[0], stdout, stderr),
+              Eq(-ENODATA));
+  EXPECT_THAT(StdoutMatches(""), IsTrue());
+  EXPECT_THAT(StderrMatches("Attempt to pop empty stack."), IsTrue());
+}
+
+TEST_F(ParserSuite, PopOne) {
+  struct token stack[MAXTOKENS];
+  stack[0].kind = invalid;
+  strcpy(stack[0].string, "");
+  struct token this_token0{type, "int"};
+  size_t tokennum = 1;
+  push_stack(tokennum, &this_token0, &stack[0]);
+
+  struct token this_token;
+  EXPECT_THAT(pop_stack(&tokennum, &this_token, &stack[0], stdout, stderr),
+              Eq(0));
+  EXPECT_THAT(StdoutMatches("int"), IsTrue());
+  EXPECT_THAT(StderrMatches(""), IsTrue());
+}
+
 TEST_F(ParserSuite, SimpleExpression) {
   char inputstr[] = "int x;";
-  EXPECT_THAT(input_parsing_successful(inputstr, &this_token, fake_stdout),
-              IsTrue());
+  EXPECT_THAT(
+      input_parsing_successful(inputstr, &this_token, fake_stdout, stderr),
+      IsTrue());
   // The output has a trailng space in case there's output after the type.
   EXPECT_THAT(StdoutMatches("x is a(n) int "), IsTrue());
 }

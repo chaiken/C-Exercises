@@ -261,6 +261,37 @@ TEST(TokenizerSuite, LeadingDelimiter2) {
   EXPECT_THAT(this_token.kind, Eq(delimiter));
 }
 
+TEST(StackTest, PushEmptyStack) {
+  struct token stack[MAXTOKENS];
+  stack[0].kind = invalid;
+  strcpy(stack[0].string, "");
+  struct token this_token{type, "int"};
+  size_t tokennum = 1;
+  push_stack(tokennum, &this_token, &stack[0]);
+  EXPECT_THAT(stack[0].kind, Eq(invalid));
+  EXPECT_THAT(stack[0].string, StrEq(""));
+  EXPECT_THAT(stack[1].kind, Eq(type));
+  EXPECT_THAT(stack[1].string, StrEq("int"));
+}
+
+TEST(StackTest, Push2ndElement) {
+  struct token stack[MAXTOKENS];
+  stack[0].kind = invalid;
+  strcpy(stack[0].string, "");
+  struct token this_token0{type, "int"};
+  size_t tokennum = 1;
+  push_stack(tokennum, &this_token0, &stack[0]);
+  struct token this_token1{qualifier, "const"};
+  tokennum = 2;
+  push_stack(tokennum, &this_token1, &stack[0]);
+  EXPECT_THAT(stack[0].kind, Eq(invalid));
+  EXPECT_THAT(stack[0].string, StrEq(""));
+  EXPECT_THAT(stack[1].kind, Eq(type));
+  EXPECT_THAT(stack[1].string, StrEq("int"));
+  EXPECT_THAT(stack[2].kind, Eq(qualifier));
+  EXPECT_THAT(stack[2].string, StrEq("const"));
+}
+
 struct ParserSuite : public Test {
   ParserSuite()
       : ftemplate("/tmp/fake_stdout_path.XXXXXX"),
@@ -268,8 +299,10 @@ struct ParserSuite : public Test {
     // Opening with "r+" means that the file is not created if it doesn't exist.
     fake_stdout = fopen(fpath, std::string("w+").c_str());
     EXPECT_THAT(fake_stdout, Ne(nullptr));
+    this_token.kind = invalid;
     bzero(this_token.string, MAXTOKENLEN);
   }
+
   ~ParserSuite() override {
     free(output_str);
     fclose(fake_stdout);

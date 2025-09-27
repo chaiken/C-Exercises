@@ -193,6 +193,74 @@ TEST(StringManipulateSuite, GetKindIdentifiers) {
   EXPECT_THAT(get_kind(" myvar;"), Eq(identifier));
 }
 
+TEST(TokenizerSuite, Empty) {
+  struct token this_token;
+  char input[] = "";
+  EXPECT_THAT(gettoken(input, &this_token), Eq(0));
+  EXPECT_THAT(this_token.string, IsEmpty());
+  EXPECT_THAT(this_token.kind, Eq(invalid));
+}
+
+TEST(TokenizerSuite, SimpleType) {
+  struct token this_token;
+  char input[] = "int";
+  EXPECT_THAT(gettoken(input, &this_token), Eq(3));
+  EXPECT_THAT(this_token.string, StrEq("int"));
+  EXPECT_THAT(this_token.kind, Eq(type));
+}
+
+TEST(TokenizerSuite, IncludesPtr) {
+  struct token this_token;
+  char input[] = "int*";
+  EXPECT_THAT(gettoken(input, &this_token), Eq(3));
+  EXPECT_THAT(this_token.string, StrEq("int"));
+  EXPECT_THAT(this_token.kind, Eq(type));
+}
+
+TEST(TokenizerSuite, SimpleQualifier) {
+  struct token this_token;
+  char input[] = "const int";
+  EXPECT_THAT(gettoken(input, &this_token), Eq(5));
+  EXPECT_THAT(this_token.string, StrEq("const"));
+  EXPECT_THAT(this_token.kind, Eq(qualifier));
+}
+
+// Since the parser does not move past the initial space, it not included in the
+// returned count.
+TEST(TokenizerSuite, TrailingWhitespace) {
+  struct token this_token;
+  char input[] = "int    ";
+  EXPECT_THAT(gettoken(input, &this_token), Eq(3));
+  EXPECT_THAT(this_token.string, StrEq("int"));
+  EXPECT_THAT(this_token.kind, Eq(type));
+}
+
+// Since the parser moved past the initial space, it is included in the returned
+// offset value.
+TEST(TokenizerSuite, LeadingWhitespace) {
+  struct token this_token;
+  char input[] = " int";
+  EXPECT_THAT(gettoken(input, &this_token), Eq(4));
+  EXPECT_THAT(this_token.string, StrEq("int"));
+  EXPECT_THAT(this_token.kind, Eq(type));
+}
+
+TEST(TokenizerSuite, LeadingDelimiter) {
+  struct token this_token;
+  char input[] = " { ";
+  EXPECT_THAT(gettoken(input, &this_token), Eq(2));
+  EXPECT_THAT(this_token.string, StrEq("{"));
+  EXPECT_THAT(this_token.kind, Eq(delimiter));
+}
+
+TEST(TokenizerSuite, LeadingDelimiter2) {
+  struct token this_token;
+  char input[] = " )";
+  EXPECT_THAT(gettoken(input, &this_token), Eq(2));
+  EXPECT_THAT(this_token.string, StrEq(")"));
+  EXPECT_THAT(this_token.kind, Eq(delimiter));
+}
+
 struct ParserSuite : public Test {
   ParserSuite()
       : ftemplate("/tmp/fake_stdout_path.XXXXXX"),

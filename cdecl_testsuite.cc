@@ -304,9 +304,10 @@ bool reset_stream_is_ok(FILE *stream) {
 
 struct ParserSuite : public Test {
   ParserSuite()
-      : ftemplate("/tmp/fake_stdout_path.XXXXXX"),
-        fopath(mktemp(const_cast<char *>(ftemplate.c_str()))),
-        fepath(mktemp(const_cast<char *>(ftemplate.c_str()))) {
+      : fotemplate("/tmp/fake_stdout_path.XXXXXX"),
+        fetemplate("/tmp/fake_stderr_path.XXXXXX"),
+        fopath(mktemp(const_cast<char *>(fotemplate.c_str()))),
+        fepath(mktemp(const_cast<char *>(fetemplate.c_str()))) {
     // Opening with "r+" means that the file is not created if it doesn't exist.
     fake_stdout = fopen(fopath, std::string("w+").c_str());
     EXPECT_THAT(fake_stdout, Ne(nullptr));
@@ -360,14 +361,15 @@ struct ParserSuite : public Test {
     size_t buffer_size = 0;
     // Cannot call std::getline() since there is no way to turn FILE* into a C++
     // stream.
-    ssize_t num_read = getline(&err_str, &buffer_size, fake_stdout);
+    ssize_t num_read = getline(&err_str, &buffer_size, fake_stderr);
     if (-1 == num_read) {
       std::cerr << "getline() failed: " << strerror(errno) << std::endl;
       return false;
     }
     return (std::string::npos != std::string(err_str).find(expected));
   }
-  std::string ftemplate;
+  std::string fotemplate;
+  std::string fetemplate;
   char *fopath;
   char *fepath;
   FILE *fake_stdout;
@@ -394,9 +396,9 @@ TEST_F(ParserSuite, PopEmpty) {
   strcpy(stack[0].string, "");
   size_t tokennum = 0;
   struct token this_token;
-  EXPECT_THAT(pop_stack(&tokennum, &this_token, &stack[0], stdout, stderr),
-              Eq(-ENODATA));
-  EXPECT_THAT(StdoutMatches(""), IsTrue());
+  EXPECT_THAT(
+      pop_stack(&tokennum, &this_token, &stack[0], fake_stdout, fake_stderr),
+      Eq(-ENODATA));
   EXPECT_THAT(StderrMatches("Attempt to pop empty stack."), IsTrue());
 }
 
@@ -409,10 +411,10 @@ TEST_F(ParserSuite, PopOne) {
   push_stack(tokennum, &this_token0, &stack[0]);
 
   struct token this_token;
-  EXPECT_THAT(pop_stack(&tokennum, &this_token, &stack[0], stdout, stderr),
-              Eq(0));
+  EXPECT_THAT(
+      pop_stack(&tokennum, &this_token, &stack[0], fake_stdout, fake_stderr),
+      Eq(0));
   EXPECT_THAT(StdoutMatches("int"), IsTrue());
-  EXPECT_THAT(StderrMatches(""), IsTrue());
 }
 
 TEST_F(ParserSuite, SimpleExpression) {

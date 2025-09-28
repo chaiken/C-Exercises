@@ -318,8 +318,6 @@ struct ParserSuite : public Test {
   }
 
   ~ParserSuite() override {
-    free(out_str);
-    free(err_str);
     fclose(fake_stdout);
     fclose(fake_stderr);
   }
@@ -347,8 +345,9 @@ struct ParserSuite : public Test {
       std::cerr << "getline() failed: " << strerror(errno) << std::endl;
       return false;
     }
-
-    return (std::string::npos != std::string(out_str).find(expected));
+    bool retval = (std::string::npos != std::string(out_str).find(expected));
+    free(out_str);
+    return retval;
   }
   bool StderrMatches(const std::string &expected) {
     if (!reset_stream_is_ok(fake_stderr)) {
@@ -366,7 +365,9 @@ struct ParserSuite : public Test {
       std::cerr << "getline() failed: " << strerror(errno) << std::endl;
       return false;
     }
-    return (std::string::npos != std::string(err_str).find(expected));
+    bool retval = (std::string::npos != std::string(err_str).find(expected));
+    free(err_str);
+    return retval;
   }
   std::string fotemplate;
   std::string fetemplate;

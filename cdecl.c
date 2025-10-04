@@ -85,6 +85,7 @@ bool is_all_blanks(const char* input) {
   return false;
 }
 
+/* Return value is the number of trimmed characters. */
 /* Caller must allocate trimmed. */
 size_t trim_trailing_whitespace(const char* input, char* trimmed) {
   if (!input || (0 == strlen(input)) || (is_all_blanks(input))) {
@@ -287,12 +288,12 @@ bool processed_array(char startstring[], size_t *sizelen, const struct token*
   return false;
 }
 
-/* Moves to the right through the declaration, returning space- or
+/* Moves to the right through the declaration, returning one space- or
  * delimiter-separated token at a time.
  * The parameter this_token returns the next token in the string.
  * The return value is the offset where parsing should resume in the next pass.
  */
-size_t gettoken(char *declstring, struct token *this_token) {
+size_t gettoken(const char *declstring, struct token *this_token) {
 
   const size_t tokenlen = strlen(declstring);
   size_t ctr = 0, tokenoffset = 0;
@@ -309,12 +310,10 @@ size_t gettoken(char *declstring, struct token *this_token) {
 
   /* Move past leading whitespace. */
   const size_t trimnum = trim_leading_whitespace(declstring, trimmed);
-  declstring += trimnum;
   tokenoffset += trimnum;
 
   /* use first non-blank character whether it is alphanumeric or no */
-  this_token->string[0] = *declstring;
-  declstring++;
+  this_token->string[0] = *(declstring + tokenoffset);
   tokenoffset++;
 
   /* Non-alphanumeric token has is always a single char. */
@@ -322,8 +321,9 @@ size_t gettoken(char *declstring, struct token *this_token) {
   if (!(isalnum(this_token->string[0])))
     goto done;
 
-  for (ctr = 0; (isalnum(*declstring) && (ctr <= tokenlen)); ctr++) {
-    this_token->string[ctr + 1] = *(declstring++);
+  for (ctr = 0; (isalnum(*(declstring + tokenoffset)) && (ctr <= tokenlen));
+       ctr++) {
+    this_token->string[ctr + 1] = *(declstring + tokenoffset);
     tokenoffset++;
   }
 
@@ -526,6 +526,30 @@ int parse_declarator(char input[], size_t *slen, struct token* this_token, struc
   return 0;
 }
 
+bool truncate_input(char** input, FILE* err_stream) {
+  char trimmed[MAXTOKENLEN];
+  char *input_end = NULL;
+  /* Dump chars after '=', if any. */
+  input_end = strstr(*input, "=");
+  /* If the input after '='is not lopped off, the input should terminate with ';'. */
+  if (!input_end) {
+    input_end = strstr(*input, ";");
+   /* Input with two semicolons could reach this point. */
+    if (input_end == *input) {
+      fprintf(err_stream, "Zero-length input string.\n");
+      return false;
+    } else if (!input_end) { /* there is neither an '=' or a ';' */
+      fprintf(err_stream, "\nImproperly terminated declaration.\n");
+      return false;
+    }
+  }
+  *input_end = '\0';
+  if (trim_trailing_whitespace(*input, trimmed)) {
+    strlcpy(*input, trimmed, MAXTOKENLEN);
+  }
+  return true;
+}
+
 /*
  * Returns true iff input is successfully parsed.  Actual parsing begins here.
  */
@@ -533,35 +557,19 @@ bool input_parsing_successful(char inputstr[], struct token* this_token, FILE *o
   char *nexttoken = (char *)malloc(MAXTOKENLEN);
   /*
    * ptr_offset is the difference between the current value of nexttoken and the
-   * allocated value on the heap.
+   * start of the heap allocation.
    */
   size_t ptr_offset = 0;
   /* stack starts at 1 so that (!stacklen) means an empty stack,
   but initialize to zero because counter is incremented before
   calling push_stack */
   size_t stacklen = 0;
-  char *input_end = NULL;
 
   strlcpy(nexttoken, inputstr, MAXTOKENLEN);
-  /* Dump chars after '=', if any. */
-  input_end = strstr(nexttoken, "=");
-  /* If the input after '='is not lopped off, the input should terminate with ';'. */
-  if (!input_end) {
-    input_end = strstr(nexttoken, ";");
-   /* Input with two semicolons could reach this point. */
-    if (input_end == nexttoken) {
-      fprintf(err_stream, "Zero-length input string.\n");
-      free(nexttoken);
-      return false;
-    }
-  }
- if (!input_end) {
-    fprintf(err_stream, "\nImproperly terminated declaration.\n");
+  if (!truncate_input(&nexttoken, err_stream)) {
     free(nexttoken);
     return false;
   }
-  strlcpy(inputstr, nexttoken, (input_end - nexttoken) + 1);
-  strlcpy(nexttoken, inputstr, MAXTOKENLEN);
 
   struct token stack[MAXTOKENS];
   while ((ptr_offset = gettoken(nexttoken + ptr_offset, this_token) > 0) && (this_token->kind != identifier))
@@ -582,11 +590,10 @@ bool input_parsing_successful(char inputstr[], struct token* this_token, FILE *o
 
   /* if there's stuff on the stack or to the right of the identifier */
   if ((stacklen) || (nexttoken < (strlen(inputstr) + &(inputstr[0])))) {
-    if(parse_declarator(inputstr, &stacklen, this_token, &stack[0], out_stream, err_stream)) {
+    if (parse_declarator(inputstr, &stacklen, this_token, &stack[0], out_stream, err_stream)) {
       return false;
     }
   }
-
   free(nexttoken - ptr_offset);
   return true;
 }

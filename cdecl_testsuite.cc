@@ -407,6 +407,46 @@ struct ParserSuite : public Test {
   struct token this_token;
 };
 
+TEST_F(ParserSuite, Truncation) {
+  char *token = (char*) malloc(MAXTOKENLEN);
+
+  strlcpy(token, "int x;", MAXTOKENLEN);
+  EXPECT_THAT(truncate_input(&token, fake_stderr), IsTrue());
+  // Checking strlen() assures that the result is NULL-terminated.
+  EXPECT_THAT(strlen(token), Eq(5));
+  EXPECT_THAT(token, StrEq("int x"));
+
+  bzero(token, MAXTOKENLEN);
+  strlcpy(token, "int x   ;", MAXTOKENLEN);
+  EXPECT_THAT(truncate_input(&token, fake_stderr), IsTrue());
+  EXPECT_THAT(strlen(token), Eq(5));
+  EXPECT_THAT(token, StrEq("int x"));
+
+  bzero(token, MAXTOKENLEN);
+  strlcpy(token, "int x = 2;", MAXTOKENLEN);
+  EXPECT_THAT(truncate_input(&token, fake_stderr), IsTrue());
+  EXPECT_THAT(strlen(token), Eq(5));
+  EXPECT_THAT(token, StrEq("int x"));
+
+  bzero(token, MAXTOKENLEN);
+  strlcpy(token, "const int x;", MAXTOKENLEN);
+  EXPECT_THAT(truncate_input(&token, fake_stderr), IsTrue());
+  EXPECT_THAT(strlen(token), Eq(11));
+  EXPECT_THAT(token, StrEq("const int x"));
+
+  bzero(token, MAXTOKENLEN);
+  strlcpy(token, "int x", MAXTOKENLEN);
+  EXPECT_THAT(truncate_input(&token, fake_stderr), IsFalse());
+  EXPECT_THAT(StderrMatches("Improperly terminated declaration."), IsTrue());
+
+  bzero(token, MAXTOKENLEN);
+  strlcpy(token, ";int x", MAXTOKENLEN);
+  EXPECT_THAT(truncate_input(&token, fake_stderr), IsFalse());
+  EXPECT_THAT(StderrMatches("Zero-length input string."), IsTrue());
+
+  free(token);
+}
+
 TEST_F(ParserSuite, PopEmpty) {
   struct token stack[MAXTOKENS];
   stack[0].kind = invalid;

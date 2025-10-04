@@ -107,6 +107,7 @@ TEST(StringManipulateSuite, TrimmedTrailingWhitepace) {
   EXPECT_THAT(trim_trailing_whitespace(" b", trimmed), Eq(0));
   EXPECT_THAT(trim_trailing_whitespace("c    ", trimmed), Eq(4));
   EXPECT_THAT(std::string(trimmed), StrEq("c"));
+  EXPECT_THAT(trim_trailing_whitespace("    ", trimmed), Eq(4));
   free(trimmed);
 }
 
@@ -441,6 +442,11 @@ TEST_F(ParserSuite, Truncation) {
 
   bzero(token, MAXTOKENLEN);
   strlcpy(token, ";int x", MAXTOKENLEN);
+  EXPECT_THAT(truncate_input(&token, fake_stderr), IsFalse());
+  EXPECT_THAT(StderrMatches("Zero-length input string."), IsTrue());
+
+  bzero(token, MAXTOKENLEN);
+  strlcpy(token, "   = ", MAXTOKENLEN);
   EXPECT_THAT(truncate_input(&token, fake_stderr), IsFalse());
   EXPECT_THAT(StderrMatches("Zero-length input string."), IsTrue());
 

@@ -85,11 +85,19 @@ bool is_all_blanks(const char* input) {
   return false;
 }
 
-/* Return value is the number of trimmed characters. */
-/* Caller must allocate trimmed. */
+/*
+ * Return value is the number of trimmed characters.
+ * trimmed is the same as input except that it will end in a non-whitespace character.
+ * If there are no non-whitespace characters, trimmed will be empty.
+ * Caller must allocate trimmed.
+ */
 size_t trim_trailing_whitespace(const char* input, char* trimmed) {
-  if (!input || (0 == strlen(input)) || (is_all_blanks(input))) {
+  if (!input || (0 == strlen(input))) {
     return 0;
+  }
+  if (is_all_blanks(input)) {
+    bzero(trimmed, MAXTOKENLEN);
+    return(strlen(input));
   }
   char* copy = strdup(input);
   char* last_char = copy + (strlen(copy) - 1);
@@ -154,6 +162,39 @@ bool has_alnum_chars(const char* input) {
     return false;
   }
   free(saveptr);
+  return true;
+}
+
+/*
+ * Remove any characters following ';' or '=' plus any whitespace which precedes
+ * these characters.  Returns true if the input contains one of those chars and
+ * has any non-whitespace characters before them.
+ */
+bool truncate_input(char** input, FILE* err_stream) {
+  char trimmed[MAXTOKENLEN];
+  char *input_end = NULL;
+  /* Dump chars after '=', if any. */
+  input_end = strstr(*input, "=");
+  /* If the input after '='is not lopped off, the input should terminate with ';'. */
+  if (!input_end) {
+    input_end = strstr(*input, ";");
+   /* Input with two semicolons could reach this point. */
+    if (input_end == *input) {
+      fprintf(err_stream, "Zero-length input string.\n");
+      return false;
+    } else if (!input_end) { /* there is neither an '=' or a ';' */
+      fprintf(err_stream, "\nImproperly terminated declaration.\n");
+      return false;
+    }
+  }
+  *input_end = '\0';
+  if (trim_trailing_whitespace(*input, trimmed)) {
+    strlcpy(*input, trimmed, MAXTOKENLEN);
+  }
+  if (!strlen(*input)) {
+    fprintf(err_stream, "Zero-length input string.\n");
+    return false;
+  }
   return true;
 }
 
@@ -524,30 +565,6 @@ int parse_declarator(char input[], size_t *slen, struct token* this_token, struc
     free(argoffset);
   }
   return 0;
-}
-
-bool truncate_input(char** input, FILE* err_stream) {
-  char trimmed[MAXTOKENLEN];
-  char *input_end = NULL;
-  /* Dump chars after '=', if any. */
-  input_end = strstr(*input, "=");
-  /* If the input after '='is not lopped off, the input should terminate with ';'. */
-  if (!input_end) {
-    input_end = strstr(*input, ";");
-   /* Input with two semicolons could reach this point. */
-    if (input_end == *input) {
-      fprintf(err_stream, "Zero-length input string.\n");
-      return false;
-    } else if (!input_end) { /* there is neither an '=' or a ';' */
-      fprintf(err_stream, "\nImproperly terminated declaration.\n");
-      return false;
-    }
-  }
-  *input_end = '\0';
-  if (trim_trailing_whitespace(*input, trimmed)) {
-    strlcpy(*input, trimmed, MAXTOKENLEN);
-  }
-  return true;
 }
 
 /*

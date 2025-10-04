@@ -263,34 +263,30 @@ TEST(TokenizerSuite, LeadingDelimiter2) {
 }
 
 struct StackTest : public Test {
-  void SetUp() override {
-    stack[0].kind = invalid;
-    strcpy(stack[0].string, "");
-    push_stack(tokennum, &this_token, &stack[0], stderr);
-  }
-
-  struct token stack[MAXTOKENS];
-  struct token this_token{type, "int"};
-  size_t tokennum = 1;
+  void SetUp() override { initialize_parser(&parser); }
+  struct parser_props parser;
 };
 
 TEST_F(StackTest, PushEmptyStack) {
-  EXPECT_THAT(stack[0].kind, Eq(invalid));
-  EXPECT_THAT(stack[0].string, StrEq(""));
-  EXPECT_THAT(stack[1].kind, Eq(type));
-  EXPECT_THAT(stack[1].string, StrEq("int"));
+  struct token token0{type, "int"};
+  EXPECT_THAT(parser.stacklen, Eq(0));
+  push_stack(&parser, &token0, stderr);
+  EXPECT_THAT(parser.stack[0].kind, Eq(type));
+  EXPECT_THAT(parser.stack[0].string, StrEq("int"));
+  EXPECT_THAT(parser.stacklen, Eq(1));
 }
 
 TEST_F(StackTest, Push2ndElement) {
-  struct token this_token1{qualifier, "const"};
-  tokennum = 2;
-  push_stack(tokennum, &this_token1, &stack[0], stderr);
-  EXPECT_THAT(stack[0].kind, Eq(invalid));
-  EXPECT_THAT(stack[0].string, StrEq(""));
-  EXPECT_THAT(stack[1].kind, Eq(type));
-  EXPECT_THAT(stack[1].string, StrEq("int"));
-  EXPECT_THAT(stack[2].kind, Eq(qualifier));
-  EXPECT_THAT(stack[2].string, StrEq("const"));
+  EXPECT_THAT(parser.stacklen, Eq(0));
+  struct token token0{type, "int"};
+  push_stack(&parser, &token0, stderr);
+  struct token token1{qualifier, "const"};
+  push_stack(&parser, &token1, stderr);
+  EXPECT_THAT(parser.stack[0].kind, Eq(type));
+  EXPECT_THAT(parser.stack[0].string, StrEq("int"));
+  EXPECT_THAT(parser.stack[1].kind, Eq(qualifier));
+  EXPECT_THAT(parser.stack[1].string, StrEq("const"));
+  EXPECT_THAT(parser.stacklen, Eq(2));
 }
 
 bool reset_stream_is_ok(FILE *stream) {
@@ -409,7 +405,7 @@ struct ParserSuite : public Test {
 };
 
 TEST_F(ParserSuite, Truncation) {
-  char *token = (char*) malloc(MAXTOKENLEN);
+  char *token = (char *)malloc(MAXTOKENLEN);
 
   strlcpy(token, "int x;", MAXTOKENLEN);
   EXPECT_THAT(truncate_input(&token, fake_stderr), IsTrue());
@@ -454,55 +450,45 @@ TEST_F(ParserSuite, Truncation) {
 }
 
 TEST_F(ParserSuite, PopEmpty) {
-  struct token stack[MAXTOKENS];
-  stack[0].kind = invalid;
-  strcpy(stack[0].string, "");
-  size_t tokennum = 0;
-  struct token this_token;
-  EXPECT_THAT(
-      pop_stack(&tokennum, &this_token, &stack[0], fake_stdout, fake_stderr),
-      Eq(-ENODATA));
+  struct parser_props parser;
+  initialize_parser(&parser);
+  struct token token;
+  EXPECT_THAT(pop_stack(&parser, &token, fake_stdout, fake_stderr),
+              Eq(-ENODATA));
   EXPECT_THAT(StderrMatches("Attempt to pop empty stack."), IsTrue());
 }
 
 TEST_F(ParserSuite, PopOne) {
-  struct token stack[MAXTOKENS];
-  stack[0].kind = invalid;
-  strcpy(stack[0].string, "");
-  struct token this_token0{type, "int"};
-  size_t tokennum = 1;
-  push_stack(tokennum, &this_token0, &stack[0], fake_stderr);
+  struct parser_props parser;
+  initialize_parser(&parser);
+  struct token token0{type, "int"};
+  push_stack(&parser, &token0, fake_stderr);
 
-  struct token this_token;
-  EXPECT_THAT(
-      pop_stack(&tokennum, &this_token, &stack[0], fake_stdout, fake_stderr),
-      Eq(0));
+  struct token token;
+  EXPECT_THAT(pop_stack(&parser, &token, fake_stdout, fake_stderr), Eq(0));
   EXPECT_THAT(StdoutMatches("int"), IsTrue());
 }
 
 TEST_F(ParserSuite, Showstack) {
-  struct token stack[MAXTOKENS];
-  stack[0].kind = invalid;
-  strcpy(stack[0].string, "");
-  struct token this_token0{type, "int"};
-  size_t tokennum = 1;
-  push_stack(tokennum, &this_token0, &stack[0], fake_stderr);
-  tokennum = 2;
-  struct token this_token1{qualifier, "const"};
-  push_stack(tokennum, &this_token1, &stack[0], fake_stderr);
-  showstack(stack, fake_stdout);
+  struct parser_props parser;
+  initialize_parser(&parser);
+  struct token token0{type, "int"};
+  push_stack(&parser, &token0, fake_stderr);
+  struct token token1{qualifier, "const"};
+  push_stack(&parser, &token1, fake_stderr);
+  showstack(&parser.stack[0], fake_stdout);
   EXPECT_THAT(StdoutMatches("Stack is:"), IsTrue());
-  EXPECT_THAT(StdoutMatches("Token number 1 has kind 2 and string int"),
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind 2 and string int"),
               IsTrue());
-  EXPECT_THAT(StdoutMatches("Token number 2 has kind 3 and string const"),
+  EXPECT_THAT(StdoutMatches("Token number 1 has kind 3 and string const"),
               IsTrue());
 }
 
 TEST_F(ParserSuite, SimpleExpression) {
   char inputstr[] = "int x;";
-  EXPECT_THAT(
-      input_parsing_successful(inputstr, &this_token, fake_stdout, stderr),
-      IsTrue());
+  struct token token0;
+  EXPECT_THAT(input_parsing_successful(inputstr, &token0, fake_stdout, stderr),
+              IsTrue());
   // The output has a trailng space in case there's output after the type.
   EXPECT_THAT(StdoutMatches("x is a(n) int "), IsTrue());
 }

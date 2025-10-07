@@ -484,6 +484,28 @@ TEST_F(ParserSuite, Showstack) {
               IsTrue());
 }
 
+TEST_F(ParserSuite, LoadStack) {
+  struct parser_props parser;
+  initialize_parser(&parser);
+  char nexttoken[MAXTOKENLEN];
+  const char* probe = "const int* x;";
+  strlcpy(nexttoken, probe, strlen(probe) + 1);
+  std::size_t consumed =
+      load_stack(&parser, nexttoken, fake_stdout, fake_stderr);
+  // consumed = strlen()-1 since the trailing ';' is elided before gettoken()
+  // processing begins.
+  EXPECT_THAT(consumed, Eq(strlen(probe)-1));
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind 3 and string const"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 1 has kind 2 and string int"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 2 has kind 3 and string *"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 3 has kind 4 and string x"),
+              IsTrue());
+  showstack(&parser.stack[0], stdout);
+}
+
 TEST_F(ParserSuite, SimpleExpression) {
   char inputstr[] = "int x;";
   struct token token0;

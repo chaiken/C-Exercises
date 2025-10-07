@@ -363,7 +363,7 @@ size_t gettoken(const char *declstring, struct token *this_token) {
 
   /* Move past leading whitespace. */
   const size_t trimnum = trim_leading_whitespace(declstring, trimmed);
-  tokenoffset += trimnum;
+  tokenoffset = trimnum;
 
   /* use first non-blank character whether it is alphanumeric or no */
   this_token->string[0] = *(declstring + tokenoffset);
@@ -585,44 +585,62 @@ int parse_declarator(char input[], struct parser_props* parser,
   return 0;
 }
 
+size_t load_stack(struct parser_props* parser, char* nexttoken, FILE* out_stream, FILE* err_stream) {
+  struct token this_token;
+  char trimmed[MAXTOKENLEN];
+   /*
+    * offset is the number of characters consumed by gettoken().
+    * offset >= this_token->string since leading whitespace in nexttoken will be
+    * skipped.
+    */
+  size_t offset = 0;
+  if (!truncate_input(&nexttoken, err_stream)) {
+    return 0;
+  }
+  while ((this_token.kind != identifier) &&
+        (offset < strlen(nexttoken))) {
+    char* input_cursor  = nexttoken + offset;
+    offset += gettoken(input_cursor, &this_token);
+    size_t trailing = trim_trailing_whitespace(nexttoken, trimmed);
+    if (trailing) {
+      strlcpy(nexttoken, trimmed, MAXTOKENLEN);
+      offset += trailing;
+    }
+    push_stack(parser, &this_token, err_stream);
+  }
+  showstack(parser->stack, out_stream);
+  return offset;
+}
+
+
 /*
  * Returns true iff input is successfully parsed.  Actual parsing begins here.
  */
 bool input_parsing_successful(char inputstr[], struct token* this_token,
 			      FILE *out_stream, FILE* err_stream) {
+  /* Allocate and call strlcpy() in case the input is too long. */
   char *nexttoken = (char *)malloc(MAXTOKENLEN);
-  /*
-   * ptr_offset is the difference between the current value of nexttoken and the
-   * start of the heap allocation.
-   */
+  struct parser_props parser;
   size_t ptr_offset = 0;
 
   strlcpy(nexttoken, inputstr, MAXTOKENLEN);
-  if (!truncate_input(&nexttoken, err_stream)) {
+  initialize_parser(&parser);
+
+  ptr_offset = load_stack(&parser, nexttoken, out_stream, err_stream);
+  if (0 == parser.stacklen) {
+    fprintf(err_stream, "Unable to read garbled input.\n");
     free(nexttoken);
     return false;
   }
-  struct parser_props parser;
-  initialize_parser(&parser);
-
-  while ((ptr_offset = gettoken(nexttoken + ptr_offset, this_token) > 0) &&
-	 (this_token->kind != identifier)) {
-    push_stack(&parser, this_token, err_stream); /* moving to the right */
-  }
-  if (0 == strlen(this_token->string)) {
-    fprintf(err_stream, "Unable to read garbled input.\n");
-    free(nexttoken - ptr_offset);
-    return false;
-  }
-
-  if (this_token->kind == identifier) {
+  showstack(parser.stack, out_stream);
+  if ((pop_stack(&parser, this_token, out_stream, err_stream) &&
+       (identifier == this_token->kind))) {
     fprintf(out_stream, "%s is a(n) ", this_token->string);
   } else {
     fprintf(err_stream, "\nNo identifiers in input string '%s'\n", inputstr);
     free(nexttoken - ptr_offset);
     return false;
   }
-
   /* if there's stuff on the stack or to the right of the identifier */
   if ((parser.stacklen) || (nexttoken < (strlen(inputstr) + &(inputstr[0])))) {
     if (parse_declarator(inputstr, &parser, this_token, out_stream, err_stream)) {
@@ -709,8 +727,6 @@ int main(int argc, char **argv) {
     exit(EINVAL);
   }
   struct token this_token;
-  this_token.kind = invalid;
-  strcpy(this_token.string, "");
   if (!input_parsing_successful(inputstr, &this_token, stdout, stderr)) {
     exit(EXIT_FAILURE);
   }

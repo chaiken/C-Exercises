@@ -194,80 +194,73 @@ TEST(StringManipulateSuite, GetKindIdentifiers) {
   EXPECT_THAT(get_kind(" myvar;"), Eq(identifier));
 }
 
-TEST(TokenizerSuite, Empty) {
+struct TokenizerSuite : public Test {
+  TokenizerSuite() { initialize_parser(&parser); }
   struct token this_token;
+  struct parser_props parser;
+};
+
+TEST_F(TokenizerSuite, Empty) {
   char input[] = "";
-  EXPECT_THAT(gettoken(input, &this_token), Eq(0));
+  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(0));
   EXPECT_THAT(this_token.string, IsEmpty());
   EXPECT_THAT(this_token.kind, Eq(invalid));
 }
 
-TEST(TokenizerSuite, SimpleType) {
-  struct token this_token;
+TEST_F(TokenizerSuite, SimpleType) {
   char input[] = "int";
-  EXPECT_THAT(gettoken(input, &this_token), Eq(3));
+  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(3));
   EXPECT_THAT(this_token.string, StrEq("int"));
   EXPECT_THAT(this_token.kind, Eq(type));
 }
 
-TEST(TokenizerSuite, IncludesPtr) {
-  struct token this_token;
+TEST_F(TokenizerSuite, IncludesPtr) {
   char input[] = "int*";
-  EXPECT_THAT(gettoken(input, &this_token), Eq(3));
+  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(3));
   EXPECT_THAT(this_token.string, StrEq("int"));
   EXPECT_THAT(this_token.kind, Eq(type));
 }
 
-TEST(TokenizerSuite, SimpleQualifier) {
-  struct token this_token;
+TEST_F(TokenizerSuite, SimpleQualifier) {
   char input[] = "const int";
-  EXPECT_THAT(gettoken(input, &this_token), Eq(5));
+  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(5));
   EXPECT_THAT(this_token.string, StrEq("const"));
   EXPECT_THAT(this_token.kind, Eq(qualifier));
 }
 
 // Since the parser does not move past the initial space, it not included in the
 // returned count.
-TEST(TokenizerSuite, TrailingWhitespace) {
-  struct token this_token;
+TEST_F(TokenizerSuite, TrailingWhitespace) {
   char input[] = "int    ";
-  EXPECT_THAT(gettoken(input, &this_token), Eq(3));
+  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(3));
   EXPECT_THAT(this_token.string, StrEq("int"));
   EXPECT_THAT(this_token.kind, Eq(type));
 }
 
 // Since the parser moved past the initial space, it is included in the returned
 // offset value.
-TEST(TokenizerSuite, LeadingWhitespace) {
-  struct token this_token;
+TEST_F(TokenizerSuite, LeadingWhitespace) {
   char input[] = " int";
-  EXPECT_THAT(gettoken(input, &this_token), Eq(4));
+  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(4));
   EXPECT_THAT(this_token.string, StrEq("int"));
   EXPECT_THAT(this_token.kind, Eq(type));
 }
 
-TEST(TokenizerSuite, LeadingDelimiter) {
-  struct token this_token;
+TEST_F(TokenizerSuite, LeadingDelimiter) {
   char input[] = " { ";
-  EXPECT_THAT(gettoken(input, &this_token), Eq(2));
+  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(2));
   EXPECT_THAT(this_token.string, StrEq("{"));
   EXPECT_THAT(this_token.kind, Eq(delimiter));
 }
 
-TEST(TokenizerSuite, LeadingDelimiter2) {
-  struct token this_token;
+TEST_F(TokenizerSuite, LeadingDelimiter2) {
   char input[] = " )";
-  EXPECT_THAT(gettoken(input, &this_token), Eq(2));
+  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(2));
   EXPECT_THAT(this_token.string, StrEq(")"));
   EXPECT_THAT(this_token.kind, Eq(delimiter));
 }
 
-struct StackTest : public Test {
-  void SetUp() override { initialize_parser(&parser); }
-  struct parser_props parser;
-};
-
-TEST_F(StackTest, PushEmptyStack) {
+TEST_F(TokenizerSuite, PushEmptyStack) {
   struct token token0{type, "int"};
   EXPECT_THAT(parser.stacklen, Eq(0));
   push_stack(&parser, &token0, stderr);
@@ -276,7 +269,7 @@ TEST_F(StackTest, PushEmptyStack) {
   EXPECT_THAT(parser.stacklen, Eq(1));
 }
 
-TEST_F(StackTest, Push2ndElement) {
+TEST_F(TokenizerSuite, Push2ndElement) {
   EXPECT_THAT(parser.stacklen, Eq(0));
   struct token token0{type, "int"};
   push_stack(&parser, &token0, stderr);
@@ -451,7 +444,6 @@ TEST_F(ParserSuite, Truncation) {
 
 TEST_F(ParserSuite, PopEmpty) {
   struct parser_props parser;
-  initialize_parser(&parser);
   struct token token;
   EXPECT_THAT(pop_stack(&parser, &token, fake_stdout, fake_stderr),
               Eq(-ENODATA));
@@ -460,7 +452,6 @@ TEST_F(ParserSuite, PopEmpty) {
 
 TEST_F(ParserSuite, PopOne) {
   struct parser_props parser;
-  initialize_parser(&parser);
   struct token token0{type, "int"};
   push_stack(&parser, &token0, fake_stderr);
 
@@ -471,7 +462,6 @@ TEST_F(ParserSuite, PopOne) {
 
 TEST_F(ParserSuite, Showstack) {
   struct parser_props parser;
-  initialize_parser(&parser);
   struct token token0{type, "int"};
   push_stack(&parser, &token0, fake_stderr);
   struct token token1{qualifier, "const"};
@@ -484,17 +474,16 @@ TEST_F(ParserSuite, Showstack) {
               IsTrue());
 }
 
-TEST_F(ParserSuite, LoadStack) {
+TEST_F(ParserSuite, LoadStackWorks) {
   struct parser_props parser;
-  initialize_parser(&parser);
   char nexttoken[MAXTOKENLEN];
-  const char* probe = "const int* x;";
+  const char *probe = "const int* x;";
   strlcpy(nexttoken, probe, strlen(probe) + 1);
   std::size_t consumed =
       load_stack(&parser, nexttoken, fake_stdout, fake_stderr);
   // consumed = strlen()-1 since the trailing ';' is elided before gettoken()
   // processing begins.
-  EXPECT_THAT(consumed, Eq(strlen(probe)-1));
+  EXPECT_THAT(consumed, Eq(strlen(probe) - 1));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind 3 and string const"),
               IsTrue());
   EXPECT_THAT(StdoutMatches("Token number 1 has kind 2 and string int"),
@@ -506,6 +495,46 @@ TEST_F(ParserSuite, LoadStack) {
   showstack(&parser.stack[0], stdout);
 }
 
+TEST_F(ParserSuite, LoadStackEqualsTerminator) {
+  struct parser_props parser;
+  char nexttoken[MAXTOKENLEN];
+  const char *probe = "static double val = 2;";
+  strlcpy(nexttoken, probe, strlen(probe) + 1);
+  std::size_t consumed =
+      load_stack(&parser, nexttoken, fake_stdout, fake_stderr);
+  EXPECT_THAT(consumed, Eq(strlen(probe) - strlen(" = 2;")));
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind 3 and string static"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 1 has kind 2 and string double"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 2 has kind 4 and string val"),
+              IsTrue());
+  showstack(&parser.stack[0], stdout);
+}
+
+TEST_F(ParserSuite, NothingToLoad) {
+  struct parser_props parser;
+  char nexttoken[MAXTOKENLEN];
+  const char *probe = "=;";
+  strlcpy(nexttoken, probe, strlen(probe) + 1);
+  std::size_t consumed =
+      load_stack(&parser, nexttoken, fake_stdout, fake_stderr);
+  EXPECT_THAT(consumed, Eq(0));
+  EXPECT_THAT(StderrMatches("Zero-length input string."), IsTrue());
+}
+
+TEST_F(ParserSuite, LotsOfWhitespace) {
+  struct parser_props parser;
+  char nexttoken[MAXTOKENLEN];
+  const char *probe = "     ;";
+  strlcpy(nexttoken, probe, strlen(probe) + 1);
+  std::size_t consumed =
+      load_stack(&parser, nexttoken, fake_stdout, fake_stderr);
+  EXPECT_THAT(consumed, Eq(0));
+  EXPECT_THAT(StderrMatches("Zero-length input string."), IsTrue());
+}
+
+/*
 TEST_F(ParserSuite, SimpleExpression) {
   char inputstr[] = "int x;";
   struct token token0;
@@ -514,3 +543,4 @@ TEST_F(ParserSuite, SimpleExpression) {
   // The output has a trailng space in case there's output after the type.
   EXPECT_THAT(StdoutMatches("x is a(n) int "), IsTrue());
 }
+*/

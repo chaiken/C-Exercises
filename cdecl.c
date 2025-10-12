@@ -55,6 +55,7 @@ struct token {
 struct parser_props {
   bool have_identifier;
   bool have_type;
+  bool have_delimiter;
   size_t stacklen;
   struct token stack[MAXTOKENS];
 };
@@ -62,6 +63,7 @@ struct parser_props {
 void initialize_parser(struct parser_props* parser) {
   parser->have_identifier = false;
   parser->have_type = false;
+  parser->have_delimiter = false;
   parser->stacklen = 0;
 }
 
@@ -391,11 +393,22 @@ size_t gettoken(struct parser_props* parser, const char *declstring,
 done:
   this_token->string[ctr + 1] = '\0';
   this_token->kind = get_kind(this_token->string);
-  if (identifier == this_token->kind) {
+  switch(this_token->kind) {
+  case identifier:
     parser->have_identifier = true;
-  }
-  if (type == this_token->kind) {
+    break;
+  case type:
     parser->have_type = true;
+    break;
+  case delimiter:
+    parser->have_delimiter = true;
+    break;
+  case qualifier:
+      __attribute__((fallthrough));
+  case invalid:
+      __attribute__((fallthrough));
+  default:
+    break;
   }
   return (tokenoffset);
 }
@@ -562,7 +575,6 @@ int parse_declarator(char input[], struct parser_props* parser,
               this_token->string);
       break;
     case qualifier:
-      push_stack(parser, this_token, err_stream);
       break;
     case whitespace:
       break;
@@ -584,10 +596,12 @@ int parse_declarator(char input[], struct parser_props* parser,
   while (parser->stacklen) {
     size_t stacktop = parser->stacklen - 1;
     if ((strcmp(parser->stack[stacktop].string, ")")) ||
-        (strcmp(parser->stack[stacktop].string, "*")) || (parser->stack[stacktop].kind == qualifier))
+        (strcmp(parser->stack[stacktop].string, "*")) || (parser->stack[stacktop].kind == qualifier)) {
       pop_stack(parser, this_token, out_stream, err_stream);
-    if (parser->stacklen)
+    }
+    if (parser->stacklen) {
       parse_declarator(input, parser, this_token, out_stream, err_stream);
+    }
   }
 
   if (saveptr) {
@@ -637,6 +651,7 @@ bool input_parsing_successful(char inputstr[], struct token* this_token,
   struct parser_props parser;
   initialize_parser(&parser);
   size_t ptr_offset = 0;
+  struct token stacktop;
 
   strlcpy(nexttoken, inputstr, MAXTOKENLEN);
   ptr_offset = load_stack(&parser, nexttoken, out_stream, err_stream);
@@ -651,8 +666,9 @@ bool input_parsing_successful(char inputstr[], struct token* this_token,
     return false;
   }
   showstack(parser.stack, out_stream);
-  if ((pop_stack(&parser, this_token, out_stream, err_stream) &&
-       (identifier == this_token->kind))) {
+  stacktop.kind = invalid;
+  if ((pop_stack(&parser, &stacktop, out_stream, err_stream) &&
+       (identifier == stacktop.kind))) {
     fprintf(out_stream, "%s is a(n) ", this_token->string);
   } else {
     fprintf(err_stream, "\nNo identifiers in input string '%s'\n", inputstr);

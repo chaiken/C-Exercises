@@ -205,6 +205,9 @@ TEST_F(TokenizerSuite, Empty) {
   EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(0));
   EXPECT_THAT(this_token.string, IsEmpty());
   EXPECT_THAT(this_token.kind, Eq(invalid));
+  EXPECT_THAT(parser.have_identifier, IsFalse());
+  EXPECT_THAT(parser.have_type, IsFalse());
+  EXPECT_THAT(parser.have_delimiter, IsFalse());
 }
 
 TEST_F(TokenizerSuite, SimpleType) {
@@ -212,6 +215,7 @@ TEST_F(TokenizerSuite, SimpleType) {
   EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(3));
   EXPECT_THAT(this_token.string, StrEq("int"));
   EXPECT_THAT(this_token.kind, Eq(type));
+  EXPECT_THAT(parser.have_type, IsTrue());
 }
 
 TEST_F(TokenizerSuite, IncludesPtr) {
@@ -219,6 +223,7 @@ TEST_F(TokenizerSuite, IncludesPtr) {
   EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(3));
   EXPECT_THAT(this_token.string, StrEq("int"));
   EXPECT_THAT(this_token.kind, Eq(type));
+  EXPECT_THAT(parser.have_type, IsTrue());
 }
 
 TEST_F(TokenizerSuite, SimpleQualifier) {
@@ -226,6 +231,7 @@ TEST_F(TokenizerSuite, SimpleQualifier) {
   EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(5));
   EXPECT_THAT(this_token.string, StrEq("const"));
   EXPECT_THAT(this_token.kind, Eq(qualifier));
+  EXPECT_THAT(parser.have_identifier, IsFalse());
 }
 
 // Since the parser does not move past the initial space, it not included in the
@@ -235,6 +241,7 @@ TEST_F(TokenizerSuite, TrailingWhitespace) {
   EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(3));
   EXPECT_THAT(this_token.string, StrEq("int"));
   EXPECT_THAT(this_token.kind, Eq(type));
+  EXPECT_THAT(parser.have_type, IsTrue());
 }
 
 // Since the parser moved past the initial space, it is included in the returned
@@ -244,6 +251,7 @@ TEST_F(TokenizerSuite, LeadingWhitespace) {
   EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(4));
   EXPECT_THAT(this_token.string, StrEq("int"));
   EXPECT_THAT(this_token.kind, Eq(type));
+  EXPECT_THAT(parser.have_type, IsTrue());
 }
 
 TEST_F(TokenizerSuite, LeadingDelimiter) {
@@ -251,6 +259,8 @@ TEST_F(TokenizerSuite, LeadingDelimiter) {
   EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(2));
   EXPECT_THAT(this_token.string, StrEq("{"));
   EXPECT_THAT(this_token.kind, Eq(delimiter));
+  EXPECT_THAT(parser.have_type, IsFalse());
+  EXPECT_THAT(parser.have_delimiter, IsTrue());
 }
 
 TEST_F(TokenizerSuite, LeadingDelimiter2) {
@@ -258,6 +268,7 @@ TEST_F(TokenizerSuite, LeadingDelimiter2) {
   EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(2));
   EXPECT_THAT(this_token.string, StrEq(")"));
   EXPECT_THAT(this_token.kind, Eq(delimiter));
+  EXPECT_THAT(parser.have_delimiter, IsTrue());
 }
 
 TEST_F(TokenizerSuite, PushEmptyStack) {
@@ -534,7 +545,6 @@ TEST_F(ParserSuite, LotsOfWhitespace) {
   EXPECT_THAT(StderrMatches("Zero-length input string."), IsTrue());
 }
 
-/*
 TEST_F(ParserSuite, SimpleExpression) {
   char inputstr[] = "int x;";
   struct token token0;
@@ -543,4 +553,3 @@ TEST_F(ParserSuite, SimpleExpression) {
   // The output has a trailng space in case there's output after the type.
   EXPECT_THAT(StdoutMatches("x is a(n) int "), IsTrue());
 }
-*/

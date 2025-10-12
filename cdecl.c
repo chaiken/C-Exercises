@@ -614,7 +614,8 @@ int parse_declarator(char input[], struct parser_props* parser,
   return 0;
 }
 
-size_t load_stack(struct parser_props* parser, char* nexttoken, FILE* out_stream, FILE* err_stream) {
+size_t load_stack(struct parser_props* parser, char* nexttoken,
+		  [[maybe_unused]] FILE* out_stream, FILE* err_stream) {
   struct token this_token;
   char trimmed[MAXTOKENLEN];
    /*
@@ -637,7 +638,9 @@ size_t load_stack(struct parser_props* parser, char* nexttoken, FILE* out_stream
     }
     push_stack(parser, &this_token, err_stream);
   }
+#ifdef TESTING
   showstack(parser->stack, out_stream);
+#endif
   return offset;
 }
 
@@ -664,7 +667,9 @@ bool input_parsing_successful(char inputstr[], FILE *out_stream,
     free(nexttoken);
     return false;
   }
+#ifdef TESTING
   showstack(parser.stack, out_stream);
+#endif
   while (parser.stacklen && (!pop_stack(&parser, out_stream, err_stream))) {
     parser.stacklen--;
   }

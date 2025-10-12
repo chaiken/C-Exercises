@@ -455,9 +455,7 @@ TEST_F(ParserSuite, Truncation) {
 
 TEST_F(ParserSuite, PopEmpty) {
   struct parser_props parser;
-  struct token token;
-  EXPECT_THAT(pop_stack(&parser, &token, fake_stdout, fake_stderr),
-              Eq(-ENODATA));
+  EXPECT_THAT(pop_stack(&parser, fake_stdout, fake_stderr), Eq(-ENODATA));
   EXPECT_THAT(StderrMatches("Attempt to pop empty stack."), IsTrue());
 }
 
@@ -466,8 +464,7 @@ TEST_F(ParserSuite, PopOne) {
   struct token token0{type, "int"};
   push_stack(&parser, &token0, fake_stderr);
 
-  struct token token;
-  EXPECT_THAT(pop_stack(&parser, &token, fake_stdout, fake_stderr), Eq(0));
+  EXPECT_THAT(pop_stack(&parser, fake_stdout, fake_stderr), Eq(0));
   EXPECT_THAT(StdoutMatches("int"), IsTrue());
 }
 
@@ -547,9 +544,16 @@ TEST_F(ParserSuite, LotsOfWhitespace) {
 
 TEST_F(ParserSuite, SimpleExpression) {
   char inputstr[] = "int x;";
-  struct token token0;
-  EXPECT_THAT(input_parsing_successful(inputstr, &token0, fake_stdout, stderr),
+  EXPECT_THAT(input_parsing_successful(inputstr, fake_stdout, fake_stderr),
               IsTrue());
   // The output has a trailng space in case there's output after the type.
   EXPECT_THAT(StdoutMatches("x is a(n) int "), IsTrue());
+}
+
+TEST_F(ParserSuite, PtrExpression) {
+  char inputstr[] = "int* x;";
+  EXPECT_THAT(input_parsing_successful(inputstr, fake_stdout, fake_stderr),
+              IsTrue());
+  // The output has a trailng space in case there's output after the type.
+  EXPECT_THAT(StdoutMatches("x is a(n) pointer(s) to int "), IsTrue());
 }

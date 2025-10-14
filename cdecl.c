@@ -614,6 +614,34 @@ int parse_declarator(char input[], struct parser_props* parser,
   return 0;
 }
 
+/*
+ * Qualifiers modify the type, not the identifier. Therefore reorder qualifiers
+ * and types on the stack in order to produce corector output.
+ * Since * is a qualifier, this function does not break
+ * "char * const typec_pwr_opmodes;"
+ */
+void reorder_qualifier_and_type(struct parser_props* parser) {
+  if (parser->have_type) {
+    size_t stackleft = parser->stacklen;
+    while (stackleft > 1) {
+      if ((type == parser->stack[stackleft-1].kind) &&
+	  (qualifier == parser->stack[stackleft-2].kind) &&
+	  (0 != strcmp("*", parser->stack[stackleft-2].string))) {
+        /* Save top element's string. */
+        char type_name[MAXTOKENLEN];
+	strlcpy(type_name, parser->stack[stackleft-1].string, MAXTOKENLEN);
+        /* Overwrite top element (type) with the qualifier 2nd from top element (qualifier). */
+	parser->stack[stackleft-1].kind = qualifier;
+	strlcpy(parser->stack[stackleft-1].string, parser->stack[stackleft-2].string, MAXTOKENLEN);
+        /* Complete the swap. */
+	parser->stack[stackleft-2].kind = type;
+	strlcpy(parser->stack[stackleft-2].string, type_name, MAXTOKENLEN);
+      }
+      stackleft -= 1;
+    }
+  }
+}
+
 size_t load_stack(struct parser_props* parser, char* nexttoken,
 		  [[maybe_unused]] FILE* out_stream, FILE* err_stream) {
   struct token this_token;
@@ -638,6 +666,7 @@ size_t load_stack(struct parser_props* parser, char* nexttoken,
     }
     push_stack(parser, &this_token, err_stream);
   }
+  reorder_qualifier_and_type(parser);
 #ifdef TESTING
   showstack(parser->stack, out_stream);
 #endif

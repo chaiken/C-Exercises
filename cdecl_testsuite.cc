@@ -492,9 +492,9 @@ TEST_F(ParserSuite, LoadStackWorks) {
   // consumed = strlen()-1 since the trailing ';' is elided before gettoken()
   // processing begins.
   EXPECT_THAT(consumed, Eq(strlen(probe) - 1));
-  EXPECT_THAT(StdoutMatches("Token number 0 has kind 3 and string const"),
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind 2 and string int"),
               IsTrue());
-  EXPECT_THAT(StdoutMatches("Token number 1 has kind 2 and string int"),
+  EXPECT_THAT(StdoutMatches("Token number 1 has kind 3 and string const"),
               IsTrue());
   EXPECT_THAT(StdoutMatches("Token number 2 has kind 3 and string *"),
               IsTrue());
@@ -511,9 +511,9 @@ TEST_F(ParserSuite, LoadStackEqualsTerminator) {
   std::size_t consumed =
       load_stack(&parser, nexttoken, fake_stdout, fake_stderr);
   EXPECT_THAT(consumed, Eq(strlen(probe) - strlen(" = 2;")));
-  EXPECT_THAT(StdoutMatches("Token number 0 has kind 3 and string static"),
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind 2 and string double"),
               IsTrue());
-  EXPECT_THAT(StdoutMatches("Token number 1 has kind 2 and string double"),
+  EXPECT_THAT(StdoutMatches("Token number 1 has kind 3 and string static"),
               IsTrue());
   EXPECT_THAT(StdoutMatches("Token number 2 has kind 4 and string val"),
               IsTrue());
@@ -556,4 +556,37 @@ TEST_F(ParserSuite, PtrExpression) {
               IsTrue());
   // The output has a trailng space in case there's output after the type.
   EXPECT_THAT(StdoutMatches("x is a(n) pointer(s) to int "), IsTrue());
+}
+
+TEST_F(ParserSuite, QualfiedExpression) {
+  char inputstr[] = "const int x;";
+  EXPECT_THAT(input_parsing_successful(inputstr, fake_stdout, fake_stderr),
+              IsTrue());
+  // The output has a trailng space in case there's output after the type.
+  EXPECT_THAT(StdoutMatches("x is a(n) const int "), IsTrue());
+}
+
+TEST_F(ParserSuite, ConstPtr) {
+  char inputstr[] = "int * const x;";
+  EXPECT_THAT(input_parsing_successful(inputstr, fake_stdout, fake_stderr),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("x is a(n) const pointer(s) to int "), IsTrue());
+}
+
+TEST_F(ParserSuite, Reorder) {
+  struct parser_props parser;
+  char nexttoken[MAXTOKENLEN];
+  const char *probe = "const int x;";
+  strlcpy(nexttoken, probe, strlen(probe) + 1);
+  std::size_t consumed =
+      load_stack(&parser, nexttoken, fake_stdout, fake_stderr);
+  // consumed = strlen()-1 since the trailing ';' is elided before gettoken()
+  // processing begins.
+  EXPECT_THAT(consumed, Eq(strlen(probe) - 1));
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind 2 and string int"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 1 has kind 3 and string const"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 2 has kind 4 and string x"),
+              IsTrue());
 }

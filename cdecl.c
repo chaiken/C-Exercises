@@ -646,6 +646,7 @@ size_t load_stack(struct parser_props* parser, char* nexttoken,
 		  [[maybe_unused]] FILE* out_stream, FILE* err_stream) {
   struct token this_token;
   char trimmed[MAXTOKENLEN];
+  this_token.kind = invalid;
    /*
     * offset is the number of characters consumed by gettoken().
     * offset >= this_token->string since leading whitespace in nexttoken will be

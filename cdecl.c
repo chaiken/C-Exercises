@@ -350,7 +350,6 @@ bool processed_array(char startstring[], size_t *sizelen, const struct
 }
 
 /* Do not allow any characters in identifiers besides a-z, '_' and '-'. */
-/* TODO: allow trailing underscore but not trailing dash. */
 static bool is_name_char(const char c) {
   if (isalpha(c) || ('-' == c) || ('_' == c)) {
     return true;
@@ -395,6 +394,10 @@ size_t gettoken(struct parser_props* parser, const char *declstring,
        ctr++) {
     this_token->string[ctr + 1] = *(declstring + tokenoffset);
     tokenoffset++;
+  }
+  /* Overwrite any trailing dash with a NUL. */
+  if ('-' == this_token->string[ctr]) {
+    this_token->string[ctr] = '\0';
   }
 
 done:

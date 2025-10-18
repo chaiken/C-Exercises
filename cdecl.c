@@ -349,6 +349,15 @@ bool processed_array(char startstring[], size_t *sizelen, const struct
   return false;
 }
 
+/* Do not allow any characters in identifiers besides a-z, '_' and '-'. */
+/* TODO: allow trailing underscore but not trailing dash. */
+static bool is_name_char(const char c) {
+  if (isalpha(c) || ('-' == c) || ('_' == c)) {
+    return true;
+  }
+  return false;
+}
+
 /* Moves to the right through the declaration, returning one space- or
  * delimiter-separated token at a time.
  * The parameter this_token returns the next token in the string.
@@ -379,11 +388,10 @@ size_t gettoken(struct parser_props* parser, const char *declstring,
   this_token->string[0] = *(declstring + tokenoffset);
   tokenoffset++;
 
-  /* Here we implicitly disallow dash and underscore in identifiers. */
-  if (!(isalnum(this_token->string[0])))
+  if (!(is_name_char(this_token->string[0])))
     goto done;
 
-  for (ctr = 0; (isalnum(*(declstring + tokenoffset)) && (ctr <= tokenlen));
+  for (ctr = 0; (is_name_char(*(declstring + tokenoffset)) && (ctr <= tokenlen));
        ctr++) {
     this_token->string[ctr + 1] = *(declstring + tokenoffset);
     tokenoffset++;

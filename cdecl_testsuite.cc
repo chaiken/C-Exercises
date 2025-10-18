@@ -212,7 +212,8 @@ TEST_F(TokenizerSuite, Empty) {
 
 TEST_F(TokenizerSuite, SimpleType) {
   char input[] = "int";
-  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(3));
+  // There is only one token, so it is strlen(input) long.
+  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(strlen(input)));
   EXPECT_THAT(this_token.string, StrEq("int"));
   EXPECT_THAT(this_token.kind, Eq(type));
   EXPECT_THAT(parser.have_type, IsTrue());
@@ -220,6 +221,7 @@ TEST_F(TokenizerSuite, SimpleType) {
 
 TEST_F(TokenizerSuite, IncludesPtr) {
   char input[] = "int*";
+  // The first token is 3 chars long.
   EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(3));
   EXPECT_THAT(this_token.string, StrEq("int"));
   EXPECT_THAT(this_token.kind, Eq(type));
@@ -256,10 +258,33 @@ TEST_F(TokenizerSuite, LeadingWhitespace) {
 
 TEST_F(TokenizerSuite, IsArray) {
   char input[] = "val[]";
+  // Array is detected, but the brackets are not part of the token.
   EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(3));
   EXPECT_THAT(this_token.string, StrEq("val"));
   EXPECT_THAT(this_token.kind, Eq(identifier));
   EXPECT_THAT(parser.is_array, IsTrue());
+}
+
+TEST_F(TokenizerSuite, HasDash) {
+  char input[] = "first-val";
+  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(strlen(input)));
+  EXPECT_THAT(this_token.string, StrEq("first-val"));
+  EXPECT_THAT(this_token.kind, Eq(identifier));
+}
+
+TEST_F(TokenizerSuite, HasUnderscore) {
+  char input[] = "first_val";
+  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(strlen(input)));
+  EXPECT_THAT(this_token.string, StrEq("first_val"));
+  EXPECT_THAT(this_token.kind, Eq(identifier));
+}
+
+// Unallowed characters and anything following them are simply cut off. */
+TEST_F(TokenizerSuite, IgnoreUnallowedChars) {
+  char input[] = "f3asdf";
+  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(1));
+  EXPECT_THAT(this_token.string, StrEq("f"));
+  EXPECT_THAT(this_token.kind, Eq(identifier));
 }
 
 TEST_F(TokenizerSuite, PushEmptyStack) {

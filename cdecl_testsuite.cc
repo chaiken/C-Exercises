@@ -207,7 +207,7 @@ TEST_F(TokenizerSuite, Empty) {
   EXPECT_THAT(this_token.kind, Eq(invalid));
   EXPECT_THAT(parser.have_identifier, IsFalse());
   EXPECT_THAT(parser.have_type, IsFalse());
-  EXPECT_THAT(parser.have_delimiter, IsFalse());
+  EXPECT_THAT(parser.is_array, IsFalse());
 }
 
 TEST_F(TokenizerSuite, SimpleType) {
@@ -254,21 +254,12 @@ TEST_F(TokenizerSuite, LeadingWhitespace) {
   EXPECT_THAT(parser.have_type, IsTrue());
 }
 
-TEST_F(TokenizerSuite, LeadingDelimiter) {
-  char input[] = " { ";
-  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(2));
-  EXPECT_THAT(this_token.string, StrEq("{"));
-  EXPECT_THAT(this_token.kind, Eq(delimiter));
-  EXPECT_THAT(parser.have_type, IsFalse());
-  EXPECT_THAT(parser.have_delimiter, IsTrue());
-}
-
-TEST_F(TokenizerSuite, LeadingDelimiter2) {
-  char input[] = " )";
-  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(2));
-  EXPECT_THAT(this_token.string, StrEq(")"));
-  EXPECT_THAT(this_token.kind, Eq(delimiter));
-  EXPECT_THAT(parser.have_delimiter, IsTrue());
+TEST_F(TokenizerSuite, IsArray) {
+  char input[] = "val[]";
+  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(3));
+  EXPECT_THAT(this_token.string, StrEq("val"));
+  EXPECT_THAT(this_token.kind, Eq(identifier));
+  EXPECT_THAT(parser.is_array, IsTrue());
 }
 
 TEST_F(TokenizerSuite, PushEmptyStack) {
@@ -571,6 +562,21 @@ TEST_F(ParserSuite, ConstPtr) {
   EXPECT_THAT(input_parsing_successful(inputstr, fake_stdout, fake_stderr),
               IsTrue());
   EXPECT_THAT(StdoutMatches("x is a(n) const pointer(s) to int "), IsTrue());
+}
+
+TEST_F(ParserSuite, SimpleArray) {
+  char inputstr[] = "const double x[]];";
+  EXPECT_THAT(input_parsing_successful(inputstr, fake_stdout, fake_stderr),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("x is an array of const double "), IsTrue());
+}
+
+TEST_F(ParserSuite, PtrArray) {
+  char inputstr[] = "double* x[]];";
+  EXPECT_THAT(input_parsing_successful(inputstr, fake_stdout, fake_stderr),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("x is an array of pointer(s) to double "),
+              IsTrue());
 }
 
 TEST_F(ParserSuite, Reorder) {

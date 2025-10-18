@@ -55,7 +55,7 @@ struct token {
 struct parser_props {
   bool have_identifier;
   bool have_type;
-  bool have_delimiter;
+  bool is_array;
   size_t stacklen;
   struct token stack[MAXTOKENS];
 };
@@ -63,7 +63,7 @@ struct parser_props {
 void initialize_parser(struct parser_props* parser) {
   parser->have_identifier = false;
   parser->have_type = false;
-  parser->have_delimiter = false;
+  parser->is_array = false;
   parser->stacklen = 0;
 }
 
@@ -379,7 +379,6 @@ size_t gettoken(struct parser_props* parser, const char *declstring,
   this_token->string[0] = *(declstring + tokenoffset);
   tokenoffset++;
 
-  /* Non-alphanumeric token has is always a single char. */
   /* Here we implicitly disallow dash and underscore in identifiers. */
   if (!(isalnum(this_token->string[0])))
     goto done;
@@ -396,13 +395,15 @@ done:
   switch(this_token->kind) {
   case identifier:
     parser->have_identifier = true;
+    if ('[' == *(declstring + tokenoffset)) {
+      parser->is_array = true;
+    }
     break;
   case type:
     parser->have_type = true;
     break;
   case delimiter:
-    parser->have_delimiter = true;
-    break;
+      __attribute__((fallthrough));
   case qualifier:
       __attribute__((fallthrough));
   case invalid:
@@ -462,7 +463,11 @@ int pop_stack(struct parser_props* parser, FILE* out_stream, FILE* err_stream) {
       pop_stack(parser, out_stream, err_stream);
       break;
     case identifier:
-      fprintf(out_stream, "%s is a(n) ", parser->stack[stacktop].string);
+      if (parser->is_array) {
+        fprintf(out_stream, "%s is an array of ", parser->stack[stacktop].string);
+      } else {
+        fprintf(out_stream, "%s is a(n) ", parser->stack[stacktop].string);
+      }
       break;
     case invalid:
       __attribute__((fallthrough));

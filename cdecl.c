@@ -634,7 +634,12 @@ size_t process_stdin(char stdinp[], FILE *input_stream) {
  */
 
 size_t find_input_string(const char from_user[], char inputstr[], FILE *stream) {
-  if (from_user[0] == '-') {
+  /*
+   * Without the length check, providing "-val;" as input triggers a hang, as
+   * process_stdin() never receives any chars in its fgets() call and waits
+   * forever.
+   */
+  if ((1 == strlen(from_user)) && (from_user[0] == '-')) {
     return process_stdin(inputstr, stream);
   } else{
     /* read input from CLI */

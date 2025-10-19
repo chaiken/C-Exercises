@@ -17,6 +17,7 @@ TEST(ProcessStringInputSuite, WellFormed) {
   const std::string well_formed{"int x;"};
   EXPECT_THAT(find_input_string(well_formed.c_str(), inputstr, stdin),
               Eq(well_formed.size()));
+  EXPECT_THAT(inputstr, StrEq("int x;"));
 }
 
 TEST(ProcessStringInputSuite, Empty) {
@@ -24,6 +25,14 @@ TEST(ProcessStringInputSuite, Empty) {
   const std::string empty{""};
   EXPECT_THAT(find_input_string(empty.c_str(), inputstr, stdin),
               Eq(empty.size()));
+  EXPECT_THAT(strlen(inputstr), Eq(0));
+}
+
+TEST(ProcesStringInputSuite, LeadingDash) {
+  char inputstr[MAXTOKENLEN];
+  const std::string dashes{"--;"};
+  EXPECT_THAT(find_input_string(dashes.c_str(), inputstr, stdin), Eq(3));
+  EXPECT_THAT(inputstr, StrEq("--;"));
 }
 
 struct ProcessInputSuite : public Test {

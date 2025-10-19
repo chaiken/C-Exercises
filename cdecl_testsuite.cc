@@ -294,6 +294,20 @@ TEST_F(TokenizerSuite, ElideTrailingDash) {
   EXPECT_THAT(this_token.kind, Eq(identifier));
 }
 
+TEST_F(TokenizerSuite, ElideLeadingDash) {
+  char input[] = "--val";
+  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(strlen(input)));
+  EXPECT_THAT(this_token.string, StrEq("val"));
+  EXPECT_THAT(this_token.kind, Eq(identifier));
+}
+
+TEST_F(TokenizerSuite, DoNotElideLeadingUnderscore) {
+  char input[] = "__val";
+  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(strlen(input)));
+  EXPECT_THAT(this_token.string, StrEq("__val"));
+  EXPECT_THAT(this_token.kind, Eq(identifier));
+}
+
 TEST_F(TokenizerSuite, PushEmptyStack) {
   struct token token0{type, "int"};
   EXPECT_THAT(parser.stacklen, Eq(0));

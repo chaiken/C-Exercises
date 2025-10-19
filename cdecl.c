@@ -382,6 +382,10 @@ size_t gettoken(struct parser_props* parser, const char *declstring,
   /* Move past leading whitespace. */
   const size_t trimnum = trim_leading_whitespace(declstring, trimmed);
   tokenoffset = trimnum;
+  /* Move past leading '-' in identifier.  Leading underscores are okay. */
+  while ('-' == *(declstring + tokenoffset)) {
+    tokenoffset++;
+  }
 
   /* use first non-blank character whether it is alphanumeric or no */
   this_token->string[0] = *(declstring + tokenoffset);

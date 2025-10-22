@@ -39,3 +39,14 @@ helloc
 *cscope*
 *.txt
 notes
+helloc
+palindrome_test
+kernel-doubly-linked-macros
+kernel-doubly-linked-macros-valgrind
+reverse-list_test
+reverse-list-valgrind
+matrix-determinant
+matrix-determinant_test
+cdecl
+cdecl-valgrind
+cdecl_test

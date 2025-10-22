@@ -318,7 +318,9 @@ TEST_F(TokenizerSuite, DoNotElideLeadingUnderscore) {
 }
 
 TEST_F(TokenizerSuite, PushEmptyStack) {
-  struct token token0{type, "int"};
+  struct token token0 {
+    type, "int"
+  };
   EXPECT_THAT(parser.stacklen, Eq(0));
   push_stack(&parser, &token0, stderr);
   EXPECT_THAT(parser.stack[0].kind, Eq(type));
@@ -328,9 +330,13 @@ TEST_F(TokenizerSuite, PushEmptyStack) {
 
 TEST_F(TokenizerSuite, Push2ndElement) {
   EXPECT_THAT(parser.stacklen, Eq(0));
-  struct token token0{type, "int"};
+  struct token token0 {
+    type, "int"
+  };
   push_stack(&parser, &token0, stderr);
-  struct token token1{qualifier, "const"};
+  struct token token1 {
+    qualifier, "const"
+  };
   push_stack(&parser, &token1, stderr);
   EXPECT_THAT(parser.stack[0].kind, Eq(type));
   EXPECT_THAT(parser.stack[0].string, StrEq("int"));
@@ -362,6 +368,7 @@ struct ParserSuite : public Test {
     EXPECT_THAT(fake_stderr, Ne(nullptr));
     this_token.kind = invalid;
     bzero(this_token.string, MAXTOKENLEN);
+    initialize_parser(&parser);
   }
 
   ~ParserSuite() override {
@@ -432,6 +439,7 @@ struct ParserSuite : public Test {
     free(err_str);
     return false;
   }
+  struct parser_props parser;
   std::string fotemplate;
   std::string fetemplate;
   char *fopath;
@@ -500,14 +508,14 @@ TEST_F(ParserSuite, Truncation) {
 }
 
 TEST_F(ParserSuite, PopEmpty) {
-  struct parser_props parser;
   EXPECT_THAT(pop_stack(&parser, fake_stdout, fake_stderr), Eq(-ENODATA));
   EXPECT_THAT(StderrMatches("Attempt to pop empty stack."), IsTrue());
 }
 
 TEST_F(ParserSuite, PopOne) {
-  struct parser_props parser;
-  struct token token0{type, "int"};
+  struct token token0 {
+    type, "int"
+  };
   push_stack(&parser, &token0, fake_stderr);
 
   EXPECT_THAT(pop_stack(&parser, fake_stdout, fake_stderr), Eq(0));
@@ -515,21 +523,24 @@ TEST_F(ParserSuite, PopOne) {
 }
 
 TEST_F(ParserSuite, Showstack) {
-  struct parser_props parser;
-  struct token token0{type, "int"};
+  struct token token0 {
+    type, "int"
+  };
   push_stack(&parser, &token0, fake_stderr);
-  struct token token1{qualifier, "const"};
+  struct token token1 {
+    qualifier, "const"
+  };
   push_stack(&parser, &token1, fake_stderr);
-  showstack(&parser.stack[0], fake_stdout);
+  showstack(&parser.stack[0], parser.stacklen, fake_stdout);
   EXPECT_THAT(StdoutMatches("Stack is:"), IsTrue());
   EXPECT_THAT(StdoutMatches("Token number 0 has kind 2 and string int"),
               IsTrue());
   EXPECT_THAT(StdoutMatches("Token number 1 has kind 3 and string const"),
               IsTrue());
+  showstack(&parser.stack[0], parser.stacklen, stdout);
 }
 
 TEST_F(ParserSuite, LoadStackWorks) {
-  struct parser_props parser;
   char nexttoken[MAXTOKENLEN];
   const char *probe = "const int* x;";
   strlcpy(nexttoken, probe, strlen(probe) + 1);
@@ -546,7 +557,7 @@ TEST_F(ParserSuite, LoadStackWorks) {
               IsTrue());
   EXPECT_THAT(StdoutMatches("Token number 3 has kind 4 and string x"),
               IsTrue());
-  showstack(&parser.stack[0], stdout);
+  showstack(&parser.stack[0], parser.stacklen, stdout);
 }
 
 TEST_F(ParserSuite, LoadStackEqualsTerminator) {
@@ -563,11 +574,10 @@ TEST_F(ParserSuite, LoadStackEqualsTerminator) {
               IsTrue());
   EXPECT_THAT(StdoutMatches("Token number 2 has kind 4 and string val"),
               IsTrue());
-  showstack(&parser.stack[0], stdout);
+  showstack(&parser.stack[0], parser.stacklen, stdout);
 }
 
 TEST_F(ParserSuite, NothingToLoad) {
-  struct parser_props parser;
   char nexttoken[MAXTOKENLEN];
   const char *probe = "=;";
   strlcpy(nexttoken, probe, strlen(probe) + 1);
@@ -578,7 +588,6 @@ TEST_F(ParserSuite, NothingToLoad) {
 }
 
 TEST_F(ParserSuite, LotsOfWhitespace) {
-  struct parser_props parser;
   char nexttoken[MAXTOKENLEN];
   const char *probe = "     ;";
   strlcpy(nexttoken, probe, strlen(probe) + 1);
@@ -635,7 +644,6 @@ TEST_F(ParserSuite, PtrArray) {
 }
 
 TEST_F(ParserSuite, Reorder) {
-  struct parser_props parser;
   char nexttoken[MAXTOKENLEN];
   const char *probe = "const int x;";
   strlcpy(nexttoken, probe, strlen(probe) + 1);

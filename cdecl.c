@@ -259,12 +259,12 @@ enum token_class get_kind(const char *intoken) {
   return identifier;
 }
 
-void showstack(const struct token* stack, FILE* out_stream) {
+void showstack(const struct token* stack, const size_t stacklen, FILE* out_stream) {
 
   size_t tokennum = 0, ctr;
 
   fprintf(out_stream, "Stack is:\n");
-  for (ctr = 0; (stack[ctr].kind > 0); ctr++) {
+  for (ctr = 0; ctr < stacklen; ctr++) {
     fprintf(out_stream, "Token number %lu has kind %d and string %s\n", tokennum,
            stack[ctr].kind, stack[ctr].string);
     tokennum++;
@@ -344,7 +344,7 @@ bool processed_array(char startstring[], size_t *sizelen, const struct
     return true;
   }
 
-  showstack(parser->stack, out_stream);
+  showstack(parser->stack, parser->stacklen, out_stream);
   fprintf(err_stream, "\nMismatched array delimiters.\n");
   return false;
 }
@@ -550,7 +550,7 @@ size_t load_stack(struct parser_props* parser, char* nexttoken,
   }
   reorder_qualifier_and_type(parser);
 #ifdef TESTING
-  showstack(parser->stack, out_stream);
+  showstack(parser->stack, parser->stacklen, out_stream);
 #endif
   return offset;
 }
@@ -579,7 +579,7 @@ bool input_parsing_successful(char inputstr[], FILE *out_stream,
     return false;
   }
 #ifdef TESTING
-  showstack(parser.stack, out_stream);
+  showstack(parser.stack, parser.stacklen, out_stream);
 #endif
   while (parser.stacklen && (!pop_stack(&parser, out_stream, err_stream))) {
     parser.stacklen--;

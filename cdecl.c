@@ -357,6 +357,35 @@ static bool is_name_char(const char c) {
   return false;
 }
 
+/*
+ * finish token() receives an unterminated string from gettoken() which it
+ * readies for pushing onto the stack.
+ */
+void finish_token(struct parser_props* parser, const char *offset_decl,
+		  struct token *this_token, const size_t ctr) {
+  this_token->string[ctr + 1] = '\0';
+  this_token->kind = get_kind(this_token->string);
+  switch(this_token->kind) {
+  case identifier:
+    parser->have_identifier = true;
+    if ('[' == *offset_decl) {
+      parser->is_array = true;
+    }
+    break;
+  case type:
+    parser->have_type = true;
+    break;
+  case delimiter:
+      __attribute__((fallthrough));
+  case qualifier:
+      __attribute__((fallthrough));
+  case invalid:
+      __attribute__((fallthrough));
+  default:
+    break;
+  }
+}
+
 /* Moves to the right through the declaration, returning one space- or
  * delimiter-separated token at a time.
  * The parameter this_token returns the next token in the string.
@@ -391,8 +420,10 @@ size_t gettoken(struct parser_props* parser, const char *declstring,
   this_token->string[0] = *(declstring + tokenoffset);
   tokenoffset++;
 
-  if (!(is_name_char(this_token->string[0])))
-    goto done;
+  if (!(is_name_char(this_token->string[0]))) {
+    finish_token(parser, declstring + tokenoffset, this_token, ctr);
+    return tokenoffset;
+  }
 
   for (ctr = 0; (is_name_char(*(declstring + tokenoffset)) && (ctr <= tokenlen));
        ctr++) {
@@ -404,29 +435,8 @@ size_t gettoken(struct parser_props* parser, const char *declstring,
     this_token->string[ctr] = '\0';
   }
 
-done:
-  this_token->string[ctr + 1] = '\0';
-  this_token->kind = get_kind(this_token->string);
-  switch(this_token->kind) {
-  case identifier:
-    parser->have_identifier = true;
-    if ('[' == *(declstring + tokenoffset)) {
-      parser->is_array = true;
-    }
-    break;
-  case type:
-    parser->have_type = true;
-    break;
-  case delimiter:
-      __attribute__((fallthrough));
-  case qualifier:
-      __attribute__((fallthrough));
-  case invalid:
-      __attribute__((fallthrough));
-  default:
-    break;
-  }
-  return (tokenoffset);
+  finish_token(parser, declstring + tokenoffset, this_token, ctr);
+  return tokenoffset;
 }
 
 /*

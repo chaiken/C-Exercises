@@ -197,6 +197,10 @@ TEST(StringManipulateSuite, GetKindTypes) {
   EXPECT_THAT(get_kind("uint64_t"), Eq(type));
 }
 
+TEST(StringManipulateSuite, GetArrayLength) {
+  EXPECT_THAT(get_kind("42"), Eq(length));
+}
+
 TEST(StringManipulateSuite, GetKindIdentifiers) {
   EXPECT_THAT(get_kind(" myvar "), Eq(identifier));
   EXPECT_THAT(get_kind(" myvar\n"), Eq(identifier));
@@ -274,6 +278,25 @@ TEST_F(TokenizerSuite, IsArray) {
   EXPECT_THAT(parser.is_array, IsTrue());
 }
 
+TEST_F(TokenizerSuite, IsArrayWithLength) {
+  char input[] = "val[42]";
+  // Array is detected, but the brackets are not part of the token.
+  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(3));
+  EXPECT_THAT(this_token.string, StrEq("val"));
+  EXPECT_THAT(this_token.kind, Eq(identifier));
+  EXPECT_THAT(parser.is_array, IsTrue());
+}
+
+TEST_F(TokenizerSuite, IsOnlyArrayLength) {
+  // load_stack() skips over leading '['.
+  char input[] = "42]";
+  parser.is_array = true;
+  // Parsing stops at last numeric character.
+  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(2));
+  EXPECT_THAT(this_token.string, StrEq("42"));
+  EXPECT_THAT(this_token.kind, Eq(length));
+}
+
 TEST_F(TokenizerSuite, HasDash) {
   char input[] = "first-val";
   EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(strlen(input)));
@@ -318,9 +341,7 @@ TEST_F(TokenizerSuite, DoNotElideLeadingUnderscore) {
 }
 
 TEST_F(TokenizerSuite, PushEmptyStack) {
-  struct token token0 {
-    type, "int"
-  };
+  struct token token0{type, "int"};
   EXPECT_THAT(parser.stacklen, Eq(0));
   push_stack(&parser, &token0, stderr);
   EXPECT_THAT(parser.stack[0].kind, Eq(type));
@@ -330,13 +351,9 @@ TEST_F(TokenizerSuite, PushEmptyStack) {
 
 TEST_F(TokenizerSuite, Push2ndElement) {
   EXPECT_THAT(parser.stacklen, Eq(0));
-  struct token token0 {
-    type, "int"
-  };
+  struct token token0{type, "int"};
   push_stack(&parser, &token0, stderr);
-  struct token token1 {
-    qualifier, "const"
-  };
+  struct token token1{qualifier, "const"};
   push_stack(&parser, &token1, stderr);
   EXPECT_THAT(parser.stack[0].kind, Eq(type));
   EXPECT_THAT(parser.stack[0].string, StrEq("int"));
@@ -513,9 +530,7 @@ TEST_F(ParserSuite, PopEmpty) {
 }
 
 TEST_F(ParserSuite, PopOne) {
-  struct token token0 {
-    type, "int"
-  };
+  struct token token0{type, "int"};
   push_stack(&parser, &token0, fake_stderr);
 
   EXPECT_THAT(pop_stack(&parser, fake_stdout, fake_stderr), Eq(0));
@@ -523,13 +538,9 @@ TEST_F(ParserSuite, PopOne) {
 }
 
 TEST_F(ParserSuite, Showstack) {
-  struct token token0 {
-    type, "int"
-  };
+  struct token token0{type, "int"};
   push_stack(&parser, &token0, fake_stderr);
-  struct token token1 {
-    qualifier, "const"
-  };
+  struct token token1{qualifier, "const"};
   push_stack(&parser, &token1, fake_stderr);
   showstack(&parser.stack[0], parser.stacklen, fake_stdout);
   EXPECT_THAT(StdoutMatches("Stack is:"), IsTrue());
@@ -575,6 +586,34 @@ TEST_F(ParserSuite, LoadStackEqualsTerminator) {
   EXPECT_THAT(StdoutMatches("Token number 2 has kind 4 and string val"),
               IsTrue());
   showstack(&parser.stack[0], parser.stacklen, stdout);
+}
+
+TEST_F(ParserSuite, LoadStackArrayLength) {
+  struct parser_props parser;
+  char nexttoken[MAXTOKENLEN];
+  const char *probe = "double val[42];";
+  strlcpy(nexttoken, probe, strlen(probe) + 1);
+  std::size_t consumed =
+      load_stack(&parser, nexttoken, fake_stdout, fake_stderr);
+  // In load_stack(), '[' is skipped, and "];" is not consumed. */
+  EXPECT_THAT(consumed, Eq(strlen(probe) - strlen("[];")));
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind 2 and string double"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 1 has kind 5 and string 42"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 2 has kind 4 and string val"),
+              IsTrue());
+  showstack(&parser.stack[0], parser.stacklen, stdout);
+}
+
+TEST_F(ParserSuite, LoadStackBadArray) {
+  struct parser_props parser;
+  char nexttoken[MAXTOKENLEN];
+  const char *probe = "double val[42;";
+  strlcpy(nexttoken, probe, strlen(probe) + 1);
+  std::size_t consumed =
+      load_stack(&parser, nexttoken, fake_stdout, fake_stderr);
+  EXPECT_THAT(consumed, Eq(0));
 }
 
 TEST_F(ParserSuite, NothingToLoad) {
@@ -640,6 +679,21 @@ TEST_F(ParserSuite, PtrArray) {
   EXPECT_THAT(input_parsing_successful(inputstr, fake_stdout, fake_stderr),
               IsTrue());
   EXPECT_THAT(StdoutMatches("x is an array of pointer(s) to double "),
+              IsTrue());
+}
+
+TEST_F(ParserSuite, ArrayWithLength) {
+  char inputstr[] = "char val[9];";
+  EXPECT_THAT(input_parsing_successful(inputstr, fake_stdout, fake_stderr),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("val is an array of 9 char"), IsTrue());
+}
+
+TEST_F(ParserSuite, ArrayWithBadLength) {
+  char inputstr[] = "char val[9;";
+  EXPECT_THAT(input_parsing_successful(inputstr, fake_stdout, fake_stderr),
+              IsFalse());
+  EXPECT_THAT(StderrMatches("Input lacks required identifier or type element"),
               IsTrue());
 }
 

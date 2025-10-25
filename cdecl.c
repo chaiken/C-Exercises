@@ -39,7 +39,7 @@ const char *types[] = {"char", "short", "int", "float", "double",
 		       "int64_t"};
 const char *qualifiers[] = {"const", "volatile", "static", "*", "extern", "unsigned"};
 
-enum token_class { invalid = 0, delimiter, type, qualifier, identifier, whitespace };
+enum token_class { invalid = 0, delimiter, type, qualifier, identifier, length, whitespace };
 
 struct token {
   enum token_class kind;
@@ -186,6 +186,24 @@ bool has_alnum_chars(const char* input) {
   return true;
 }
 
+bool is_numeric(const char* input) {
+    if (!input || !strlen(input)) {
+    return false;
+  }
+  char *copy = strdup(input);
+  char *saveptr = copy;
+  while (*copy && (isdigit(*copy))) {
+    copy++;
+  }
+  /* Reached the end without finding non-digit characters. */
+  if (!*copy) {
+    free(saveptr);
+    return true;
+  }
+  free(saveptr);
+  return false;
+}
+
 /*
  * Remove any characters following ';' or '=' plus any whitespace which precedes
  * these characters.  Returns true if the input contains one of those chars and
@@ -246,6 +264,10 @@ enum token_class get_kind(const char *intoken) {
   for (ctr = 0; ctr < numel; ctr++) {
     if (!strcmp(intoken, qualifiers[ctr]))
       return (qualifier);
+  }
+
+  if (is_numeric(intoken)) {
+    return length;
   }
 
   /*
@@ -320,35 +342,6 @@ bool processed_function_args(char startstring[], size_t *arglength, FILE* out_st
   return true;
 }
 
-bool processed_array(char startstring[], size_t *sizelen, const struct
-		     parser_props *parser, FILE* out_stream, FILE* err_stream) {
-  char endstring[MAXTOKENLEN];
-  size_t ctr = 0;
-  *sizelen = 0;
-
-  assert(startstring);
-
-  strcpy(endstring, (const char *)startstring);
-  fprintf(out_stream, "array of ");
-
-  while ((*sizelen < strlen(startstring)) && (endstring[*sizelen] != ']'))
-    (*sizelen)++;
-
-  if (endstring[*sizelen] == ']') {
-    /* print any array size values */
-    if (*sizelen >= 1) {
-      while (ctr++ < *sizelen)
-        fprintf(out_stream, "%c", startstring[ctr - 1]);
-    }
-    fprintf(out_stream, " ");
-    return true;
-  }
-
-  showstack(parser->stack, parser->stacklen, out_stream);
-  fprintf(err_stream, "\nMismatched array delimiters.\n");
-  return false;
-}
-
 /* Do not allow any characters in identifiers besides a-z, '_' and '-'. */
 static bool is_name_char(const char c) {
   if (isalpha(c) || ('-' == c) || ('_' == c)) {
@@ -378,6 +371,8 @@ void finish_token(struct parser_props* parser, const char *offset_decl,
   case delimiter:
       __attribute__((fallthrough));
   case qualifier:
+      __attribute__((fallthrough));
+  case length:
       __attribute__((fallthrough));
   case invalid:
       __attribute__((fallthrough));
@@ -420,11 +415,31 @@ size_t gettoken(struct parser_props* parser, const char *declstring,
   this_token->string[0] = *(declstring + tokenoffset);
   tokenoffset++;
 
+  // Process array length, if any.
+  if (parser->is_array) {
+    /* Check if the array is ill-formed. */
+    if (NULL == strstr(declstring, "]")) {
+      this_token->kind = invalid;
+      parser->is_array = false;
+      parser->have_identifier = false;
+      return 0;
+    }
+    for (ctr = 0; (isdigit(*(declstring + tokenoffset)) && (ctr <= tokenlen));
+       ctr++) {
+      this_token->string[ctr + 1] = *(declstring + tokenoffset);
+      tokenoffset++;
+    }
+    finish_token(parser, declstring + tokenoffset, this_token, ctr);
+    return tokenoffset;
+  }
+
+  /* The token is a single character. */
   if (!(is_name_char(this_token->string[0]))) {
     finish_token(parser, declstring + tokenoffset, this_token, ctr);
     return tokenoffset;
   }
 
+  /* The token has multiple characters, so copy them all. */
   for (ctr = 0; (is_name_char(*(declstring + tokenoffset)) && (ctr <= tokenlen));
        ctr++) {
     this_token->string[ctr + 1] = *(declstring + tokenoffset);
@@ -479,7 +494,6 @@ int pop_stack(struct parser_props* parser, FILE* out_stream, FILE* err_stream) {
     case type:
       fprintf(out_stream, "%s ", parser->stack[stacktop].string);
       break;
-    /* TODO: process functions args and arrays here. */
     case delimiter:
       /* Ignore this_token token, which should be the
          opening parenthesis of a function pointer.
@@ -494,6 +508,13 @@ int pop_stack(struct parser_props* parser, FILE* out_stream, FILE* err_stream) {
         fprintf(out_stream, "%s is a(n) ", parser->stack[stacktop].string);
       }
       break;
+    case length:
+      if (parser->is_array) {
+        fprintf(out_stream, "%s ", parser->stack[stacktop].string);
+      } else {
+        fprintf(err_stream, "\nError: found length without array.\n");
+      }
+      break;
     case invalid:
       __attribute__((fallthrough));
     default:
@@ -505,6 +526,24 @@ int pop_stack(struct parser_props* parser, FILE* out_stream, FILE* err_stream) {
   memset(parser->stack[stacktop].string, '\0', MAXTOKENLEN);
   parser->stack[stacktop].kind = invalid;
   return 0;
+}
+
+/*
+ * If the declaration describes a 1-dimensional array with a specified length,
+ * the top of the stack is the length and the element below is the identifier.
+ */
+void reorder_array_identifier_and_length(struct parser_props* parser) {
+  const size_t stacklast = parser->stacklen - 1;
+  const struct token arraylen = parser->stack[stacklast];
+  const struct token name = parser->stack[stacklast-1];
+  if ((!parser->is_array) || (length != arraylen.kind) ||
+      (identifier != name.kind)) {
+    return;
+  }
+  strlcpy(parser->stack[stacklast].string, name.string, MAXTOKENLEN);
+  strlcpy(parser->stack[stacklast-1].string, arraylen.string, MAXTOKENLEN);
+  parser->stack[stacklast].kind = identifier;
+  parser->stack[stacklast-1].kind = length;
 }
 
 /*
@@ -537,6 +576,7 @@ size_t load_stack(struct parser_props* parser, char* nexttoken,
 		  [[maybe_unused]] FILE* out_stream, FILE* err_stream) {
   struct token this_token;
   char trimmed[MAXTOKENLEN];
+  char* input_cursor = nexttoken;
   this_token.kind = invalid;
    /*
     * offset is the number of characters consumed by gettoken().
@@ -547,24 +587,43 @@ size_t load_stack(struct parser_props* parser, char* nexttoken,
   if (!truncate_input(&nexttoken, err_stream)) {
     return 0;
   }
-  while ((this_token.kind != identifier) &&
-        (offset < strlen(nexttoken))) {
-    char* input_cursor  = nexttoken + offset;
-    offset += gettoken(parser, input_cursor, &this_token);
-    size_t trailing = trim_trailing_whitespace(nexttoken, trimmed);
-    if (trailing) {
-      strlcpy(nexttoken, trimmed, MAXTOKENLEN);
-      offset += trailing;
+  // Finding the identifier terminates initial stack loading since it comes
+  // last, as long as there are no function arguments or array delimiters.
+  while (offset < strlen(nexttoken)) {
+    while (this_token.kind != identifier) {
+      input_cursor = nexttoken + offset;
+      offset += gettoken(parser, input_cursor, &this_token);
+      if (!offset) {
+	break;
+      }
+      size_t trailing = trim_trailing_whitespace(nexttoken, trimmed);
+      if (trailing) {
+        strlcpy(nexttoken, trimmed, MAXTOKENLEN);
+        offset += trailing;
+      }
+      push_stack(parser, &this_token, err_stream);
     }
-    push_stack(parser, &this_token, err_stream);
+    if (parser->is_array) {
+      /* Skip ']'. */
+      input_cursor = nexttoken + offset + 1;
+      offset += gettoken(parser, input_cursor, &this_token);
+      if ((length == this_token.kind) && (strlen(this_token.string))) {
+        push_stack(parser, &this_token, err_stream);
+      }
+      /* Ignore multidimensional arrays for the moment. */
+      break;
+    }
   }
+  if (!parser->have_identifier) {
+    return 0;
+  }
+  reorder_array_identifier_and_length(parser);
   reorder_qualifier_and_type(parser);
 #ifdef TESTING
   showstack(parser->stack, parser->stacklen, out_stream);
 #endif
   return offset;
 }
-
 
 /*
  * Returns true iff input is successfully parsed.  Actual parsing begins here.

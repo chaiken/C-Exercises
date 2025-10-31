@@ -351,6 +351,19 @@ static bool is_name_char(const char c) {
   return false;
 }
 
+const char typechars[] = {'1', '2', '3', '4', '6', '8', 'a', 'b', 'c', 'd', 'e',
+			  'f', 'g', 'h', 'i', 'l', 'n', 'o', 'r', 's', 't', 'u'};
+
+static bool is_type_char(const char c) {
+  for (long unsigned i=0; i < ARRAY_SIZE(typechars); i++) {
+    if (c == typechars[i]) {
+      return true;
+    }
+  }
+  return false;
+}
+
+
 /*
  * finish token() receives an unterminated string from gettoken() which it
  * readies for pushing onto the stack.
@@ -369,11 +382,15 @@ void finish_token(struct parser_props* parser, const char *offset_decl,
   case type:
     parser->have_type = true;
     break;
+  case length:
+    if (!parser->is_array) {
+      this_token->kind = invalid;
+      this_token->string[0] = '\0';
+    }
+    break;
   case delimiter:
       __attribute__((fallthrough));
   case qualifier:
-      __attribute__((fallthrough));
-  case length:
       __attribute__((fallthrough));
   case invalid:
       __attribute__((fallthrough));
@@ -393,7 +410,7 @@ size_t process_array_length(struct parser_props* parser, const char* offset_stri
       return 0;
     }
     for (ctr = 0; offset_string && isdigit(*(offset_string+ctr)) && ctr < MAXTOKENLEN; ctr++) {
-      this_token->string[ctr + 1] = *(offset_string + ctr);
+      this_token->string[ctr] = *(offset_string + ctr);
     }
     finish_token(parser, offset_string, this_token, ctr);
     return ctr;
@@ -403,6 +420,12 @@ size_t process_array_length(struct parser_props* parser, const char* offset_stri
  * delimiter-separated token at a time.
  * The parameter this_token returns the next token in the string.
  * The return value is the offset where parsing should resume in the next pass.
+ *
+ * If the parser has a type, non-name characters trigger termination of an
+ * identifier.
+ *
+ * If the parser has no type, characters which are neither name nor type
+ * characters trigger termination of input.
  */
 size_t gettoken(struct parser_props* parser, const char *declstring,
 		struct token *this_token) {
@@ -429,31 +452,49 @@ size_t gettoken(struct parser_props* parser, const char *declstring,
     tokenoffset++;
   }
 
-  /* use first non-blank character whether it is alphanumeric or no */
-  this_token->string[0] = *(declstring + tokenoffset);
-  tokenoffset++;
-
   // Process array length, if any.
   if (parser->is_array) {
     tokenoffset += process_array_length(parser, declstring + tokenoffset, this_token);
     return tokenoffset;
   }
 
-  /* The token is a single character. */
-  if (!(is_name_char(this_token->string[0]))) {
+  /*
+   * The token is a single character.  Even stdint types include numerals, they
+   *  do not begin with them.
+   */
+  if ('*' == *(declstring + tokenoffset)) {
+    strlcpy(this_token->string, "*", 2);
+    tokenoffset++;
     finish_token(parser, declstring + tokenoffset, this_token, ctr);
     return tokenoffset;
   }
 
   /* The token has multiple characters, so copy them all. */
-  for (ctr = 0; (is_name_char(*(declstring + tokenoffset)) && (ctr <= tokenlen));
-       ctr++) {
-    this_token->string[ctr + 1] = *(declstring + tokenoffset);
+  for (ctr = 0; ctr <= tokenlen; ctr++) {
+    char nextchar = *(declstring + tokenoffset);
+    if (parser->have_type) {
+      /*
+       * We are looking for an identifier. Finding an identifier terminates
+       * parsing, so we don't need to check if we have one.
+       */
+	if (!is_name_char(nextchar)) {
+          break;
+      }
+    } else {
+      /*
+       * We are looking for a type but we might first see a qualifier composed
+       * of name_chars.
+       */
+      if (!is_name_char(nextchar) && !is_type_char(nextchar)) {
+        break;
+      }
+    }
+    this_token->string[ctr] = nextchar;
     tokenoffset++;
   }
   /* Overwrite any trailing dash with a NUL. */
-  if ('-' == this_token->string[ctr]) {
-    this_token->string[ctr] = '\0';
+  if ('-' == this_token->string[ctr-1]) {
+    this_token->string[ctr-1] = '\0';
   }
 
   finish_token(parser, declstring + tokenoffset, this_token, ctr);
@@ -578,6 +619,7 @@ void reorder_qualifier_and_type(struct parser_props* parser) {
   }
 }
 
+// Only the tests make use of the return value.
 size_t load_stack(struct parser_props* parser, char* nexttoken,
 		  [[maybe_unused]] FILE* out_stream, FILE* err_stream) {
   struct token this_token;

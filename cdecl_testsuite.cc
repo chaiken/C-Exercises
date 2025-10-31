@@ -311,12 +311,95 @@ TEST_F(TokenizerSuite, HasUnderscore) {
   EXPECT_THAT(this_token.kind, Eq(identifier));
 }
 
-// Unallowed characters and anything following them are simply cut off. */
-TEST_F(TokenizerSuite, IgnoreUnallowedChars) {
-  char input[] = "f3asdf";
+// Unallowed characters and anything following them are simply cut off.
+// Encountering an identifier without first finding a type means that the
+// expression is ill-formed, but that logic is at the stack-loading level, not
+// the tokenizer level.
+TEST_F(TokenizerSuite, IgnoreUnallowedCharsNoType) {
+  // '5' is neither a name nor type char.
+  char input[] = "f5asdf";
   EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(1));
   EXPECT_THAT(this_token.string, StrEq("f"));
   EXPECT_THAT(this_token.kind, Eq(identifier));
+}
+
+TEST_F(TokenizerSuite, IgnoreUnallowedCharsStdintNoType) {
+  char input[] = "uint32_t";
+  EXPECT_THAT(gettoken(&parser, input, &this_token), strlen(input));
+  EXPECT_THAT(this_token.string, StrEq(input));
+  EXPECT_THAT(this_token.kind, Eq(type));
+}
+
+TEST_F(TokenizerSuite, IgnoreUnallowedCharsStdintHasType) {
+  parser.have_type = true;
+  char input[] = "uint32_t";
+  EXPECT_THAT(gettoken(&parser, input, &this_token), strlen("uint"));
+  EXPECT_THAT(this_token.string, StrEq("uint"));
+  EXPECT_THAT(this_token.kind, Eq(identifier));
+}
+
+// Produces same result as above, as the comment describes.
+TEST_F(TokenizerSuite, IgnoreUnallowedCharsHasType) {
+  parser.have_type = true;
+  char input[] = "f5asdf";
+  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(1));
+  EXPECT_THAT(this_token.string, StrEq("f"));
+  EXPECT_THAT(this_token.kind, Eq(identifier));
+}
+
+TEST_F(TokenizerSuite, IgnoreUnallowedCharsHasTypeBadFirst) {
+  parser.have_type = true;
+  char input[] = "2fasdf";
+  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(0));
+  EXPECT_THAT(strlen(this_token.string), Eq(0));
+  EXPECT_THAT(kind_names[this_token.kind], StrEq("invalid"));
+}
+
+// '2' is an allowed type character, but ']' is not.
+TEST_F(TokenizerSuite, IgnoreUnallowedCharsNoTypeHasDelimIsNotArray) {
+  char input[] = "2]fasdf";
+  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(1));
+  EXPECT_THAT(strlen(this_token.string), Eq(0));
+  EXPECT_THAT(kind_names[this_token.kind], StrEq("invalid"));
+}
+
+// '2' is an allowed type character, but ']' is not.
+TEST_F(TokenizerSuite, IgnoreUnallowedCharsHasTypeHasDelimIsNotArray) {
+  parser.have_type = true;
+  char input[] = "2]fasdf";
+  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(0));
+  EXPECT_THAT(strlen(this_token.string), Eq(0));
+  EXPECT_THAT(kind_names[this_token.kind], StrEq("invalid"));
+}
+
+// Without ']', if we have a type, ']' is unallowed.
+TEST_F(TokenizerSuite, IgnoreUnallowedCharsNoDelimIsArray) {
+  parser.have_type = true;
+  parser.is_array = true;
+  char input[] = "2fasdf";
+  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(0));
+  EXPECT_THAT(strlen(this_token.string), Eq(0));
+  EXPECT_THAT(kind_names[this_token.kind], StrEq("invalid"));
+}
+
+TEST_F(TokenizerSuite, IgnoreUnallowedCharsHasDelimIsArray) {
+  parser.have_type = true;
+  parser.is_array = true;
+  char input[] = "9]fasdf";
+  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(1));
+  EXPECT_THAT(strlen(this_token.string), Eq(1));
+  EXPECT_THAT(this_token.string, StrEq("9"));
+  EXPECT_THAT(kind_names[this_token.kind], StrEq("length"));
+}
+
+// An expression which has no type when processing encounters the identifier is
+// ill-formed.
+TEST_F(TokenizerSuite, IgnoreUnallowedCharsNoTypeIsArray) {
+  parser.is_array = true;
+  char input[] = "2fasdf";
+  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(0));
+  EXPECT_THAT(strlen(this_token.string), Eq(0));
+  EXPECT_THAT(kind_names[this_token.kind], StrEq("invalid"));
 }
 
 TEST_F(TokenizerSuite, ElideTrailingDash) {

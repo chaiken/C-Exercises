@@ -572,7 +572,6 @@ TEST_F(ParserSuite, LoadStackWorks) {
 }
 
 TEST_F(ParserSuite, LoadStackEqualsTerminator) {
-  struct parser_props parser;
   char nexttoken[MAXTOKENLEN];
   const char *probe = "static double val = 2;";
   strlcpy(nexttoken, probe, strlen(probe) + 1);
@@ -589,7 +588,6 @@ TEST_F(ParserSuite, LoadStackEqualsTerminator) {
 }
 
 TEST_F(ParserSuite, LoadStackArrayLength) {
-  struct parser_props parser;
   char nexttoken[MAXTOKENLEN];
   const char *probe = "double val[42];";
   strlcpy(nexttoken, probe, strlen(probe) + 1);
@@ -607,7 +605,6 @@ TEST_F(ParserSuite, LoadStackArrayLength) {
 }
 
 TEST_F(ParserSuite, LoadStackBadArray) {
-  struct parser_props parser;
   char nexttoken[MAXTOKENLEN];
   const char *probe = "double val[42;";
   strlcpy(nexttoken, probe, strlen(probe) + 1);

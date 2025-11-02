@@ -381,6 +381,23 @@ void finish_token(struct parser_props* parser, const char *offset_decl,
   }
 }
 
+size_t process_array_length(struct parser_props* parser, const char* offset_string, struct token* this_token) {
+    size_t ctr = 0;
+    /* Check if the array is ill-formed. */
+    if (NULL == strstr(offset_string, "]")) {
+      this_token->kind = invalid;
+      strcpy(this_token->string, "\0");
+      parser->is_array = false;
+      parser->have_identifier = false;
+      return 0;
+    }
+    for (ctr = 0; offset_string && isdigit(*(offset_string+ctr)) && ctr < MAXTOKENLEN; ctr++) {
+      this_token->string[ctr + 1] = *(offset_string + ctr);
+    }
+    finish_token(parser, offset_string, this_token, ctr);
+    return ctr;
+}
+
 /* Moves to the right through the declaration, returning one space- or
  * delimiter-separated token at a time.
  * The parameter this_token returns the next token in the string.
@@ -417,19 +434,7 @@ size_t gettoken(struct parser_props* parser, const char *declstring,
 
   // Process array length, if any.
   if (parser->is_array) {
-    /* Check if the array is ill-formed. */
-    if (NULL == strstr(declstring, "]")) {
-      this_token->kind = invalid;
-      parser->is_array = false;
-      parser->have_identifier = false;
-      return 0;
-    }
-    for (ctr = 0; (isdigit(*(declstring + tokenoffset)) && (ctr <= tokenlen));
-       ctr++) {
-      this_token->string[ctr + 1] = *(declstring + tokenoffset);
-      tokenoffset++;
-    }
-    finish_token(parser, declstring + tokenoffset, this_token, ctr);
+    tokenoffset += process_array_length(parser, declstring + tokenoffset, this_token);
     return tokenoffset;
   }
 

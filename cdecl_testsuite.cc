@@ -544,10 +544,11 @@ TEST_F(ParserSuite, Showstack) {
   push_stack(&parser, &token1, fake_stderr);
   showstack(&parser.stack[0], parser.stacklen, fake_stdout);
   EXPECT_THAT(StdoutMatches("Stack is:"), IsTrue());
-  EXPECT_THAT(StdoutMatches("Token number 0 has kind 2 and string int"),
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string int"),
               IsTrue());
-  EXPECT_THAT(StdoutMatches("Token number 1 has kind 3 and string const"),
-              IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 1 has kind qualifier and string const"),
+      IsTrue());
   showstack(&parser.stack[0], parser.stacklen, stdout);
 }
 
@@ -560,13 +561,14 @@ TEST_F(ParserSuite, LoadStackWorks) {
   // consumed = strlen()-1 since the trailing ';' is elided before gettoken()
   // processing begins.
   EXPECT_THAT(consumed, Eq(strlen(probe) - 1));
-  EXPECT_THAT(StdoutMatches("Token number 0 has kind 2 and string int"),
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string int"),
               IsTrue());
-  EXPECT_THAT(StdoutMatches("Token number 1 has kind 3 and string const"),
+  EXPECT_THAT(
+      StdoutMatches("Token number 1 has kind qualifier and string const"),
+      IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 2 has kind qualifier and string *"),
               IsTrue());
-  EXPECT_THAT(StdoutMatches("Token number 2 has kind 3 and string *"),
-              IsTrue());
-  EXPECT_THAT(StdoutMatches("Token number 3 has kind 4 and string x"),
+  EXPECT_THAT(StdoutMatches("Token number 3 has kind identifier and string x"),
               IsTrue());
   showstack(&parser.stack[0], parser.stacklen, stdout);
 }
@@ -578,12 +580,14 @@ TEST_F(ParserSuite, LoadStackEqualsTerminator) {
   std::size_t consumed =
       load_stack(&parser, nexttoken, fake_stdout, fake_stderr);
   EXPECT_THAT(consumed, Eq(strlen(probe) - strlen(" = 2;")));
-  EXPECT_THAT(StdoutMatches("Token number 0 has kind 2 and string double"),
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string double"),
               IsTrue());
-  EXPECT_THAT(StdoutMatches("Token number 1 has kind 3 and string static"),
-              IsTrue());
-  EXPECT_THAT(StdoutMatches("Token number 2 has kind 4 and string val"),
-              IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 1 has kind qualifier and string static"),
+      IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 2 has kind identifier and string val"),
+      IsTrue());
   showstack(&parser.stack[0], parser.stacklen, stdout);
 }
 
@@ -595,12 +599,13 @@ TEST_F(ParserSuite, LoadStackArrayLength) {
       load_stack(&parser, nexttoken, fake_stdout, fake_stderr);
   // In load_stack(), '[' is skipped, and "];" is not consumed. */
   EXPECT_THAT(consumed, Eq(strlen(probe) - strlen("[];")));
-  EXPECT_THAT(StdoutMatches("Token number 0 has kind 2 and string double"),
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string double"),
               IsTrue());
-  EXPECT_THAT(StdoutMatches("Token number 1 has kind 5 and string 42"),
+  EXPECT_THAT(StdoutMatches("Token number 1 has kind length and string 42"),
               IsTrue());
-  EXPECT_THAT(StdoutMatches("Token number 2 has kind 4 and string val"),
-              IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 2 has kind identifier and string val"),
+      IsTrue());
   showstack(&parser.stack[0], parser.stacklen, stdout);
 }
 
@@ -703,10 +708,11 @@ TEST_F(ParserSuite, Reorder) {
   // consumed = strlen()-1 since the trailing ';' is elided before gettoken()
   // processing begins.
   EXPECT_THAT(consumed, Eq(strlen(probe) - 1));
-  EXPECT_THAT(StdoutMatches("Token number 0 has kind 2 and string int"),
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string int"),
               IsTrue());
-  EXPECT_THAT(StdoutMatches("Token number 1 has kind 3 and string const"),
-              IsTrue());
-  EXPECT_THAT(StdoutMatches("Token number 2 has kind 4 and string x"),
+  EXPECT_THAT(
+      StdoutMatches("Token number 1 has kind qualifier and string const"),
+      IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 2 has kind identifier and string x"),
               IsTrue());
 }

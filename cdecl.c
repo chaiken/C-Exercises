@@ -40,6 +40,7 @@ const char *types[] = {"char", "short", "int", "float", "double",
 const char *qualifiers[] = {"const", "volatile", "static", "*", "extern", "unsigned"};
 
 enum token_class { invalid = 0, delimiter, type, qualifier, identifier, length, whitespace };
+const char *kind_names[] = { "invalid", "delimiter", "type", "qualifier", "identifier", "length", "whitespace" };
 
 struct token {
   enum token_class kind;
@@ -287,8 +288,8 @@ void showstack(const struct token* stack, const size_t stacklen, FILE* out_strea
 
   fprintf(out_stream, "Stack is:\n");
   for (ctr = 0; ctr < stacklen; ctr++) {
-    fprintf(out_stream, "Token number %lu has kind %d and string %s\n", tokennum,
-           stack[ctr].kind, stack[ctr].string);
+    fprintf(out_stream, "Token number %lu has kind %s and string %s\n", tokennum,
+           kind_names[stack[ctr].kind], stack[ctr].string);
     tokennum++;
   }
 

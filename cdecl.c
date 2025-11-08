@@ -58,18 +58,26 @@ struct token {
 struct parser_props {
   bool have_identifier;
   bool have_type;
-  bool is_array;
+  size_t array_dimensions;
+  size_t array_lengths;
+  bool last_dimension_unspecified;
   size_t stacklen;
   struct token stack[MAXTOKENS];
   FILE *out_stream;
   FILE *err_stream;
 };
 
-void initialize_parser(struct parser_props* parser) {
+void reset_parser(struct parser_props* parser){
   parser->have_identifier = false;
   parser->have_type = false;
-  parser->is_array = false;
+  parser->array_dimensions = 0;
+  parser->array_lengths = 0;
+  parser->last_dimension_unspecified = true;
   parser->stacklen = 0;
+}
+
+void initialize_parser(struct parser_props* parser) {
+  reset_parser(parser);
   parser->out_stream = stdout;
   parser->err_stream = stderr;
 }
@@ -385,18 +393,47 @@ void finish_token(struct parser_props* parser, const char *offset_decl,
   this_token->kind = get_kind(this_token->string);
   switch(this_token->kind) {
   case identifier:
+    if (!parser->have_type) {
+      /* Indicate hard failure. */
+      reset_parser(parser);
+      break;
+    }
     parser->have_identifier = true;
     if ('[' == *offset_decl) {
-      parser->is_array = true;
+      if (strstr(offset_decl, "]")) {
+        parser->array_dimensions++;
+      } else {
+        reset_parser(parser);
+      }
     }
     break;
   case type:
     parser->have_type = true;
     break;
   case length:
-    if (!parser->is_array) {
+    if ((!parser->have_identifier) || (!parser->array_dimensions)) {
+      /* Indicate hard failure. */
+      reset_parser(parser);
       this_token->kind = invalid;
-      this_token->string[0] = '\0';
+      strcpy(this_token->string, "");
+      break;
+    }
+    /* The first array dimension is accounted for in the identifier block above.
+     * Any subsequent ones with lengths are accounted for here. Subsequent
+     * lengthless dimensions are accounted for in load_stack().  Perhaps
+     * handling all this counting in the delimiter case below would have been
+     * wiser.
+     */
+    if (parser->array_lengths) {
+      parser->array_dimensions++;
+    }
+    parser->array_lengths++;
+    if (parser->array_lengths > parser->array_dimensions) {
+      /* The first dimension of an array must always have a declared length, so
+       * the number of dimensions >= the number of lengths.  This code should be
+       * unreachable since "[]" terminates the stack-loading.
+       */
+      reset_parser(parser);
     }
     break;
   case delimiter:
@@ -415,16 +452,15 @@ size_t process_array_length(struct parser_props* parser,
     size_t ctr = 0;
     /* Check if the array is ill-formed. */
     if (NULL == strstr(offset_string, "]")) {
-      this_token->kind = invalid;
-      strcpy(this_token->string, "\0");
-      parser->is_array = false;
-      parser->have_identifier = false;
+      /* Indicate hard failure. */
+      reset_parser(parser);
       return 0;
     }
     for (ctr = 0; offset_string && isdigit(*(offset_string+ctr)) &&
 	   ctr < MAXTOKENLEN; ctr++) {
       this_token->string[ctr] = *(offset_string + ctr);
     }
+    this_token->kind = length;
     finish_token(parser, offset_string, this_token, ctr);
     return ctr;
 }
@@ -465,8 +501,8 @@ size_t gettoken(struct parser_props* parser, const char *declstring,
     tokenoffset++;
   }
 
-  // Process array length, if any.
-  if (parser->is_array) {
+  /* Process array length, if any. We should already have an identifier. */
+  if (parser->array_dimensions) {
     tokenoffset += process_array_length(parser, declstring + tokenoffset,
 					this_token);
     return tokenoffset;
@@ -563,7 +599,7 @@ int pop_stack(struct parser_props* parser) {
       pop_stack(parser);
       break;
     case identifier:
-      if (parser->is_array) {
+      if (parser->array_dimensions) {
         fprintf(parser->out_stream, "%s is an array of ",
 		parser->stack[stacktop].string);
       } else {
@@ -572,11 +608,21 @@ int pop_stack(struct parser_props* parser) {
       }
       break;
     case length:
-      if (parser->is_array) {
-        fprintf(parser->out_stream, "%s ", parser->stack[stacktop].string);
+      if (parser->array_dimensions) {
+        fprintf(parser->out_stream, "%s", parser->stack[stacktop].string);
+	if (parser->array_lengths > 1) {
+	  fprintf(parser->out_stream, "x");
+	} else {
+          if (parser->last_dimension_unspecified)  {
+	    fprintf(parser->out_stream, "x? ");
+	  } else {
+   	    fprintf(parser->out_stream, " ");
+          }
+	}
       } else {
         fprintf(parser->err_stream, "\nError: found length without array.\n");
       }
+      parser->array_lengths--;
       break;
     case invalid:
       __attribute__((fallthrough));
@@ -591,22 +637,57 @@ int pop_stack(struct parser_props* parser) {
   return 0;
 }
 
+void reverse_lengths(struct parser_props* parser) {
+  // Intentionally truncate in the case of an odd number of lengths.
+  const size_t num_pairs = (size_t)parser->array_lengths / 2;
+  // The token at parser->stacklen-1 is the identifier.
+  const size_t top_len_idx = parser->stacklen - 2;
+  size_t bottom_len_idx;
+  if (parser->array_lengths % 2) {
+    bottom_len_idx = (top_len_idx - num_pairs) - 1;
+  } else {
+    bottom_len_idx = top_len_idx - num_pairs;
+  }
+  for (size_t ctr = 0; ctr < num_pairs; ctr++) {
+    struct token bottom_len = parser->stack[bottom_len_idx + ctr];
+    struct token top_len = parser->stack[top_len_idx - ctr];
+    strlcpy(parser->stack[top_len_idx].string, bottom_len.string, MAXTOKENLEN);
+    strlcpy(parser->stack[bottom_len_idx].string, top_len.string, MAXTOKENLEN);
+  }
+}
+
+
 /*
  * If the declaration describes a 1-dimensional array with a specified length,
- * the top of the stack is the length and the element below is the identifier.
+ * the top of the stack holds the array lengths and the element below them is
+ * the identifier.
  */
-void reorder_array_identifier_and_length(struct parser_props* parser) {
-  const size_t stacklast = parser->stacklen - 1;
-  const struct token arraylen = parser->stack[stacklast];
-  const struct token name = parser->stack[stacklast-1];
-  if ((!parser->is_array) || (length != arraylen.kind) ||
-      (identifier != name.kind)) {
+void reorder_array_identifier_and_lengths(struct parser_props* parser) {
+  if (!parser->array_lengths) {
     return;
   }
-  strlcpy(parser->stack[stacklast].string, name.string, MAXTOKENLEN);
-  strlcpy(parser->stack[stacklast-1].string, arraylen.string, MAXTOKENLEN);
-  parser->stack[stacklast].kind = identifier;
-  parser->stack[stacklast-1].kind = length;
+  const size_t stacklast = parser->stacklen - 1;
+  /*
+   * The identifier name starts at the top.  We want it below the array
+   * dimensions.
+   */
+  size_t unprocessed_lengths = parser->array_lengths;
+  // Move the identifier to the stack top by swapping it with each identifier in turn.
+  while (unprocessed_lengths){
+    struct token name = parser->stack[stacklast -unprocessed_lengths];
+    struct token arraylen = parser->stack[(stacklast - unprocessed_lengths)+1];
+    if ((length != arraylen.kind) || (identifier != name.kind)) {
+      return;
+    }
+    strlcpy(parser->stack[(stacklast-unprocessed_lengths)+1].string, name.string, MAXTOKENLEN);
+    strlcpy(parser->stack[stacklast-unprocessed_lengths].string, arraylen.string, MAXTOKENLEN);
+    parser->stack[(stacklast-unprocessed_lengths)+1].kind = identifier;
+    parser->stack[stacklast-unprocessed_lengths].kind = length;
+    unprocessed_lengths--;
+  }
+  if (parser->array_lengths > 1) {
+    reverse_lengths(parser);
+  }
 }
 
 /*
@@ -636,12 +717,50 @@ void reorder_qualifier_and_type(struct parser_props* parser) {
   }
 }
 
+void process_array_dimensions(struct parser_props* parser, char* nexttoken,
+			      size_t *offset, char** input_cursor, struct token* this_token) {
+  char *next_dim;
+  do {
+    /* Skip '['. */
+    (*offset)++;
+    *input_cursor = nexttoken + *offset;
+    /* We've encountered "[]", which always terminates C array-length declarations.
+     * Return without incrementing offset.
+     */
+    if (']' == **input_cursor) {
+      /*
+       * The first increment of array_dimensions happens in finish_token() after
+       * finding the identifier.
+       * The first dimension must have a length.  If we've observed a length, the
+       * dimension is not the first, so the counter should be incremented.
+       */
+      if (parser->array_lengths) {
+        parser->array_dimensions++;
+      }
+      break;
+    }
+    (*offset) += gettoken(parser, *input_cursor, this_token);
+    if ((length == this_token->kind) && (strlen(this_token->string))) {
+      push_stack(parser, this_token);
+    }
+    next_dim = strstr(nexttoken+*offset, "[");
+    if (next_dim) {
+      if (2 >= strlen(next_dim)) {
+        /* No array length; return without incrementing offset. */
+        parser->array_dimensions++;
+        break;
+      }
+    }
+  } while ((NULL != next_dim) && (*offset <= strlen(nexttoken)));
+}
+
 // Only the tests make use of the return value.
 size_t load_stack(struct parser_props* parser, char* nexttoken) {
   struct token this_token;
   char trimmed[MAXTOKENLEN];
   char* input_cursor = nexttoken;
   this_token.kind = invalid;
+  strcpy(this_token.string, "");
    /*
     * offset is the number of characters consumed by gettoken().
     * offset >= this_token->string since leading whitespace in nexttoken will be
@@ -653,11 +772,11 @@ size_t load_stack(struct parser_props* parser, char* nexttoken) {
   }
   // Finding the identifier terminates initial stack loading since it comes
   // last, as long as there are no function arguments or array delimiters.
-  while (offset < strlen(nexttoken)) {
+  while (offset <= strlen(nexttoken)) {
     while (this_token.kind != identifier) {
       input_cursor = nexttoken + offset;
       offset += gettoken(parser, input_cursor, &this_token);
-      if (!offset) {
+      if ((!offset) || (invalid == this_token.kind)) {
 	break;
       }
       size_t trailing = trim_trailing_whitespace(nexttoken, trimmed);
@@ -667,21 +786,18 @@ size_t load_stack(struct parser_props* parser, char* nexttoken) {
       }
       push_stack(parser, &this_token);
     }
-    if (parser->is_array) {
-      /* Skip ']'. */
-      input_cursor = nexttoken + offset + 1;
-      offset += gettoken(parser, input_cursor, &this_token);
-      if ((length == this_token.kind) && (strlen(this_token.string))) {
-        push_stack(parser, &this_token);
-      }
-      /* Ignore multidimensional arrays for the moment. */
-      break;
+    if (parser->array_dimensions) {
+      process_array_dimensions(parser, nexttoken, &offset, &input_cursor, &this_token);
     }
+    break;
   }
   if (!parser->have_identifier) {
     return 0;
   }
-  reorder_array_identifier_and_length(parser);
+  if (parser->array_dimensions == parser->array_lengths){
+    parser->last_dimension_unspecified = false;
+  }
+  reorder_array_identifier_and_lengths(parser);
   reorder_qualifier_and_type(parser);
 #ifdef TESTING
   showstack(parser->stack, parser->stacklen, parser->out_stream);
@@ -691,14 +807,16 @@ size_t load_stack(struct parser_props* parser, char* nexttoken) {
 
 /*
  * Returns true iff input is successfully parsed.  Actual parsing begins here.
+ * The parser pointer is passed in rather than allocated here only because
+ * doing so facilitates testing.
  */
-bool input_parsing_successful(char inputstr[], struct parser_props* parser) {
+bool input_parsing_successful(struct parser_props *parser, char inputstr[]) {
   /* Allocate and call strlcpy() in case the input is too long. */
   char *nexttoken = (char *)malloc(MAXTOKENLEN);
   strlcpy(nexttoken, inputstr, MAXTOKENLEN);
   load_stack(parser, nexttoken);
   if (0 == parser->stacklen) {
-    fprintf(parser->err_stream, "Unable to read garbled input.\n");
+    fprintf(parser->err_stream, "Unable to parse garbled input.\n");
     free(nexttoken);
     return false;
   }
@@ -784,6 +902,8 @@ size_t find_input_string(const char from_user[], char inputstr[], FILE *stream) 
 #ifndef TESTING
 int main(int argc, char **argv) {
   char inputstr[MAXTOKENLEN] = {0};
+  struct parser_props parser;
+  initialize_parser(&parser);
 
   if ((argc != 2)) {
     usage();
@@ -799,9 +919,7 @@ int main(int argc, char **argv) {
     usage();
     exit(EINVAL);
   }
-  struct parser_props parser;
-  initialize_parser(&parser);
-  if (!input_parsing_successful(inputstr, &parser)) {
+  if (!input_parsing_successful(&parser, inputstr)) {
     exit(EXIT_FAILURE);
   }
   printf("\n");

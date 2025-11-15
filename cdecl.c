@@ -39,8 +39,10 @@ const char *types[] = {"char", "short", "int", "float", "double",
 		       "int64_t"};
 const char *qualifiers[] = {"const", "volatile", "static", "*", "extern", "unsigned"};
 
-enum token_class { invalid = 0, delimiter, type, qualifier, identifier, length, whitespace };
-const char *kind_names[] = { "invalid", "delimiter", "type", "qualifier", "identifier", "length", "whitespace" };
+enum token_class { invalid = 0, delimiter, type, qualifier, identifier, length,
+		   whitespace };
+const char *kind_names[] = { "invalid", "delimiter", "type", "qualifier",
+			     "identifier", "length", "whitespace" };
 
 struct token {
   enum token_class kind;
@@ -59,6 +61,8 @@ struct parser_props {
   bool is_array;
   size_t stacklen;
   struct token stack[MAXTOKENS];
+  FILE *out_stream;
+  FILE *err_stream;
 };
 
 void initialize_parser(struct parser_props* parser) {
@@ -66,6 +70,13 @@ void initialize_parser(struct parser_props* parser) {
   parser->have_type = false;
   parser->is_array = false;
   parser->stacklen = 0;
+  parser->out_stream = stdout;
+  parser->err_stream = stderr;
+}
+
+void set_test_streams(struct parser_props* parser, FILE* fake_stdout, FILE* fake_stderr) {
+  parser->out_stream = fake_stdout;
+  parser->err_stream = fake_stderr;
 }
 
 void usage(void) {
@@ -77,7 +88,8 @@ void usage(void) {
 }
 
 void limitations() {
-  printf("Input must be shorter than %u characters, not including quotation marks and semicolon\n", MAXTOKENLEN);
+  printf("Input must be shorter than %u characters, not including quotation marks and semicolon\n",
+	 MAXTOKENLEN);
   printf("Known deficiencies:\n\ta) doesn't handle multi-line struct and union "
          "declarations;\n");
   printf("\tb) doesn't handle multiple comma-separated identifiers;\n");
@@ -363,7 +375,6 @@ static bool is_type_char(const char c) {
   return false;
 }
 
-
 /*
  * finish token() receives an unterminated string from gettoken() which it
  * readies for pushing onto the stack.
@@ -399,7 +410,8 @@ void finish_token(struct parser_props* parser, const char *offset_decl,
   }
 }
 
-size_t process_array_length(struct parser_props* parser, const char* offset_string, struct token* this_token) {
+size_t process_array_length(struct parser_props* parser,
+			    const char* offset_string, struct token* this_token) {
     size_t ctr = 0;
     /* Check if the array is ill-formed. */
     if (NULL == strstr(offset_string, "]")) {
@@ -409,7 +421,8 @@ size_t process_array_length(struct parser_props* parser, const char* offset_stri
       parser->have_identifier = false;
       return 0;
     }
-    for (ctr = 0; offset_string && isdigit(*(offset_string+ctr)) && ctr < MAXTOKENLEN; ctr++) {
+    for (ctr = 0; offset_string && isdigit(*(offset_string+ctr)) &&
+	   ctr < MAXTOKENLEN; ctr++) {
       this_token->string[ctr] = *(offset_string + ctr);
     }
     finish_token(parser, offset_string, this_token, ctr);
@@ -454,7 +467,8 @@ size_t gettoken(struct parser_props* parser, const char *declstring,
 
   // Process array length, if any.
   if (parser->is_array) {
-    tokenoffset += process_array_length(parser, declstring + tokenoffset, this_token);
+    tokenoffset += process_array_length(parser, declstring + tokenoffset,
+					this_token);
     return tokenoffset;
   }
 
@@ -505,9 +519,9 @@ size_t gettoken(struct parser_props* parser, const char *declstring,
  * Adds an element created from this_token to parser->stack and increments
  * stacklen.
  */
-void push_stack(struct parser_props* parser, struct token* this_token, FILE* err_stream) {
+void push_stack(struct parser_props* parser, struct token* this_token) {
   if (parser->stacklen >= MAXTOKENS) {
-    fprintf(err_stream, "\nStack overflow.\n");
+    fprintf(parser->err_stream, "\nStack overflow.\n");
     exit(-ENOMEM);
   }
 
@@ -519,11 +533,11 @@ void push_stack(struct parser_props* parser, struct token* this_token, FILE* err
 
 /* move back to the left */
 /* Return 0 on success, an error code on failure */
-int pop_stack(struct parser_props* parser, FILE* out_stream, FILE* err_stream) {
+int pop_stack(struct parser_props* parser) {
   /* Last element of stack with stacklen=n is at index = n-1. */
   const size_t stacktop = parser->stacklen - 1;
   if (!parser->stacklen) {
-    fprintf(err_stream, "Attempt to pop empty stack.\n");
+    fprintf(parser->err_stream, "Attempt to pop empty stack.\n");
     return -ENODATA;
   }
   /*
@@ -531,7 +545,7 @@ int pop_stack(struct parser_props* parser, FILE* out_stream, FILE* err_stream) {
    * object to which the pointer points.
    */
   if (!strcmp(parser->stack[stacktop].string, "*")) {
-    fprintf(out_stream, "pointer(s) to ");
+    fprintf(parser->out_stream, "pointer(s) to ");
   } else {
     switch (parser->stack[stacktop].kind) {
     case whitespace:
@@ -539,33 +553,35 @@ int pop_stack(struct parser_props* parser, FILE* out_stream, FILE* err_stream) {
     case qualifier:
       __attribute__((fallthrough));
     case type:
-      fprintf(out_stream, "%s ", parser->stack[stacktop].string);
+      fprintf(parser->out_stream, "%s ", parser->stack[stacktop].string);
       break;
     case delimiter:
       /* Ignore this_token token, which should be the
          opening parenthesis of a function pointer.
          There should be no array delimiters on the stack */
       parser->stacklen--;
-      pop_stack(parser, out_stream, err_stream);
+      pop_stack(parser);
       break;
     case identifier:
       if (parser->is_array) {
-        fprintf(out_stream, "%s is an array of ", parser->stack[stacktop].string);
+        fprintf(parser->out_stream, "%s is an array of ",
+		parser->stack[stacktop].string);
       } else {
-        fprintf(out_stream, "%s is a(n) ", parser->stack[stacktop].string);
+        fprintf(parser->out_stream, "%s is a(n) ",
+		parser->stack[stacktop].string);
       }
       break;
     case length:
       if (parser->is_array) {
-        fprintf(out_stream, "%s ", parser->stack[stacktop].string);
+        fprintf(parser->out_stream, "%s ", parser->stack[stacktop].string);
       } else {
-        fprintf(err_stream, "\nError: found length without array.\n");
+        fprintf(parser->err_stream, "\nError: found length without array.\n");
       }
       break;
     case invalid:
       __attribute__((fallthrough));
     default:
-      fprintf(err_stream, "\nError: element %s is of unknown type %d.\n",
+      fprintf(parser->err_stream, "\nError: element %s is of unknown type %d.\n",
               parser->stack[stacktop].string, parser->stack[stacktop].kind);
       return -EINVAL;
     }
@@ -609,7 +625,8 @@ void reorder_qualifier_and_type(struct parser_props* parser) {
 	strlcpy(type_name, parser->stack[stacktop].string, MAXTOKENLEN);
         /* Overwrite type (top element) with the 2nd element from top (qualifier). */
 	parser->stack[stacktop].kind = qualifier;
-	strlcpy(parser->stack[stacktop].string, parser->stack[stacktop-1].string, MAXTOKENLEN);
+	strlcpy(parser->stack[stacktop].string, parser->stack[stacktop-1].string,
+		MAXTOKENLEN);
         /* Complete the swap. */
 	parser->stack[stacktop-1].kind = type;
 	strlcpy(parser->stack[stacktop-1].string, type_name, MAXTOKENLEN);
@@ -620,8 +637,7 @@ void reorder_qualifier_and_type(struct parser_props* parser) {
 }
 
 // Only the tests make use of the return value.
-size_t load_stack(struct parser_props* parser, char* nexttoken,
-		  [[maybe_unused]] FILE* out_stream, FILE* err_stream) {
+size_t load_stack(struct parser_props* parser, char* nexttoken) {
   struct token this_token;
   char trimmed[MAXTOKENLEN];
   char* input_cursor = nexttoken;
@@ -632,7 +648,7 @@ size_t load_stack(struct parser_props* parser, char* nexttoken,
     * skipped.
     */
   size_t offset = 0;
-  if (!truncate_input(&nexttoken, err_stream)) {
+  if (!truncate_input(&nexttoken, parser->err_stream)) {
     return 0;
   }
   // Finding the identifier terminates initial stack loading since it comes
@@ -649,14 +665,14 @@ size_t load_stack(struct parser_props* parser, char* nexttoken,
         strlcpy(nexttoken, trimmed, MAXTOKENLEN);
         offset += trailing;
       }
-      push_stack(parser, &this_token, err_stream);
+      push_stack(parser, &this_token);
     }
     if (parser->is_array) {
       /* Skip ']'. */
       input_cursor = nexttoken + offset + 1;
       offset += gettoken(parser, input_cursor, &this_token);
       if ((length == this_token.kind) && (strlen(this_token.string))) {
-        push_stack(parser, &this_token, err_stream);
+        push_stack(parser, &this_token);
       }
       /* Ignore multidimensional arrays for the moment. */
       break;
@@ -668,7 +684,7 @@ size_t load_stack(struct parser_props* parser, char* nexttoken,
   reorder_array_identifier_and_length(parser);
   reorder_qualifier_and_type(parser);
 #ifdef TESTING
-  showstack(parser->stack, parser->stacklen, out_stream);
+  showstack(parser->stack, parser->stacklen, parser->out_stream);
 #endif
   return offset;
 }
@@ -676,33 +692,29 @@ size_t load_stack(struct parser_props* parser, char* nexttoken,
 /*
  * Returns true iff input is successfully parsed.  Actual parsing begins here.
  */
-bool input_parsing_successful(char inputstr[], FILE *out_stream,
-			      FILE* err_stream) {
+bool input_parsing_successful(char inputstr[], struct parser_props* parser) {
   /* Allocate and call strlcpy() in case the input is too long. */
   char *nexttoken = (char *)malloc(MAXTOKENLEN);
-  struct parser_props parser;
-
-  initialize_parser(&parser);
   strlcpy(nexttoken, inputstr, MAXTOKENLEN);
-  load_stack(&parser, nexttoken, out_stream, err_stream);
-  if (0 == parser.stacklen) {
-    fprintf(err_stream, "Unable to read garbled input.\n");
+  load_stack(parser, nexttoken);
+  if (0 == parser->stacklen) {
+    fprintf(parser->err_stream, "Unable to read garbled input.\n");
     free(nexttoken);
     return false;
   }
-  if (!(parser.have_identifier && parser.have_type)) {
-    fprintf(err_stream, "Input lacks required identifier or type element.\n");
+  if (!(parser->have_identifier && parser->have_type)) {
+    fprintf(parser->err_stream, "Input lacks required identifier or type element.\n");
     free(nexttoken);
     return false;
   }
 #ifdef TESTING
-  showstack(parser.stack, parser.stacklen, out_stream);
+  showstack(parser->stack, parser->stacklen, parser->out_stream);
 #endif
-  while (parser.stacklen && (!pop_stack(&parser, out_stream, err_stream))) {
-    parser.stacklen--;
+  while (parser->stacklen && (!pop_stack(parser))) {
+    parser->stacklen--;
   }
-  fprintf(out_stream, "\n");
-  fflush(out_stream);
+  fprintf(parser->out_stream, "\n");
+  fflush(parser->out_stream);
   free(nexttoken);
   return true;
 }
@@ -787,7 +799,9 @@ int main(int argc, char **argv) {
     usage();
     exit(EINVAL);
   }
-  if (!input_parsing_successful(inputstr, stdout, stderr)) {
+  struct parser_props parser;
+  initialize_parser(&parser);
+  if (!input_parsing_successful(inputstr, &parser)) {
     exit(EXIT_FAILURE);
   }
   printf("\n");

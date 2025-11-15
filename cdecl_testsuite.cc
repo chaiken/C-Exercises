@@ -426,7 +426,7 @@ TEST_F(TokenizerSuite, DoNotElideLeadingUnderscore) {
 TEST_F(TokenizerSuite, PushEmptyStack) {
   struct token token0{type, "int"};
   EXPECT_THAT(parser.stacklen, Eq(0));
-  push_stack(&parser, &token0, stderr);
+  push_stack(&parser, &token0);
   EXPECT_THAT(parser.stack[0].kind, Eq(type));
   EXPECT_THAT(parser.stack[0].string, StrEq("int"));
   EXPECT_THAT(parser.stacklen, Eq(1));
@@ -435,9 +435,9 @@ TEST_F(TokenizerSuite, PushEmptyStack) {
 TEST_F(TokenizerSuite, Push2ndElement) {
   EXPECT_THAT(parser.stacklen, Eq(0));
   struct token token0{type, "int"};
-  push_stack(&parser, &token0, stderr);
+  push_stack(&parser, &token0);
   struct token token1{qualifier, "const"};
-  push_stack(&parser, &token1, stderr);
+  push_stack(&parser, &token1);
   EXPECT_THAT(parser.stack[0].kind, Eq(type));
   EXPECT_THAT(parser.stack[0].string, StrEq("int"));
   EXPECT_THAT(parser.stack[1].kind, Eq(qualifier));
@@ -469,6 +469,7 @@ struct ParserSuite : public Test {
     this_token.kind = invalid;
     bzero(this_token.string, MAXTOKENLEN);
     initialize_parser(&parser);
+    set_test_streams(&parser, fake_stdout, fake_stderr);
   }
 
   ~ParserSuite() override {
@@ -608,24 +609,24 @@ TEST_F(ParserSuite, Truncation) {
 }
 
 TEST_F(ParserSuite, PopEmpty) {
-  EXPECT_THAT(pop_stack(&parser, fake_stdout, fake_stderr), Eq(-ENODATA));
+  EXPECT_THAT(pop_stack(&parser), Eq(-ENODATA));
   EXPECT_THAT(StderrMatches("Attempt to pop empty stack."), IsTrue());
 }
 
 TEST_F(ParserSuite, PopOne) {
   struct token token0{type, "int"};
-  push_stack(&parser, &token0, fake_stderr);
+  push_stack(&parser, &token0);
 
-  EXPECT_THAT(pop_stack(&parser, fake_stdout, fake_stderr), Eq(0));
+  EXPECT_THAT(pop_stack(&parser), Eq(0));
   EXPECT_THAT(StdoutMatches("int"), IsTrue());
 }
 
 TEST_F(ParserSuite, Showstack) {
   struct token token0{type, "int"};
-  push_stack(&parser, &token0, fake_stderr);
+  push_stack(&parser, &token0);
   struct token token1{qualifier, "const"};
-  push_stack(&parser, &token1, fake_stderr);
-  showstack(&parser.stack[0], parser.stacklen, fake_stdout);
+  push_stack(&parser, &token1);
+  showstack(&parser.stack[0], parser.stacklen, parser.out_stream);
   EXPECT_THAT(StdoutMatches("Stack is:"), IsTrue());
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string int"),
               IsTrue());
@@ -639,8 +640,7 @@ TEST_F(ParserSuite, LoadStackWorks) {
   char nexttoken[MAXTOKENLEN];
   const char *probe = "const int* x;";
   strlcpy(nexttoken, probe, strlen(probe) + 1);
-  std::size_t consumed =
-      load_stack(&parser, nexttoken, fake_stdout, fake_stderr);
+  std::size_t consumed = load_stack(&parser, nexttoken);
   // consumed = strlen()-1 since the trailing ';' is elided before gettoken()
   // processing begins.
   EXPECT_THAT(consumed, Eq(strlen(probe) - 1));
@@ -660,8 +660,7 @@ TEST_F(ParserSuite, LoadStackEqualsTerminator) {
   char nexttoken[MAXTOKENLEN];
   const char *probe = "static double val = 2;";
   strlcpy(nexttoken, probe, strlen(probe) + 1);
-  std::size_t consumed =
-      load_stack(&parser, nexttoken, fake_stdout, fake_stderr);
+  std::size_t consumed = load_stack(&parser, nexttoken);
   EXPECT_THAT(consumed, Eq(strlen(probe) - strlen(" = 2;")));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string double"),
               IsTrue());
@@ -678,8 +677,7 @@ TEST_F(ParserSuite, LoadStackArrayLength) {
   char nexttoken[MAXTOKENLEN];
   const char *probe = "double val[42];";
   strlcpy(nexttoken, probe, strlen(probe) + 1);
-  std::size_t consumed =
-      load_stack(&parser, nexttoken, fake_stdout, fake_stderr);
+  std::size_t consumed = load_stack(&parser, nexttoken);
   // In load_stack(), '[' is skipped, and "];" is not consumed. */
   EXPECT_THAT(consumed, Eq(strlen(probe) - strlen("[];")));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string double"),
@@ -696,8 +694,7 @@ TEST_F(ParserSuite, LoadStackBadArray) {
   char nexttoken[MAXTOKENLEN];
   const char *probe = "double val[42;";
   strlcpy(nexttoken, probe, strlen(probe) + 1);
-  std::size_t consumed =
-      load_stack(&parser, nexttoken, fake_stdout, fake_stderr);
+  std::size_t consumed = load_stack(&parser, nexttoken);
   EXPECT_THAT(consumed, Eq(0));
 }
 
@@ -705,8 +702,7 @@ TEST_F(ParserSuite, NothingToLoad) {
   char nexttoken[MAXTOKENLEN];
   const char *probe = "=;";
   strlcpy(nexttoken, probe, strlen(probe) + 1);
-  std::size_t consumed =
-      load_stack(&parser, nexttoken, fake_stdout, fake_stderr);
+  std::size_t consumed = load_stack(&parser, nexttoken);
   EXPECT_THAT(consumed, Eq(0));
   EXPECT_THAT(StderrMatches("Zero-length input string."), IsTrue());
 }
@@ -715,69 +711,60 @@ TEST_F(ParserSuite, LotsOfWhitespace) {
   char nexttoken[MAXTOKENLEN];
   const char *probe = "     ;";
   strlcpy(nexttoken, probe, strlen(probe) + 1);
-  std::size_t consumed =
-      load_stack(&parser, nexttoken, fake_stdout, fake_stderr);
+  std::size_t consumed = load_stack(&parser, nexttoken);
   EXPECT_THAT(consumed, Eq(0));
   EXPECT_THAT(StderrMatches("Zero-length input string."), IsTrue());
 }
 
 TEST_F(ParserSuite, SimpleExpression) {
   char inputstr[] = "int x;";
-  EXPECT_THAT(input_parsing_successful(inputstr, fake_stdout, fake_stderr),
-              IsTrue());
+  EXPECT_THAT(input_parsing_successful(inputstr, &parser), IsTrue());
   // The output has a trailng space in case there's output after the type.
   EXPECT_THAT(StdoutMatches("x is a(n) int "), IsTrue());
 }
 
 TEST_F(ParserSuite, PtrExpression) {
   char inputstr[] = "int* x;";
-  EXPECT_THAT(input_parsing_successful(inputstr, fake_stdout, fake_stderr),
-              IsTrue());
+  EXPECT_THAT(input_parsing_successful(inputstr, &parser), IsTrue());
   // The output has a trailng space in case there's output after the type.
   EXPECT_THAT(StdoutMatches("x is a(n) pointer(s) to int "), IsTrue());
 }
 
 TEST_F(ParserSuite, QualfiedExpression) {
   char inputstr[] = "const int x;";
-  EXPECT_THAT(input_parsing_successful(inputstr, fake_stdout, fake_stderr),
-              IsTrue());
+  EXPECT_THAT(input_parsing_successful(inputstr, &parser), IsTrue());
   // The output has a trailng space in case there's output after the type.
   EXPECT_THAT(StdoutMatches("x is a(n) const int "), IsTrue());
 }
 
 TEST_F(ParserSuite, ConstPtr) {
   char inputstr[] = "int * const x;";
-  EXPECT_THAT(input_parsing_successful(inputstr, fake_stdout, fake_stderr),
-              IsTrue());
+  EXPECT_THAT(input_parsing_successful(inputstr, &parser), IsTrue());
   EXPECT_THAT(StdoutMatches("x is a(n) const pointer(s) to int "), IsTrue());
 }
 
 TEST_F(ParserSuite, SimpleArray) {
   char inputstr[] = "const double x[]];";
-  EXPECT_THAT(input_parsing_successful(inputstr, fake_stdout, fake_stderr),
-              IsTrue());
+  EXPECT_THAT(input_parsing_successful(inputstr, &parser), IsTrue());
   EXPECT_THAT(StdoutMatches("x is an array of const double "), IsTrue());
 }
 
 TEST_F(ParserSuite, PtrArray) {
   char inputstr[] = "double* x[]];";
-  EXPECT_THAT(input_parsing_successful(inputstr, fake_stdout, fake_stderr),
-              IsTrue());
+  EXPECT_THAT(input_parsing_successful(inputstr, &parser), IsTrue());
   EXPECT_THAT(StdoutMatches("x is an array of pointer(s) to double "),
               IsTrue());
 }
 
 TEST_F(ParserSuite, ArrayWithLength) {
   char inputstr[] = "char val[9];";
-  EXPECT_THAT(input_parsing_successful(inputstr, fake_stdout, fake_stderr),
-              IsTrue());
+  EXPECT_THAT(input_parsing_successful(inputstr, &parser), IsTrue());
   EXPECT_THAT(StdoutMatches("val is an array of 9 char"), IsTrue());
 }
 
 TEST_F(ParserSuite, ArrayWithBadLength) {
   char inputstr[] = "char val[9;";
-  EXPECT_THAT(input_parsing_successful(inputstr, fake_stdout, fake_stderr),
-              IsFalse());
+  EXPECT_THAT(input_parsing_successful(inputstr, &parser), IsFalse());
   EXPECT_THAT(StderrMatches("Input lacks required identifier or type element"),
               IsTrue());
 }
@@ -786,8 +773,7 @@ TEST_F(ParserSuite, Reorder) {
   char nexttoken[MAXTOKENLEN];
   const char *probe = "const int x;";
   strlcpy(nexttoken, probe, strlen(probe) + 1);
-  std::size_t consumed =
-      load_stack(&parser, nexttoken, fake_stdout, fake_stderr);
+  std::size_t consumed = load_stack(&parser, nexttoken);
   // consumed = strlen()-1 since the trailing ';' is elided before gettoken()
   // processing begins.
   EXPECT_THAT(consumed, Eq(strlen(probe) - 1));

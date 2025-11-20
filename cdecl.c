@@ -30,7 +30,29 @@
 #define MAXTOKENLEN 64
 #define MAXTOKENS 256
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
+#define _cleanup_(x) __attribute__((__cleanup__(x)))
 
+/*
+ * generalized cleanup function for heap allocations copied from systemd's
+ * src/boot/util.h
+ *
+ * The more obvious
+ *     free(p);
+ * results in ASAN complaining
+ *     ""attempting free on address which was not malloc()-ed""
+ * The reason is that the macro is passing a void** pointer, namely &p.
+ * Copilot explains,
+ *   "the compiler arranges for freep(&var) to be called at scope exit. That
+ *    means p inside freep is not the heap pointer itself, but the address of
+ *    the local variable copy (a char **)."
+ * Without the cast,
+ *    "free(p) is freeing the stack address of var, not the heap block returned
+ *     by strdup. AddressSanitizer catches this as an invalid free."
+ *
+ */
+static inline void freep(void *p) {
+    free(*(void **) p);
+}
 
 const char delimiters[] = {'(', ')', '[', ']', '{', '}', ','};
 const char *types[] = {"char", "short", "int", "float", "double",
@@ -114,16 +136,14 @@ bool is_all_blanks(const char* input) {
     return false;
   }
   char* token_copy = strdup(input);
-  char *saveptr = token_copy;
+  _cleanup_(freep) char *saveptr = token_copy;
   while (token_copy && isprint(*token_copy) && isblank(*token_copy)) {
       token_copy++;
   }
   // Reached end of the string.
   if (!strlen(token_copy)) {
-    free(saveptr);
     return true;
   }
-  free(saveptr);
   return false;
 }
 
@@ -141,7 +161,7 @@ size_t trim_trailing_whitespace(const char* input, char* trimmed) {
     bzero(trimmed, MAXTOKENLEN);
     return(strlen(input));
   }
-  char* copy = strdup(input);
+  _cleanup_(freep) char* copy = strdup(input);
   char* last_char = copy + (strlen(copy) - 1);
   // last_char should be greater than input when the loop exits, as otherwise input is all blanks.
   size_t removed = 0;
@@ -150,7 +170,6 @@ size_t trim_trailing_whitespace(const char* input, char* trimmed) {
     removed++;
   }
   if ((copy + (strlen(copy) - 1)) == last_char) {
-    free(copy);
     return 0;
   }
   /* Copy the non-blank part of the input to the output.*/
@@ -159,7 +178,6 @@ size_t trim_trailing_whitespace(const char* input, char* trimmed) {
     trimmed++;
   }
   *trimmed = '\0';
-  free(copy);
   return removed;
 }
 
@@ -172,7 +190,7 @@ size_t trim_leading_whitespace(const char* input, char* trimmed) {
     return 0;
   }
   char* copy = strdup(input);
-  char* saveptr = copy;
+  _cleanup_(freep) char* saveptr = copy;
   size_t removed = 0;
   while (copy && isblank(*copy)) {
     copy++;
@@ -185,7 +203,6 @@ size_t trim_leading_whitespace(const char* input, char* trimmed) {
     copy++;
   }
   *trimmed = '\0';
-  free(saveptr);
   return removed;
 }
 
@@ -194,16 +211,14 @@ bool has_alnum_chars(const char* input) {
     return false;
   }
   char *copy = strdup(input);
-  char *saveptr = copy;
+  _cleanup_(freep) char *saveptr = copy;
   while (*copy && (!isalnum(*copy))) {
     copy++;
   }
   /* Reached the end without finding alphanumeric characters. */
   if (!*copy) {
-    free(saveptr);
     return false;
   }
-  free(saveptr);
   return true;
 }
 
@@ -212,16 +227,14 @@ bool is_numeric(const char* input) {
     return false;
   }
   char *copy = strdup(input);
-  char *saveptr = copy;
+  _cleanup_(freep) char *saveptr = copy;
   while (*copy && (isdigit(*copy))) {
     copy++;
   }
   /* Reached the end without finding non-digit characters. */
   if (!*copy) {
-    free(saveptr);
     return true;
   }
-  free(saveptr);
   return false;
 }
 
@@ -320,7 +333,7 @@ void showstack(const struct token* stack, const size_t stacklen, FILE* out_strea
 bool processed_function_args(char startstring[], size_t *arglength, FILE* out_stream, FILE* err_stream) {
   char endstring[MAXTOKENLEN];
   char *argstring = (char *)malloc(strlen(startstring));
-  char *saveptr = argstring;
+  _cleanup_(freep) char *saveptr = argstring;
   size_t ctr, printargs = 0;
 
   assert(startstring);
@@ -358,8 +371,6 @@ bool processed_function_args(char startstring[], size_t *arglength, FILE* out_st
   }
 
   fprintf(out_stream, "that returns ");
-  free(saveptr);
-
   return true;
 }
 
@@ -812,17 +823,15 @@ size_t load_stack(struct parser_props* parser, char* nexttoken) {
  */
 bool input_parsing_successful(struct parser_props *parser, char inputstr[]) {
   /* Allocate and call strlcpy() in case the input is too long. */
-  char *nexttoken = (char *)malloc(MAXTOKENLEN);
+  _cleanup_(freep) char *nexttoken = (char *)malloc(MAXTOKENLEN);
   strlcpy(nexttoken, inputstr, MAXTOKENLEN);
   load_stack(parser, nexttoken);
   if (0 == parser->stacklen) {
     fprintf(parser->err_stream, "Unable to parse garbled input.\n");
-    free(nexttoken);
     return false;
   }
   if (!(parser->have_identifier && parser->have_type)) {
     fprintf(parser->err_stream, "Input lacks required identifier or type element.\n");
-    free(nexttoken);
     return false;
   }
 #ifdef TESTING
@@ -833,7 +842,6 @@ bool input_parsing_successful(struct parser_props *parser, char inputstr[]) {
   }
   fprintf(parser->out_stream, "\n");
   fflush(parser->out_stream);
-  free(nexttoken);
   return true;
 }
 

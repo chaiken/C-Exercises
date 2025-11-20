@@ -78,8 +78,9 @@ cdecl: cdecl.c
 	$(CCC) $(CFLAGS) $(LDFLAGS) -o cdecl cdecl.c
 
 cdecl-valgrind: cdecl.c
+	/bin/rm -f ./cdecl_valgrind
 	$(CCC) $(CBASICFLAGS) $(LDBASICFLAGS) -o cdecl-valgrind cdecl.c
-	valgrind cdecl-valgrind
+	valgrind ./cdecl-valgrind
 
 # Listing cdecl_testsuite.cc as a dependency results in linker failure.
 cdecl_test: cdecl_testsuite.o cdecl.c

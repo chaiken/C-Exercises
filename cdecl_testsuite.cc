@@ -578,43 +578,73 @@ TEST_F(ParserSuite, Truncation) {
   char *token = (char *)malloc(MAXTOKENLEN);
 
   strlcpy(token, "int x;", MAXTOKENLEN);
-  EXPECT_THAT(truncate_input(&token, fake_stderr), IsTrue());
+  EXPECT_THAT(truncate_input(&token, false, fake_stderr), IsTrue());
   // Checking strlen() assures that the result is NULL-terminated.
   EXPECT_THAT(strlen(token), Eq(5));
   EXPECT_THAT(token, StrEq("int x"));
 
   bzero(token, MAXTOKENLEN);
   strlcpy(token, "int x   ;", MAXTOKENLEN);
-  EXPECT_THAT(truncate_input(&token, fake_stderr), IsTrue());
+  EXPECT_THAT(truncate_input(&token, false, fake_stderr), IsTrue());
   EXPECT_THAT(strlen(token), Eq(5));
   EXPECT_THAT(token, StrEq("int x"));
 
   bzero(token, MAXTOKENLEN);
   strlcpy(token, "int x = 2;", MAXTOKENLEN);
-  EXPECT_THAT(truncate_input(&token, fake_stderr), IsTrue());
+  EXPECT_THAT(truncate_input(&token, false, fake_stderr), IsTrue());
   EXPECT_THAT(strlen(token), Eq(5));
   EXPECT_THAT(token, StrEq("int x"));
 
   bzero(token, MAXTOKENLEN);
   strlcpy(token, "const int x;", MAXTOKENLEN);
-  EXPECT_THAT(truncate_input(&token, fake_stderr), IsTrue());
+  EXPECT_THAT(truncate_input(&token, false, fake_stderr), IsTrue());
   EXPECT_THAT(strlen(token), Eq(11));
   EXPECT_THAT(token, StrEq("const int x"));
 
   bzero(token, MAXTOKENLEN);
   strlcpy(token, "int x", MAXTOKENLEN);
-  EXPECT_THAT(truncate_input(&token, fake_stderr), IsFalse());
+  EXPECT_THAT(truncate_input(&token, false, fake_stderr), IsFalse());
   EXPECT_THAT(StderrMatches("Improperly terminated declaration."), IsTrue());
 
   bzero(token, MAXTOKENLEN);
   strlcpy(token, ";int x", MAXTOKENLEN);
-  EXPECT_THAT(truncate_input(&token, fake_stderr), IsFalse());
+  EXPECT_THAT(truncate_input(&token, false, fake_stderr), IsFalse());
   EXPECT_THAT(StderrMatches("Zero-length input string."), IsTrue());
 
   bzero(token, MAXTOKENLEN);
   strlcpy(token, "   = ", MAXTOKENLEN);
-  EXPECT_THAT(truncate_input(&token, fake_stderr), IsFalse());
+  EXPECT_THAT(truncate_input(&token, false, fake_stderr), IsFalse());
   EXPECT_THAT(StderrMatches("Zero-length input string."), IsTrue());
+
+  bzero(token, MAXTOKENLEN);
+  strlcpy(token, "uint32_t f[21];", MAXTOKENLEN);
+  EXPECT_THAT(truncate_input(&token, false, fake_stderr), IsTrue());
+  EXPECT_THAT(strlen(token), Eq(strlen("uint32_t f[21]")));
+  EXPECT_THAT(token, StrEq("uint32_t f[21]"));
+
+  bzero(token, MAXTOKENLEN);
+  strlcpy(token, "uint32_t f[2] = {3,4};", MAXTOKENLEN);
+  EXPECT_THAT(truncate_input(&token, false, fake_stderr), IsTrue());
+  EXPECT_THAT(strlen(token), Eq(strlen("uint32_t f[2]")));
+  EXPECT_THAT(token, StrEq("uint32_t f[2]"));
+
+  bzero(token, MAXTOKENLEN);
+  strlcpy(token, "uint32_t f();", MAXTOKENLEN);
+  EXPECT_THAT(truncate_input(&token, true, fake_stderr), IsTrue());
+  EXPECT_THAT(strlen(token), Eq(strlen("uint32_t f(")));
+  EXPECT_THAT(token, StrEq("uint32_t f("));
+
+  bzero(token, MAXTOKENLEN);
+  strlcpy(token, "uint32_t f(long val);", MAXTOKENLEN);
+  EXPECT_THAT(truncate_input(&token, true, fake_stderr), IsTrue());
+  EXPECT_THAT(strlen(token), Eq(strlen("uint32_t f(long val")));
+  EXPECT_THAT(token, StrEq("uint32_t f(long val"));
+
+  bzero(token, MAXTOKENLEN);
+  strlcpy(token, "uint32_t f(long val, bool init);", MAXTOKENLEN);
+  EXPECT_THAT(truncate_input(&token, true, fake_stderr), IsTrue());
+  EXPECT_THAT(strlen(token), Eq(strlen("uint32_t f(long val")));
+  EXPECT_THAT(token, StrEq("uint32_t f(long val"));
 
   free(token);
 }
@@ -651,7 +681,7 @@ TEST_F(ParserSuite, LoadStackWorks) {
   char nexttoken[MAXTOKENLEN];
   const char *probe = "const int* x;";
   strlcpy(nexttoken, probe, strlen(probe) + 1);
-  std::size_t consumed = load_stack(&parser, nexttoken);
+  std::size_t consumed = load_stack(&parser, nexttoken, false);
   // consumed = strlen()-1 since the trailing ';' is elided before gettoken()
   // processing begins.
   EXPECT_THAT(consumed, Eq(strlen(probe) - 1));
@@ -671,7 +701,7 @@ TEST_F(ParserSuite, LoadStackEqualsTerminator) {
   char nexttoken[MAXTOKENLEN];
   const char *probe = "static double val = 2;";
   strlcpy(nexttoken, probe, strlen(probe) + 1);
-  std::size_t consumed = load_stack(&parser, nexttoken);
+  std::size_t consumed = load_stack(&parser, nexttoken, false);
   EXPECT_THAT(consumed, Eq(strlen(probe) - strlen(" = 2;")));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string double"),
               IsTrue());
@@ -688,7 +718,7 @@ TEST_F(ParserSuite, LoadStackArrayNoLength) {
   char nexttoken[MAXTOKENLEN];
   const char *probe = "double val[];";
   strlcpy(nexttoken, probe, strlen(probe) + 1);
-  std::size_t consumed = load_stack(&parser, nexttoken);
+  std::size_t consumed = load_stack(&parser, nexttoken, false);
   //  First '[' is consumed; "];" is not. */
   EXPECT_THAT(consumed, Eq(strlen(probe) - strlen("];")));
   EXPECT_THAT(parser.array_dimensions, Eq(1));
@@ -705,7 +735,7 @@ TEST_F(ParserSuite, LoadStackArrayLength) {
   char nexttoken[MAXTOKENLEN];
   const char *probe = "double val[111];";
   strlcpy(nexttoken, probe, strlen(probe) + 1);
-  std::size_t consumed = load_stack(&parser, nexttoken);
+  std::size_t consumed = load_stack(&parser, nexttoken, false);
   // In load_stack(), "];" is not consumed. */
   EXPECT_THAT(consumed, Eq(strlen(probe) - strlen("];")));
   EXPECT_THAT(parser.array_dimensions, Eq(1));
@@ -727,7 +757,7 @@ TEST_F(ParserSuite, LoadStackTwoDimArrayOneLength) {
   // Only the first '[' is consumed.  "[]" terminates processing.
   // As noted in process_array_dimension(), "return without incrementing
   // offset."
-  EXPECT_THAT(load_stack(&parser, nexttoken),
+  EXPECT_THAT(load_stack(&parser, nexttoken, false),
               Eq(strlen(probe) - strlen("][];")));
   EXPECT_THAT(parser.array_dimensions, Eq(2));
   EXPECT_THAT(parser.array_lengths, Eq(1));
@@ -738,7 +768,8 @@ TEST_F(ParserSuite, LoadStackTwoDimArrayTwoLengths) {
   char nexttoken[MAXTOKENLEN];
   const char *probe = "double val[8][4];";
   strlcpy(nexttoken, probe, strlen(probe) + 1);
-  EXPECT_THAT(load_stack(&parser, nexttoken), Eq(strlen(probe) - strlen("];")));
+  EXPECT_THAT(load_stack(&parser, nexttoken, false),
+              Eq(strlen(probe) - strlen("];")));
   EXPECT_THAT(parser.array_dimensions, Eq(2));
   EXPECT_THAT(parser.array_lengths, Eq(2));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string double"),
@@ -757,7 +788,8 @@ TEST_F(ParserSuite, LoadStackThreeDimArrayTwoLengths) {
   char nexttoken[MAXTOKENLEN];
   const char *probe = "double val[8][4];";
   strlcpy(nexttoken, probe, strlen(probe) + 1);
-  EXPECT_THAT(load_stack(&parser, nexttoken), Eq(strlen(probe) - strlen("];")));
+  EXPECT_THAT(load_stack(&parser, nexttoken, false),
+              Eq(strlen(probe) - strlen("];")));
   EXPECT_THAT(parser.array_dimensions, Eq(2));
   EXPECT_THAT(parser.array_lengths, Eq(2));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string double"),
@@ -776,7 +808,8 @@ TEST_F(ParserSuite, LoadStackThreeDimArrayThreeLengths) {
   char nexttoken[MAXTOKENLEN];
   const char *probe = "double val[8][4];";
   strlcpy(nexttoken, probe, strlen(probe) + 1);
-  EXPECT_THAT(load_stack(&parser, nexttoken), Eq(strlen(probe) - strlen("];")));
+  EXPECT_THAT(load_stack(&parser, nexttoken, false),
+              Eq(strlen(probe) - strlen("];")));
   EXPECT_THAT(parser.array_dimensions, Eq(2));
   EXPECT_THAT(parser.array_lengths, Eq(2));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string double"),
@@ -795,7 +828,7 @@ TEST_F(ParserSuite, LoadStackBadArray) {
   char nexttoken[MAXTOKENLEN];
   const char *probe = "double val[42;";
   strlcpy(nexttoken, probe, strlen(probe) + 1);
-  std::size_t consumed = load_stack(&parser, nexttoken);
+  std::size_t consumed = load_stack(&parser, nexttoken, false);
   EXPECT_THAT(consumed, Eq(0));
 }
 
@@ -803,7 +836,7 @@ TEST_F(ParserSuite, NothingToLoad) {
   char nexttoken[MAXTOKENLEN];
   const char *probe = "=;";
   strlcpy(nexttoken, probe, strlen(probe) + 1);
-  std::size_t consumed = load_stack(&parser, nexttoken);
+  std::size_t consumed = load_stack(&parser, nexttoken, false);
   EXPECT_THAT(consumed, Eq(0));
   EXPECT_THAT(StderrMatches("Zero-length input string."), IsTrue());
 }
@@ -812,9 +845,31 @@ TEST_F(ParserSuite, LotsOfWhitespace) {
   char nexttoken[MAXTOKENLEN];
   const char *probe = "     ;";
   strlcpy(nexttoken, probe, strlen(probe) + 1);
-  std::size_t consumed = load_stack(&parser, nexttoken);
+  std::size_t consumed = load_stack(&parser, nexttoken, false);
+  EXPECT_THAT(parser.next, IsNull());
   EXPECT_THAT(consumed, Eq(0));
   EXPECT_THAT(StderrMatches("Zero-length input string."), IsTrue());
+}
+
+TEST_F(ParserSuite, SimpleFunction) {
+  char nexttoken[MAXTOKENLEN];
+  const char *probe = "double sqrt();";
+  strlcpy(nexttoken, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, nexttoken, false);
+  EXPECT_THAT(consumed, Eq(strlen("double sqrt")));
+  // When there are no function parameters, there is no second parser.
+  EXPECT_THAT(parser.next, IsNull());
+  EXPECT_THAT(parser.stack[1].kind, Eq(identifier));
+  EXPECT_THAT(parser.stack[1].string, StrEq("sqrt"));
+}
+
+TEST_F(ParserSuite, SimpleFunctionBadDelims) {
+  char nexttoken[MAXTOKENLEN];
+  const char *probe = "double sqrt(;";
+  strlcpy(nexttoken, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, nexttoken, false);
+  EXPECT_THAT(consumed, Eq(0));
+  EXPECT_THAT(StderrMatches("Malformed function declaration."), IsTrue());
 }
 
 TEST_F(ParserSuite, SimpleExpression) {
@@ -906,11 +961,29 @@ TEST_F(ParserSuite, ArrayWithBadLength) {
               IsTrue());
 }
 
+TEST_F(ParserSuite, SimpleFunctionOutput) {
+  char inputstr[] = "double sqrt();";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(parser.has_function_params, IsFalse());
+  EXPECT_THAT(StdoutMatches("sqrt is a function which returns double"),
+              IsTrue());
+}
+
+TEST_F(ParserSuite, FunctionOutputOneParam) {
+  char inputstr[] = "double sqrt(double x);";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(parser.has_function_params, IsTrue());
+  EXPECT_THAT(parser.next, Not(IsNull()));
+  EXPECT_THAT(StdoutMatches("sqrt is a function which returns double and takes "
+                            "param x is a(n) double"),
+              IsTrue());
+}
+
 TEST_F(ParserSuite, Reorder) {
   char nexttoken[MAXTOKENLEN];
   const char *probe = "const int x;";
   strlcpy(nexttoken, probe, strlen(probe) + 1);
-  std::size_t consumed = load_stack(&parser, nexttoken);
+  std::size_t consumed = load_stack(&parser, nexttoken, false);
   // consumed = strlen()-1 since the trailing ';' is elided before gettoken()
   // processing begins.
   EXPECT_THAT(consumed, Eq(strlen(probe) - 1));

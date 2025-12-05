@@ -80,11 +80,15 @@ struct token {
 struct parser_props {
   bool have_identifier;
   bool have_type;
+  bool last_dimension_unspecified;
+  bool is_function;
+  /* ';' for normal parsing and ')' for function parameters. */
   size_t array_dimensions;
   size_t array_lengths;
-  bool last_dimension_unspecified;
+  bool has_function_params;
   size_t stacklen;
   struct token stack[MAXTOKENS];
+  struct parser_props *next;
   FILE *out_stream;
   FILE *err_stream;
 };
@@ -92,10 +96,13 @@ struct parser_props {
 void reset_parser(struct parser_props* parser){
   parser->have_identifier = false;
   parser->have_type = false;
+  parser->last_dimension_unspecified = true;
+  parser->is_function = false;
   parser->array_dimensions = 0;
   parser->array_lengths = 0;
-  parser->last_dimension_unspecified = true;
+  parser->has_function_params = false;
   parser->stacklen = 0;
+  parser->next = NULL;
 }
 
 void initialize_parser(struct parser_props* parser) {
@@ -234,23 +241,38 @@ bool is_numeric(const char* input) {
 }
 
 /*
- * Remove any characters following ';' or '=' plus any whitespace which precedes
- * these characters.  Returns true if the input contains one of those chars and
- * has any non-whitespace characters before them.
+ * Remove any characters following ';' , ')' or '=' plus any whitespace which
+ * precedes these characters.  Returns true if the input contains one of those
+ * chars and has any non-whitespace characters before them.
  */
-bool truncate_input(char** input, FILE* err_stream) {
+bool truncate_input(char** input, bool is_function, FILE* err_stream) {
   char trimmed[MAXTOKENLEN];
   char *input_end = NULL;
+  if (!is_function) {
   /* Dump chars after '=', if any. */
-  input_end = strstr(*input, "=");
-  /* If the input after '='is not lopped off, the input should terminate with ';'. */
+    input_end = strstr(*input, "=");
+  } else {
+    input_end = strstr(*input, ",");
+  }
+  /*
+   * If the input after '=' or ',' is not lopped off, the input should terminate
+   * with ';' or ')'.
+   */
   if (!input_end) {
-    input_end = strstr(*input, ";");
-   /* Input with two semicolons could reach this point. */
+    if (!is_function) {
+      input_end = strstr(*input, ";");
+    } else {
+      input_end = strstr(*input, ")");
+      /* There are no function parameters. */
+      if (input_end && (')' == **input)) {
+	return false;
+      }
+    }
+   /* Input with two semicolons or ')' could reach this point. */
     if (input_end == *input) {
       fprintf(err_stream, "Zero-length input string.\n");
       return false;
-    } else if (!input_end) { /* there is neither an '=' or a ';' */
+    } else if (!input_end) { /* There are no terminators. */
       fprintf(err_stream, "\nImproperly terminated declaration.\n");
       return false;
     }
@@ -324,49 +346,40 @@ void showstack(const struct token* stack, const size_t stacklen, FILE* out_strea
   return;
 }
 
-/* fails for multiple arguments */
-bool processed_function_args(char startstring[], size_t *arglength, FILE* out_stream, FILE* err_stream) {
-  char endstring[MAXTOKENLEN];
-  char *argstring = (char *)malloc(strlen(startstring));
-  _cleanup_(freep) char *saveptr = argstring;
-  size_t ctr, printargs = 0;
+size_t load_stack(struct parser_props* parser, char* nexttoken, bool is_function);
 
-  assert(startstring);
-
-  *arglength = 0;
-  strcpy(endstring, startstring);
-
-  while ((*arglength < strlen(startstring)) && (endstring[*arglength] != ')'))
-    (*arglength)++;
-
-  if (endstring[*arglength] != ')') {
-    fprintf(err_stream, "Malformed function arguments %s\n", argstring);
-    return false;
+/* Spawn a new parser and put the result from processing the function parameters
+ * on the stack of the original one. Note that the function name is on the
+ * original parser's stack.
+ */
+void process_function_params(struct parser_props *const parser, char* nexttoken, size_t *offset, char** input_cursor) {
+  struct parser_props *params_parser;
+  if (!parser->has_function_params) {
+    return;
   }
-
-  printargs = *arglength;
-
-  if (strstr(endstring, ". . .")) {
-    fprintf(out_stream, "a variadic function ");
-    /* 3 '.', 3 spaces, one comma */
-    printargs -= 7;
-  } else
-    fprintf(out_stream, "a function ");
-
-  if (printargs) {
-    fprintf(out_stream, "that takes ");
-
-    for (ctr = 0; ctr < printargs; ctr++) {
-      if (endstring[ctr] == ',')
-        fprintf(out_stream, " and");
-      else
-        putchar(endstring[ctr]);
-    }
-    fprintf(out_stream, " args and ");
+  /* Advance the input cursor to the correct start of the parameter. */
+  (*offset)++;
+  *input_cursor = nexttoken + *offset; /* Skip '(' or ','. */
+  if (0 == strlen(*input_cursor)) {
+      return;
   }
-
-  fprintf(out_stream, "that returns ");
-  return true;
+  params_parser = (struct parser_props *)malloc(sizeof(struct parser_props));
+  if(!params_parser) {
+    exit(ENOMEM);
+  }
+  initialize_parser(params_parser);
+  params_parser->out_stream = parser->out_stream;
+  params_parser->err_stream = parser->err_stream;
+  parser->next = params_parser;
+  /* Pass input_cursor rather than nexttoken since the params parser only
+   * processes what's inside the parentheses.
+   */
+   load_stack(params_parser, *input_cursor, true);
+#ifdef TESTING
+  if (params_parser->stacklen) {
+    showstack(params_parser->stack, params_parser->stacklen, stdout);
+  }
+#endif
 }
 
 /* Do not allow any characters in identifiers besides a-z, '_' and '-'. */
@@ -389,6 +402,47 @@ static bool is_type_char(const char c) {
   return false;
 }
 
+/* A true return value means no errors. */
+bool check_for_array_dimensions(struct parser_props *parser,
+				const char *offset_decl) {
+  if ('[' != *offset_decl) {
+    return true;
+  }
+  if (strstr(offset_decl, "]")) {
+     parser->array_dimensions++;
+          return true;
+  }
+  reset_parser(parser);
+  return false;
+}
+
+/* A true return value means no errors. */
+bool check_for_function_parameters(struct parser_props *parser,
+				   const char *offset_decl) {
+  if ('(' != *offset_decl) {
+    return true;
+  }
+  const char *params_end = strstr(offset_decl, ")");
+  if (!params_end) {
+    reset_parser(parser);
+    fprintf(parser->err_stream, "Malformed function declaration.\n");
+    return false;
+  }
+  parser->is_function = true;
+  /* No function parameters since types are at least 3 chars long. */
+  if (3 > (params_end - offset_decl)) {
+    return true;
+  }
+  if (isblank(*(offset_decl+1))) {
+    return true;
+  }
+  /*
+   * There is possibly a type within the parentheses and thus a function
+   * parameter. */
+  parser->has_function_params = true;
+  return true;
+}
+
 /*
  * finish token() receives an unterminated string from gettoken() which it
  * readies for pushing onto the stack.
@@ -402,15 +456,14 @@ void finish_token(struct parser_props* parser, const char *offset_decl,
     if (!parser->have_type) {
       /* Indicate hard failure. */
       reset_parser(parser);
-      break;
+      return;
     }
     parser->have_identifier = true;
-    if ('[' == *offset_decl) {
-      if (strstr(offset_decl, "]")) {
-        parser->array_dimensions++;
-      } else {
-        reset_parser(parser);
-      }
+    if (!check_for_array_dimensions(parser, offset_decl)) {
+      return;
+    }
+    if (!check_for_function_parameters(parser, offset_decl)) {
+      return;
     }
     break;
   case type:
@@ -573,9 +626,12 @@ void push_stack(struct parser_props* parser, struct token* this_token) {
   return;
 }
 
+int pop_all(struct parser_props *parser);
+
 /* move back to the left */
 /* Return 0 on success, an error code on failure */
 int pop_stack(struct parser_props* parser) {
+  int ret;
   /* Last element of stack with stacklen=n is at index = n-1. */
   const size_t stacktop = parser->stacklen - 1;
   if (!parser->stacklen) {
@@ -596,6 +652,17 @@ int pop_stack(struct parser_props* parser) {
       __attribute__((fallthrough));
     case type:
       fprintf(parser->out_stream, "%s ", parser->stack[stacktop].string);
+        /*
+	 * If the function is itself part of a union or struct, then
+	 * parser->next could be populated without function params.
+	 */
+        if(parser->has_function_params && parser->next) {
+          fprintf(parser->out_stream, "and takes param ");
+          ret = pop_all(parser->next);
+	  /* TODO: handle multiple function parameters correctly. */
+	  free(parser->next);
+	  if (ret) return ret;
+	}
       break;
     case delimiter:
       /* Ignore this_token token, which should be the
@@ -608,6 +675,9 @@ int pop_stack(struct parser_props* parser) {
       if (parser->array_dimensions) {
         fprintf(parser->out_stream, "%s is an array of ",
 		parser->stack[stacktop].string);
+      } else if (parser->is_function) {
+        fprintf(parser->out_stream, "%s is a function which returns ",
+	        parser->stack[stacktop].string);
       } else {
         fprintf(parser->out_stream, "%s is a(n) ",
 		parser->stack[stacktop].string);
@@ -640,6 +710,16 @@ int pop_stack(struct parser_props* parser) {
   }
   memset(parser->stack[stacktop].string, '\0', MAXTOKENLEN);
   parser->stack[stacktop].kind = invalid;
+  return 0;
+}
+
+int pop_all(struct parser_props *parser) {
+  int ret;
+  while (parser->stacklen) {
+    ret = pop_stack(parser);
+    if (ret) return ret;
+    parser->stacklen--;
+  }
   return 0;
 }
 
@@ -761,21 +841,21 @@ void process_array_dimensions(struct parser_props* parser, char* nexttoken,
 }
 
 // Only the tests make use of the return value.
-size_t load_stack(struct parser_props* parser, char* nexttoken) {
+size_t load_stack(struct parser_props* parser, char* nexttoken, bool is_function) {
   struct token this_token;
   char trimmed[MAXTOKENLEN];
   char* input_cursor = nexttoken;
-  this_token.kind = invalid;
-  strcpy(this_token.string, "");
    /*
     * offset is the number of characters consumed by gettoken().
     * offset >= this_token->string since leading whitespace in nexttoken will be
     * skipped.
     */
   size_t offset = 0;
-  if (!truncate_input(&nexttoken, parser->err_stream)) {
+  if (!truncate_input(&nexttoken, is_function, parser->err_stream)) {
     return 0;
   }
+  this_token.kind = invalid;
+  strcpy(this_token.string, "");
   // Finding the identifier terminates initial stack loading since it comes
   // last, as long as there are no function arguments or array delimiters.
   while (offset <= strlen(nexttoken)) {
@@ -793,7 +873,15 @@ size_t load_stack(struct parser_props* parser, char* nexttoken) {
       push_stack(parser, &this_token);
     }
     if (parser->array_dimensions) {
-      process_array_dimensions(parser, nexttoken, &offset, &input_cursor, &this_token);
+      process_array_dimensions(parser, nexttoken, &offset, &input_cursor,
+			       &this_token);
+    }
+    /* Either the parameter list is "()" and there are no new characters
+     * processed, or there are new function parameters,
+     * each handled by a new parser.
+     */
+    if (parser->has_function_params) {
+      process_function_params(parser, nexttoken, &offset, &input_cursor);
     }
     break;
   }
@@ -805,10 +893,17 @@ size_t load_stack(struct parser_props* parser, char* nexttoken) {
   }
   reorder_array_identifier_and_lengths(parser);
   reorder_qualifier_and_type(parser);
+
+  struct parser_props *next_parser = parser->next;
+  while (next_parser) {
+    reorder_array_identifier_and_lengths(next_parser);
+    reorder_qualifier_and_type(next_parser);
+    next_parser = next_parser->next;
+  }
 #ifdef TESTING
   showstack(parser->stack, parser->stacklen, parser->out_stream);
 #endif
-  return offset;
+  return offset;   /* Only used by tests. */
 }
 
 /*
@@ -820,7 +915,7 @@ bool input_parsing_successful(struct parser_props *parser, char inputstr[]) {
   /* Allocate and call strlcpy() in case the input is too long. */
   _cleanup_(freep) char *nexttoken = (char *)malloc(MAXTOKENLEN);
   strlcpy(nexttoken, inputstr, MAXTOKENLEN);
-  load_stack(parser, nexttoken);
+  load_stack(parser, nexttoken, false);
   if (0 == parser->stacklen) {
     fprintf(parser->err_stream, "Unable to parse garbled input.\n");
     return false;
@@ -832,9 +927,7 @@ bool input_parsing_successful(struct parser_props *parser, char inputstr[]) {
 #ifdef TESTING
   showstack(parser->stack, parser->stacklen, parser->out_stream);
 #endif
-  while (parser->stacklen && (!pop_stack(parser))) {
-    parser->stacklen--;
-  }
+  if (pop_all(parser)) return false;
   fprintf(parser->out_stream, "\n");
   fflush(parser->out_stream);
   return true;

@@ -12,6 +12,12 @@
 
 using namespace ::testing;
 
+void set_test_streams(struct parser_props *parser, FILE *fake_stdout,
+                      FILE *fake_stderr) {
+  parser->out_stream = fake_stdout;
+  parser->err_stream = fake_stderr;
+}
+
 TEST(ProcessStringInputSuite, WellFormed) {
   char inputstr[MAXTOKENLEN];
   const std::string well_formed{"int x;"};

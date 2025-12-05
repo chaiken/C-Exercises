@@ -104,11 +104,6 @@ void initialize_parser(struct parser_props* parser) {
   parser->err_stream = stderr;
 }
 
-void set_test_streams(struct parser_props* parser, FILE* fake_stdout, FILE* fake_stderr) {
-  parser->out_stream = fake_stdout;
-  parser->err_stream = fake_stderr;
-}
-
 void usage(void) {
   printf("\ncdecl prints out the English language form of a C declaration.\n");
   printf("Invoke as 'cdecl <declaration>' or\n");

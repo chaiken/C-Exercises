@@ -88,6 +88,7 @@ struct parser_props {
   bool has_function_params;
   size_t stacklen;
   struct token stack[MAXTOKENS];
+  struct parser_props *prev;
   struct parser_props *next;
   FILE *out_stream;
   FILE *err_stream;
@@ -102,6 +103,7 @@ void reset_parser(struct parser_props* parser){
   parser->array_lengths = 0;
   parser->has_function_params = false;
   parser->stacklen = 0;
+  parser->prev = NULL;
   parser->next = NULL;
 }
 
@@ -245,35 +247,29 @@ bool is_numeric(const char* input) {
  * precedes these characters.  Returns true if the input contains one of those
  * chars and has any non-whitespace characters before them.
  */
-bool truncate_input(char** input, bool is_function, FILE* err_stream) {
+bool truncate_input(char** input, const struct parser_props *parser) {
   char trimmed[MAXTOKENLEN];
   char *input_end = NULL;
-  if (!is_function) {
-  /* Dump chars after '=', if any. */
+  if (!parser->is_function) {
+    /* Dump chars after '=', if any. */
     input_end = strstr(*input, "=");
-  } else {
-    input_end = strstr(*input, ",");
   }
   /*
    * If the input after '=' or ',' is not lopped off, the input should terminate
    * with ';' or ')'.
    */
   if (!input_end) {
-    if (!is_function) {
+    if ((!parser->is_function)) {
       input_end = strstr(*input, ";");
     } else {
       input_end = strstr(*input, ")");
-      /* There are no function parameters. */
-      if (input_end && (')' == **input)) {
-	return false;
-      }
     }
    /* Input with two semicolons or ')' could reach this point. */
     if (input_end == *input) {
-      fprintf(err_stream, "Zero-length input string.\n");
+      fprintf(parser->err_stream, "Zero-length input string.\n");
       return false;
     } else if (!input_end) { /* There are no terminators. */
-      fprintf(err_stream, "\nImproperly terminated declaration.\n");
+      fprintf(parser->err_stream, "\nImproperly terminated declaration.\n");
       return false;
     }
   }
@@ -282,7 +278,7 @@ bool truncate_input(char** input, bool is_function, FILE* err_stream) {
     strlcpy(*input, trimmed, MAXTOKENLEN);
   }
   if (!strlen(*input)) {
-    fprintf(err_stream, "Zero-length input string.\n");
+    fprintf(parser->err_stream, "Zero-length input string.\n");
     return false;
   }
   return true;
@@ -332,6 +328,26 @@ enum token_class get_kind(const char *intoken) {
   return identifier;
 }
 
+void show_parser_list(const struct parser_props *parser) {
+  struct parser_props *pnext = parser->next;
+  if (!pnext) {
+    fprintf(parser->out_stream, "\nNo subsidiary parsers.\n");
+    return;
+  }
+  /* The list head is a stack allocation. */
+  fprintf(parser->out_stream, "\nHEAD: %p-->", parser);
+  while (pnext) {
+    fprintf(parser->out_stream, "%p", pnext);
+    pnext = pnext->next;
+    if (pnext) {
+      fprintf(parser->out_stream, "-->");
+    } else {
+      fprintf(parser->out_stream, "\n\n");
+      break;
+    }
+  }
+}
+
 void showstack(const struct token* stack, const size_t stacklen, FILE* out_stream) {
 
   size_t tokennum = 0, ctr;
@@ -346,46 +362,112 @@ void showstack(const struct token* stack, const size_t stacklen, FILE* out_strea
   return;
 }
 
-size_t load_stack(struct parser_props* parser, char* nexttoken, bool is_function);
+size_t load_stack(struct parser_props* parser, char* nexttoken, bool needs_truncation);
+
+struct parser_props *make_parser(struct parser_props* const parser) {
+    struct parser_props *new_parser = (struct parser_props *)malloc(sizeof(struct parser_props));
+fprintf(stdout, "Allocated %p\n", new_parser);
+    if(!new_parser) {
+      exit(ENOMEM);
+    }
+    initialize_parser(new_parser);
+    new_parser->out_stream = parser->out_stream;
+    new_parser->err_stream = parser->err_stream;
+    parser->next = new_parser;
+    new_parser->prev = parser;
+    return new_parser;
+}
+
+bool overwrite_trailing_delim(char **output, const char *input, const char delim) {
+  const char *param_end = strchr(input, delim);
+  if (!param_end) {
+    return false;
+  }
+  size_t param_len = param_end - input;
+  /* Copy the entire input, as otherwise there is no trailing NULL. */
+  strncpy(*output, input, param_len+2);
+  /* Overwrite the delimiter with a NULL. */
+  *(*output + param_len) = '\0';
+  return true;
+}
+
+/* The list head is a stack allocation. */
+void free_all_parsers(struct parser_props *parser) {
+  while (parser->next) {
+    struct parser_props *save = parser->next->next;
+    free(parser->next);
+    parser->next = save;
+  }
+}
 
 /* Spawn a new parser and put the result from processing the function parameters
  * on the stack of the original one. Note that the function name is on the
  * original parser's stack.
  */
-void process_function_params(struct parser_props *const parser, char* nexttoken, size_t *offset, char** input_cursor) {
+bool process_function_params(struct parser_props *parser, char* nexttoken, size_t *offset, char** input_cursor) {
   struct parser_props *params_parser;
+  struct parser_props *tail_parser = parser;
+  size_t increm = 0;
+  /* TODO: use a _cleanup_ macro here. */
+  char *next_param = (char *)malloc(MAXTOKENLEN);
+
   if (!parser->has_function_params) {
-    return;
+    return false;
   }
-  /* Advance the input cursor to the correct start of the parameter. */
-  (*offset)++;
-  *input_cursor = nexttoken + *offset; /* Skip '(' or ','. */
-  if (0 == strlen(*input_cursor)) {
-      return;
-  }
-  params_parser = (struct parser_props *)malloc(sizeof(struct parser_props));
-  if(!params_parser) {
-    exit(ENOMEM);
-  }
-  initialize_parser(params_parser);
-  params_parser->out_stream = parser->out_stream;
-  params_parser->err_stream = parser->err_stream;
-  parser->next = params_parser;
-  /* Pass input_cursor rather than nexttoken since the params parser only
-   * processes what's inside the parentheses.
-   */
-   size_t increm = load_stack(params_parser, *input_cursor, true);
-   if (!increm) {
-     free(params_parser);
-     parser->next = NULL;
-     return;
-   }
-   *offset += increm;
+  /* +1 to go past '('. */
+  *input_cursor = nexttoken + *offset + 1;
+  while (strlen(*input_cursor)) {
+    // Freed in pop_stack().
+    params_parser = make_parser(tail_parser);
+    /* There may be more than one function parameter yet to process. */
+    if (strchr(*input_cursor, ',')) {
+      if (!overwrite_trailing_delim(&next_param, *input_cursor, ',')) {
+        fprintf(parser->err_stream, "Failed to process list function args %s\n", next_param);
+        goto failed;
+      }
+      increm = load_stack(params_parser, next_param, false);
+      if (!increm) {
+        fprintf(parser->err_stream, "Failed to load list function parameter %s\n", next_param);
+        goto failed;
+      }
+      *offset += increm;
+      /* +1 to go past ','. The comma is not included in offset. */
+      *input_cursor += increm + 1;
+  //#ifdef TESTING
+  show_parser_list(parser);
+  //#endif
+    } else {
+      /*
+       * There is only one remaining parameter.
+       * Pass input_cursor rather than nexttoken since the params parser only
+       * processes what's inside the parentheses.
+       */
+      if (!overwrite_trailing_delim(&next_param, *input_cursor, ')')) {
+        fprintf(parser->err_stream, "Failed to process last function arg\n");
+        goto failed;
+      }
+      increm = load_stack(params_parser, next_param, false);
+      if (!increm) {
+        fprintf(parser->err_stream, "Failed to load last function arg %s\n", next_param);
+        goto failed;
+      }
+      /* 1 is for ')'. */
+      *offset += increm + 1;
+      *input_cursor = nexttoken + *offset; /* Skip past ')'. */
 #ifdef TESTING
-  if (params_parser->stacklen) {
-    showstack(params_parser->stack, params_parser->stacklen, stdout);
-  }
+  show_parser_list(parser);
 #endif
+       break;
+    }
+    tail_parser = params_parser;
+  }
+  free(next_param);
+  return true;  /* Not reached? */
+ failed:
+    free(params_parser);
+    free(next_param);
+    initialize_parser(parser);
+    return false;
 }
 
 /* Do not allow any characters in identifiers besides a-z, '_' and '-'. */
@@ -465,12 +547,8 @@ void finish_token(struct parser_props* parser, const char *offset_decl,
       return;
     }
     parser->have_identifier = true;
-    if (!check_for_array_dimensions(parser, offset_decl)) {
-      return;
-    }
-    if (!check_for_function_parameters(parser, offset_decl)) {
-      return;
-    }
+    check_for_array_dimensions(parser, offset_decl);
+    check_for_function_parameters(parser, offset_decl);
     break;
   case type:
     parser->have_type = true;
@@ -656,18 +734,30 @@ int pop_stack(struct parser_props* parser) {
       __attribute__((fallthrough));
     case qualifier:
       __attribute__((fallthrough));
+    /* Process the function parameters right after processing the return value of a function.  */
     case type:
       fprintf(parser->out_stream, "%s ", parser->stack[stacktop].string);
         /*
 	 * If the function is itself part of a union or struct, then
 	 * parser->next could be populated without function params.
 	 */
-        if(parser->has_function_params && parser->next) {
-          fprintf(parser->out_stream, "and takes param ");
-          ret = pop_all(parser->next);
-	  /* TODO: handle multiple function parameters correctly. */
-	  free(parser->next);
-	  if (ret) return ret;
+        if(parser->has_function_params) {
+          struct parser_props *cursor = parser->next;
+	  size_t depth = 0;
+          while(cursor) {
+            if (depth) {
+              fprintf(parser->out_stream, "and ");
+            } else {
+              fprintf(parser->out_stream, "and takes param(s) ");
+	    }
+            ret = pop_all(cursor);
+	    depth++;
+            struct parser_props *save = cursor->next;
+fprintf(stdout, "\npop_stack(): freeing %p\n", cursor);
+            free(cursor);
+	    cursor = save;
+	    if (ret) return ret;
+          }
 	}
       break;
     case delimiter:
@@ -676,7 +766,7 @@ int pop_stack(struct parser_props* parser) {
          There should be no array delimiters on the stack */
       parser->stacklen--;
       pop_stack(parser);
-      break;
+     break;
     case identifier:
       if (parser->array_dimensions) {
         fprintf(parser->out_stream, "%s is an array of ",
@@ -847,24 +937,29 @@ void process_array_dimensions(struct parser_props* parser, char* nexttoken,
 }
 
 // Only the tests make use of the return value.
-size_t load_stack(struct parser_props* parser, char* nexttoken, bool is_function) {
+size_t load_stack(struct parser_props* parser, char* nexttoken, bool needs_truncation) {
   struct token this_token;
   char trimmed[MAXTOKENLEN];
   char* input_cursor = nexttoken;
-   /*
-    * offset is the number of characters consumed by gettoken().
-    * offset >= this_token->string since leading whitespace in nexttoken will be
-    * skipped.
-    */
-  size_t offset = 0;
-  if (!truncate_input(&nexttoken, is_function, parser->err_stream)) {
-    return 0;
+  if (needs_truncation) {
+   if (!truncate_input(&nexttoken, parser)) {
+      free_all_parsers(parser);
+      return 0;
+    }
   }
   this_token.kind = invalid;
   strcpy(this_token.string, "");
-  // Finding the identifier terminates initial stack loading since it comes
-  // last, as long as there are no function arguments or array delimiters.
+  /*
+   * offset is the number of characters consumed by gettoken().
+   * offset >= strlen(this_token->string) since leading whitespace in
+   * nexttoken will be skipped.
+   */
+  size_t offset = 0;
   while (offset <= strlen(nexttoken)) {
+    /*
+     * Finding the identifier terminates initial stack loading since it comes
+     * last, as long as there are no function arguments or array delimiters.
+     */
     while (this_token.kind != identifier) {
       input_cursor = nexttoken + offset;
       offset += gettoken(parser, input_cursor, &this_token);
@@ -887,19 +982,24 @@ size_t load_stack(struct parser_props* parser, char* nexttoken, bool is_function
      * each handled by a new parser.
      */
     if (parser->has_function_params) {
-      process_function_params(parser, nexttoken, &offset, &input_cursor);
+      /* Move past the already-processed characters and '('. */
+      if (!process_function_params(parser, nexttoken, &offset, &input_cursor)) {
+	initialize_parser(parser);
+	return 0;
+      }
     }
     break;
   }
   if (!parser->have_identifier) {
+    free_all_parsers(parser);
     return 0;
   }
-  if (parser->array_dimensions == parser->array_lengths){
+  if (parser->array_dimensions &&
+      (parser->array_dimensions == parser->array_lengths)) {
     parser->last_dimension_unspecified = false;
   }
   reorder_array_identifier_and_lengths(parser);
   reorder_qualifier_and_type(parser);
-
   struct parser_props *next_parser = parser->next;
   while (next_parser) {
     reorder_array_identifier_and_lengths(next_parser);
@@ -921,19 +1021,24 @@ bool input_parsing_successful(struct parser_props *parser, char inputstr[]) {
   /* Allocate and call strlcpy() in case the input is too long. */
   _cleanup_(freep) char *nexttoken = (char *)malloc(MAXTOKENLEN);
   strlcpy(nexttoken, inputstr, MAXTOKENLEN);
-  load_stack(parser, nexttoken, false);
+  load_stack(parser, nexttoken, true);
   if (0 == parser->stacklen) {
     fprintf(parser->err_stream, "Unable to parse garbled input.\n");
+    free_all_parsers(parser);
     return false;
   }
   if (!(parser->have_identifier && parser->have_type)) {
     fprintf(parser->err_stream, "Input lacks required identifier or type element.\n");
+    free_all_parsers(parser);
     return false;
   }
 #ifdef TESTING
   showstack(parser->stack, parser->stacklen, parser->out_stream);
 #endif
-  if (pop_all(parser)) return false;
+  if (pop_all(parser)) {
+   free_all_parsers(parser);
+   return false;
+  }
   fprintf(parser->out_stream, "\n");
   fflush(parser->out_stream);
   return true;

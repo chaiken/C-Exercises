@@ -649,6 +649,32 @@ TEST_F(ParserSuite, Truncation) {
   free(token);
 }
 
+TEST_F(ParserSuite, ProcessFunctionParamsOneParam) {
+  char nexttoken[MAXTOKENLEN];
+  char *input_cursor = nexttoken;
+  const char *query = "double sqrt(double val)";
+  // The following characters were processed by the first parser.
+  size_t offset = strlen("double sqrt");
+
+  parser.has_function_params = true;
+  strlcpy(nexttoken, query, strlen(query) + 1);
+
+  process_function_params(&parser, nexttoken, &offset, &input_cursor);
+
+  // When process_function_params() runs, the first parser has already handled
+  // all the text before the opening parentheses.
+  EXPECT_THAT(parser.stacklen, Eq(0));
+  ASSERT_THAT(parser.next, Not(IsNull()));
+  EXPECT_THAT(offset, Eq(strlen("double sqrt(")));
+  EXPECT_THAT(parser.next->stacklen, Eq(2));
+  EXPECT_THAT(parser.next->stack[0].kind, Eq(type));
+  EXPECT_THAT(parser.next->stack[0].string, StrEq("double"));
+  EXPECT_THAT(parser.next->stack[1].kind, Eq(identifier));
+  EXPECT_THAT(parser.next->stack[1].string, StrEq("val"));
+  // Normally freed by pop_stack().
+  free(parser.next);
+}
+
 TEST_F(ParserSuite, PopEmpty) {
   EXPECT_THAT(pop_stack(&parser), Eq(-ENODATA));
   EXPECT_THAT(StderrMatches("Attempt to pop empty stack."), IsTrue());

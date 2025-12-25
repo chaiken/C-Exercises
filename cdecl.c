@@ -374,7 +374,13 @@ void process_function_params(struct parser_props *const parser, char* nexttoken,
   /* Pass input_cursor rather than nexttoken since the params parser only
    * processes what's inside the parentheses.
    */
-   load_stack(params_parser, *input_cursor, true);
+   size_t increm = load_stack(params_parser, *input_cursor, true);
+   if (!increm) {
+     free(params_parser);
+     parser->next = NULL;
+     return;
+   }
+   *offset += increm;
 #ifdef TESTING
   if (params_parser->stacklen) {
     showstack(params_parser->stack, params_parser->stacklen, stdout);

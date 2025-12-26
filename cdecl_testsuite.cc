@@ -754,6 +754,30 @@ TEST_F(ParserSuite, LoadStackEqualsTerminator) {
   showstack(&parser.stack[0], parser.stacklen, stdout);
 }
 
+TEST_F(ParserSuite, LoadStackParensTerminator) {
+  char nexttoken[MAXTOKENLEN];
+  const char *probe = "uint64_t hash(char *str);";
+  strlcpy(nexttoken, probe, strlen(probe) + 1);
+  // Final ')' terminates processing.
+  EXPECT_THAT(load_stack(&parser, nexttoken, false),
+              Eq(strlen("uint64_t hash(char *str")));
+  ASSERT_THAT(parser.next, Not(IsNull()));
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string char"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 1 has kind qualifier and string *"),
+              IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 2 has kind identifier and string str"),
+      IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string uint64_t"),
+              IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 1 has kind identifier and string hash"),
+      IsTrue());
+  // Otherwise freed by pop_all().
+  free(parser.next);
+}
+
 TEST_F(ParserSuite, LoadStackArrayNoLength) {
   char nexttoken[MAXTOKENLEN];
   const char *probe = "double val[];";
@@ -1014,9 +1038,10 @@ TEST_F(ParserSuite, FunctionOutputOneParam) {
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(parser.has_function_params, IsTrue());
   EXPECT_THAT(parser.next, Not(IsNull()));
-  EXPECT_THAT(StdoutMatches("sqrt is a function which returns double and takes "
-                            "param x is a(n) double"),
+  // clang-format off
+  EXPECT_THAT(StdoutMatches("sqrt is a function which returns double and takes param x is a(n) double"),
               IsTrue());
+  // clang-format on
 }
 
 TEST_F(ParserSuite, Reorder) {

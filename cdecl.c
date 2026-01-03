@@ -51,7 +51,8 @@
  *
  */
 static inline void freep(void *p) {
-    free(*(void **) p);
+  free(*(void **) p);
+  *(void**)p = NULL;
 }
 
 const char delimiters[] = {'(', ')', '[', ']', '{', '}', ','};
@@ -409,7 +410,7 @@ bool process_function_params(struct parser_props *parser, char* nexttoken, size_
   struct parser_props *tail_parser = parser;
   size_t increm = 0;
   /* TODO: use a _cleanup_ macro here. */
-  char *next_param = (char *)malloc(MAXTOKENLEN);
+  _cleanup_(freep) char *next_param = (char *)malloc(MAXTOKENLEN);
 
   if (!parser->has_function_params) {
     return false;
@@ -461,11 +462,10 @@ bool process_function_params(struct parser_props *parser, char* nexttoken, size_
     }
     tail_parser = params_parser;
   }
-  free(next_param);
   return true;  /* Not reached? */
  failed:
     free(params_parser);
-    free(next_param);
+    params_parser = NULL;
     initialize_parser(parser);
     return false;
 }

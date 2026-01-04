@@ -104,6 +104,7 @@ void reset_parser(struct parser_props* parser){
   parser->array_lengths = 0;
   parser->has_function_params = false;
   parser->stacklen = 0;
+  parser->stack[0].kind = invalid;
   parser->prev = NULL;
   parser->next = NULL;
 }
@@ -332,18 +333,18 @@ enum token_class get_kind(const char *intoken) {
 void show_parser_list(const struct parser_props *parser) {
   struct parser_props *pnext = parser->next;
   if (!pnext) {
-    fprintf(parser->out_stream, "\nNo subsidiary parsers.\n");
+    fprintf(stderr, "\nNo subsidiary parsers.\n");
     return;
   }
   /* The list head is a stack allocation. */
-  fprintf(parser->out_stream, "\nHEAD: %p-->", parser);
+  fprintf(stderr, "HEAD: %p-->", parser);
   while (pnext) {
-    fprintf(parser->out_stream, "%p", pnext);
+    fprintf(stderr, "%p", pnext);
     pnext = pnext->next;
     if (pnext) {
-      fprintf(parser->out_stream, "-->");
+      fprintf(stderr, "-->");
     } else {
-      fprintf(parser->out_stream, "\n\n");
+      fprintf(stderr, "\n");
       break;
     }
   }
@@ -367,7 +368,9 @@ size_t load_stack(struct parser_props* parser, char* nexttoken, bool needs_trunc
 
 struct parser_props *make_parser(struct parser_props* const parser) {
     struct parser_props *new_parser = (struct parser_props *)malloc(sizeof(struct parser_props));
-fprintf(stdout, "Allocated %p\n", new_parser);
+#ifdef TESTING
+    fprintf(stderr, "Allocated %p\n", new_parser);
+#endif
     if(!new_parser) {
       exit(ENOMEM);
     }
@@ -434,9 +437,9 @@ bool process_function_params(struct parser_props *parser, char* nexttoken, size_
       *offset += increm;
       /* +1 to go past ','. The comma is not included in offset. */
       *input_cursor += increm + 1;
-  //#ifdef TESTING
-  show_parser_list(parser);
-  //#endif
+#ifdef TESTING
+      show_parser_list(parser);
+#endif
     } else {
       /*
        * There is only one remaining parameter.
@@ -733,7 +736,8 @@ int pop_stack(struct parser_props* parser) {
     case whitespace:
       __attribute__((fallthrough));
     case qualifier:
-      __attribute__((fallthrough));
+      fprintf(parser->out_stream, "%s ", parser->stack[stacktop].string);
+      break;
     /* Process the function parameters right after processing the return value of a function.  */
     case type:
       fprintf(parser->out_stream, "%s ", parser->stack[stacktop].string);
@@ -744,7 +748,7 @@ int pop_stack(struct parser_props* parser) {
         if(parser->has_function_params) {
           struct parser_props *cursor = parser->next;
 	  size_t depth = 0;
-          while(cursor) {
+          while (cursor && cursor->stacklen) {
             if (depth) {
               fprintf(parser->out_stream, "and ");
             } else {
@@ -753,7 +757,9 @@ int pop_stack(struct parser_props* parser) {
             ret = pop_all(cursor);
 	    depth++;
             struct parser_props *save = cursor->next;
-fprintf(stdout, "\npop_stack(): freeing %p\n", cursor);
+#ifdef TESTING
+            fprintf(stderr, "pop_stack(): freeing %p\n", cursor);
+#endif
             free(cursor);
 	    cursor = save;
 	    if (ret) return ret;
@@ -811,7 +817,7 @@ fprintf(stdout, "\npop_stack(): freeing %p\n", cursor);
 
 int pop_all(struct parser_props *parser) {
   int ret;
-  while (parser->stacklen) {
+  while (parser && parser->stacklen) {
     ret = pop_stack(parser);
     if (ret) return ret;
     parser->stacklen--;

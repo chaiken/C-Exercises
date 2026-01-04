@@ -740,7 +740,7 @@ TEST_F(ParserSuite, ProcessFunctionParamsTwoParams) {
   struct parser_props *pnext = parser.next;
   while (pnext) {
     struct parser_props *save = pnext->next;
-    std::cout << "Freeing pnext: " << std::hex << pnext << std::endl;
+    std::cout << "Test: freeing pnext: " << std::hex << pnext << std::endl;
     free(pnext);
     pnext = save;
   }
@@ -822,9 +822,9 @@ TEST_F(ParserSuite, PopAllTwoFunctionParams) {
   ASSERT_THAT(params_parser2->prev, Not(IsNull()));
 
   struct token token5{type, "int64_t"};
-  push_stack(parser.next, &token5);
+  push_stack(parser.next->next, &token5);
   struct token token6{identifier, "seed"};
-  push_stack(parser.next, &token6);
+  push_stack(parser.next->next, &token6);
 
   EXPECT_THAT(pop_all(&parser), Eq(0));
   EXPECT_THAT(StdoutMatches("hash"), IsTrue());
@@ -1200,11 +1200,31 @@ TEST_F(ParserSuite, SimpleFunctionOutput) {
 }
 
 TEST_F(ParserSuite, FunctionOutputOneParam) {
-  char inputstr[] = "double sqrt(double x);";
+  char inputstr[] = "double sqrt(const double x);";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(parser.has_function_params, IsTrue());
   // clang-format off
-  EXPECT_THAT(StdoutMatches("sqrt is a function which returns double and takes param(s) x is a(n) double"),
+  EXPECT_THAT(StdoutMatches("sqrt is a function which returns double and takes param(s) x is a(n) const double"),
+              IsTrue());
+  // clang-format on
+}
+
+TEST_F(ParserSuite, FunctionOutputOneParamQualifier) {
+  char inputstr[] = "volatile double sqrt(const double x);";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(parser.has_function_params, IsTrue());
+  // clang-format off
+  EXPECT_THAT(StdoutMatches("sqrt is a function which returns volatile double and takes param(s) x is a(n) const double"),
+              IsTrue());
+  // clang-format on
+}
+
+TEST_F(ParserSuite, FunctionOutputTwoParams) {
+  char inputstr[] = "uint64_t hash(char *key, uint64_t seed);";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(parser.has_function_params, IsTrue());
+  // clang-format off
+  EXPECT_THAT(StdoutMatches("hash is a function which returns uint64_t and takes param(s) key is a(n) pointer(s) to char and seed is a(n) uint64_t"),
               IsTrue());
   // clang-format on
 }

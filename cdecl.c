@@ -527,7 +527,7 @@ bool check_for_function_parameters(struct parser_props *parser,
   if (3 > (params_end - offset_decl)) {
     return true;
   }
-  if (isblank(*(offset_decl+1))) {
+  if (is_all_blanks(offset_decl)) {
     return true;
   }
   /*

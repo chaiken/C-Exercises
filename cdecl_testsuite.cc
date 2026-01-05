@@ -762,6 +762,56 @@ TEST_F(ParserSuite, ProcessFunctionParamsStrayComma) {
   EXPECT_THAT(StderrMatches("Failed to load last function arg"), IsTrue());
 }
 
+TEST_F(ParserSuite, ProcessFunctionParamsStrayMiddleComma) {
+  char nexttoken[MAXTOKENLEN];
+  char *input_cursor = nexttoken;
+  const char *query = "uint64_t hash(char *key, , uint64_t seed)";
+  // The following characters were processed by the first parser.
+  size_t offset = strlen("uint64_t hash");
+
+  parser.has_function_params = true;
+  strlcpy(nexttoken, query, strlen(query) + 1);
+
+  process_function_params(&parser, nexttoken, &offset, &input_cursor);
+  ASSERT_THAT(parser.next, IsNull());
+  EXPECT_THAT(StderrMatches("Failed to load list function parameter"),
+              IsTrue());
+}
+
+TEST_F(ParserSuite, ProcessFunctionParamsLeadingWhitespace) {
+  char nexttoken[MAXTOKENLEN];
+  char *input_cursor = nexttoken;
+  const char *query = "uint64_t hash(   char *key, uint64_t seed)";
+  // The following characters were processed by the first parser.
+  size_t offset = strlen("uint64_t hash");
+
+  parser.has_function_params = true;
+  strlcpy(nexttoken, query, strlen(query) + 1);
+
+  process_function_params(&parser, nexttoken, &offset, &input_cursor);
+  ASSERT_THAT(parser.next, Not(IsNull()));
+
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string char"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 1 has kind qualifier and string *"),
+              IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 2 has kind identifier and string key"),
+      IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string uint64_t"),
+              IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 1 has kind identifier and string seed"),
+      IsTrue());
+  struct parser_props *pnext = parser.next;
+  while (pnext) {
+    struct parser_props *save = pnext->next;
+    std::cout << "Test: freeing pnext: " << std::hex << pnext << std::endl;
+    free(pnext);
+    pnext = save;
+  }
+}
+
 TEST_F(ParserSuite, PopEmpty) {
   EXPECT_THAT(pop_stack(&parser), Eq(-ENODATA));
   EXPECT_THAT(StderrMatches("Attempt to pop empty stack."), IsTrue());
@@ -1237,6 +1287,26 @@ TEST_F(ParserSuite, FunctionOutputOneParamQualifier) {
 
 TEST_F(ParserSuite, FunctionOutputTwoParams) {
   char inputstr[] = "uint64_t hash(char *key, uint64_t seed);";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(parser.has_function_params, IsTrue());
+  // clang-format off
+  EXPECT_THAT(StdoutMatches("hash is a function which returns uint64_t and takes param(s) key is a(n) pointer(s) to char and seed is a(n) uint64_t"),
+              IsTrue());
+  // clang-format on
+}
+
+TEST_F(ParserSuite, FunctionOutputLeadingWhitespace) {
+  char inputstr[] = "double sqrt(   const double x);";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(parser.has_function_params, IsTrue());
+  // clang-format off
+  EXPECT_THAT(StdoutMatches("sqrt is a function which returns double and takes param(s) x is a(n) const double"),
+              IsTrue());
+  // clang-format on
+}
+
+TEST_F(ParserSuite, FunctionOutputNoWhitespace) {
+  char inputstr[] = "uint64_t hash(char *key,uint64_t seed);";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(parser.has_function_params, IsTrue());
   // clang-format off

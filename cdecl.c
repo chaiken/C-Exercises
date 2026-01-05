@@ -127,12 +127,9 @@ void limitations() {
 	 MAXTOKENLEN);
   printf("Known deficiencies:\n\ta) doesn't handle multi-line struct and union "
          "declarations;\n");
-  printf("\tb) doesn't handle multiple comma-separated identifiers;\n");
-  printf("\tc) handles multi-dimensional arrays awkwardly;\n");
-  printf("\td) includes only the most basic checks for declaration errors;\n");
-  printf("\te) includes only the qualifiers defined in ANSI C, not LIBC\n");
-  printf("or kernel extensions;\n");
-  printf("\tf) doesn't process identifiers in function argument lists.\n ");
+  printf("\ta) doesn't handle multiple comma-separated declarations;\n");
+  printf("\tb) includes only the qualifiers defined in ANSI C, not LIBC\n");
+  printf("or kernel extensions.\n");
   exit(-1);
 }
 

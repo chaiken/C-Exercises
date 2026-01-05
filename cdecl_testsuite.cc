@@ -710,6 +710,7 @@ TEST_F(ParserSuite, ProcessFunctionParamsOneParamBadDelim) {
 
   process_function_params(&parser, nexttoken, &offset, &input_cursor);
   ASSERT_THAT(parser.next, IsNull());
+  EXPECT_THAT(StderrMatches("Failed to process last function arg"), IsTrue());
 }
 
 TEST_F(ParserSuite, ProcessFunctionParamsTwoParams) {
@@ -744,6 +745,21 @@ TEST_F(ParserSuite, ProcessFunctionParamsTwoParams) {
     free(pnext);
     pnext = save;
   }
+}
+
+TEST_F(ParserSuite, ProcessFunctionParamsStrayComma) {
+  char nexttoken[MAXTOKENLEN];
+  char *input_cursor = nexttoken;
+  const char *query = "double sqrt(double val,)";
+  // The following characters were processed by the first parser.
+  size_t offset = strlen("double sqrt");
+
+  parser.has_function_params = true;
+  strlcpy(nexttoken, query, strlen(query) + 1);
+
+  process_function_params(&parser, nexttoken, &offset, &input_cursor);
+  ASSERT_THAT(parser.next, IsNull());
+  EXPECT_THAT(StderrMatches("Failed to load last function arg"), IsTrue());
 }
 
 TEST_F(ParserSuite, PopEmpty) {

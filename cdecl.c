@@ -399,6 +399,9 @@ bool overwrite_trailing_delim(char **output, const char *input, const char delim
 void free_all_parsers(struct parser_props *parser) {
   while (parser->next) {
     struct parser_props *save = parser->next->next;
+#ifdef TESTING
+            fprintf(stderr, "free_all_parsers(): freeing %p\n", parser->next);
+#endif
     free(parser->next);
     parser->next = save;
   }
@@ -467,7 +470,7 @@ bool process_function_params(struct parser_props *parser, char* nexttoken, size_
   }
   return true;  /* Not reached? */
  failed:
-    free(params_parser);
+    free_all_parsers(parser);
     params_parser = NULL;
     initialize_parser(parser);
     return false;

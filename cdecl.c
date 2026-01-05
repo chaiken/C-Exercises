@@ -55,17 +55,16 @@ static inline void freep(void *p) {
   *(void**)p = NULL;
 }
 
-const char delimiters[] = {'(', ')', '[', ']', '{', '}', ','};
 const char *types[] = {"char", "short", "int", "float", "double",
-		       "long", "struct", "enum", "union", "void", "int8_t", "uint8_t",
-		       "int8_t", "uint16_t", "int16_t", "uint32_t", "int32_t", "uint64_t",
-		       "int64_t"};
-const char *qualifiers[] = {"const", "volatile", "static", "*", "extern", "unsigned"};
-
-enum token_class { invalid = 0, delimiter, type, qualifier, identifier, length,
-		   whitespace };
-const char *kind_names[] = { "invalid", "delimiter", "type", "qualifier",
-			     "identifier", "length", "whitespace" };
+                       "long", "struct", "enum", "union", "void", "int8_t",
+                       "uint8_t", "int8_t", "uint16_t", "int16_t", "uint32_t",
+                       "int32_t", "uint64_t", "int64_t"};
+const char *qualifiers[] = {"const", "volatile", "static", "*", "extern",
+                            "unsigned"};
+enum token_class { invalid = 0, type, qualifier, identifier, length,
+                   whitespace };
+const char *kind_names[] = {"invalid", "type", "qualifier", "identifier",
+                            "length", "whitespace" };
 
 struct token {
   enum token_class kind;
@@ -294,13 +293,6 @@ enum token_class get_kind(const char *intoken) {
   }
   if (is_all_blanks(intoken)) {
     return whitespace;
-  }
-
-  numel = ARRAY_SIZE(delimiters);
-  for (ctr = 0; ctr < numel; ctr++) {
-    if ((1 == strlen(intoken)) && (*intoken == delimiters[ctr])) {
-      return (delimiter);
-    }
   }
 
   numel = ARRAY_SIZE(types);
@@ -585,8 +577,6 @@ void finish_token(struct parser_props* parser, const char *offset_decl,
       reset_parser(parser);
     }
     break;
-  case delimiter:
-      __attribute__((fallthrough));
   case qualifier:
       __attribute__((fallthrough));
   case invalid:
@@ -769,13 +759,6 @@ int pop_stack(struct parser_props* parser) {
           }
 	}
       break;
-    case delimiter:
-      /* Ignore this_token token, which should be the
-         opening parenthesis of a function pointer.
-         There should be no array delimiters on the stack */
-      parser->stacklen--;
-      pop_stack(parser);
-     break;
     case identifier:
       if (parser->array_dimensions) {
         fprintf(parser->out_stream, "%s is an array of ",

@@ -156,23 +156,6 @@ TEST(StringManipulateSuite, GetKindWhitespace) {
   EXPECT_THAT(get_kind(" "), Eq(whitespace));
 }
 
-TEST(StringManipulateSuite, GetKindDelimiters) {
-  EXPECT_THAT(get_kind("("), Eq(delimiter));
-  EXPECT_THAT(get_kind(")"), Eq(delimiter));
-  EXPECT_THAT(get_kind("["), Eq(delimiter));
-  EXPECT_THAT(get_kind("{"), Eq(delimiter));
-  EXPECT_THAT(get_kind("}"), Eq(delimiter));
-  EXPECT_THAT(get_kind(","), Eq(delimiter));
-  //  EXPECT_THAT(get_kind("())"), Eq(delimiter));
-  char *trimmed = (char *)malloc(MAXTOKENLEN);
-  EXPECT_THAT(trim_trailing_whitespace(", ", trimmed), IsTrue());
-  EXPECT_THAT(get_kind(trimmed), Eq(delimiter));
-  bzero(trimmed, strlen(trimmed));
-  EXPECT_THAT(trim_leading_whitespace(" ,", trimmed), IsTrue());
-  EXPECT_THAT(get_kind(trimmed), Eq(delimiter));
-  free(trimmed);
-}
-
 TEST(StringManipulateSuite, GetKindQualifiers) {
   EXPECT_THAT(get_kind("const"), Eq(qualifier));
   EXPECT_THAT(get_kind("volatile"), Eq(qualifier));

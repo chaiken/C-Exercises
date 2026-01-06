@@ -185,15 +185,17 @@ size_t trim_trailing_whitespace(const char* input, char* trimmed) {
 
 /* Caller must allocate trimmed. */
 size_t trim_leading_whitespace(const char* input, char* trimmed) {
+  char* copy = strdup(input);
+  _cleanup_(freep) char* saveptr = copy;
+  size_t removed = 0;
+  /* Make sure trimmed starts empty. */
+  *trimmed = '\0';
   if (!input || (0 == strlen(input)) || (is_all_blanks(input))) {
     return 0;
   }
   if (!isblank(*input)) {
     return 0;
   }
-  char* copy = strdup(input);
-  _cleanup_(freep) char* saveptr = copy;
-  size_t removed = 0;
   while (copy && isblank(*copy)) {
     copy++;
     removed++;
@@ -527,6 +529,72 @@ bool check_for_function_parameters(struct parser_props *parser,
 }
 
 /*
+ * Append the name of a struct or union to the type name since in "struct
+ * task_struct ts;", the type is "struct task_struct", not "struct".  The parser
+ * has already encountered "union" or "struct", so input_cursor+offset should
+ * point past one of them.  The return value indicates success or failure.
+ */
+bool handled_compound_type(const char *input_cursor, struct token *this_token,
+                           size_t *offset) {
+  char compound_type_name[MAXTOKENLEN];
+  const char *brace_pos;
+  char *name_end_ptr;
+  size_t brace_offset;
+  size_t existing_token_len;
+  size_t i;
+  size_t j;
+
+  /*
+   * Check if the struct or union is anonymous.
+   * Do not yet handle full struct or union declarations.
+   */
+  brace_pos = strchr(input_cursor+*offset, '{');
+  if (brace_pos) {
+    brace_offset = brace_pos - (input_cursor+*offset);
+    *offset += brace_offset;
+    return true;
+  }
+
+  /*
+   * Starting with "struct page *pp", compound type name is "page" since "pp" is
+   * the identifier, not handled by this function.
+   */
+  *offset += trim_leading_whitespace(input_cursor+*offset, &compound_type_name[0]);
+  /*
+   * Since there's no leading whitespace, the next blank terminates the compound
+   * identifier.
+   */
+  name_end_ptr = strchr(compound_type_name, ' ');
+  /*
+   * The declaration is something like "struct task_struct;", not "struct
+   * task_struct ts;" so no further action is needed.  Leave identifier for subsequent code to process.
+   */
+  if (!name_end_ptr) {
+    return true;
+  }
+
+  existing_token_len = strlen(this_token->string);
+  this_token->string[existing_token_len] = ' ';
+  /* +1 for the space and +1 for terminating NULL */
+  if ((existing_token_len + strlen(compound_type_name) + 2) > MAXTOKENLEN) {
+    return false;
+  }
+  j = 0;
+  for (i = existing_token_len+1; i < existing_token_len + 1 + strlen(compound_type_name); i++, j++) {
+    /* Reached the end of the compound_type_name, so stop before copying the identifier into the type. */
+    if (' ' == compound_type_name[j]) break;
+    this_token->string[i] = compound_type_name[j];
+  }
+  this_token->string[i] = '\0';
+  /*
+   * The 1 accounts for the space.  The characters left in input_cursor should
+   *  be an identifier which names the instance of the compound type.
+   */
+  *offset += j + 1;
+  return true;
+}
+
+/*
  * finish token() receives an unterminated string from gettoken() which it
  * readies for pushing onto the stack.
  */
@@ -682,7 +750,6 @@ size_t gettoken(struct parser_props* parser, const char *declstring,
   if ('-' == this_token->string[ctr-1]) {
     this_token->string[ctr-1] = '\0';
   }
-
   finish_token(parser, declstring + tokenoffset, this_token, ctr);
   return tokenoffset;
 }
@@ -930,6 +997,12 @@ size_t load_stack(struct parser_props* parser, char* nexttoken, bool needs_trunc
   struct token this_token;
   char trimmed[MAXTOKENLEN];
   char* input_cursor = nexttoken;
+  /*
+   * offset is the number of characters consumed by gettoken().
+   * offset >= strlen(this_token->string) since leading whitespace in
+   * nexttoken will be skipped.
+   */
+  size_t offset = 0;
   if (needs_truncation) {
    if (!truncate_input(&nexttoken, parser)) {
       free_all_parsers(parser);
@@ -938,12 +1011,6 @@ size_t load_stack(struct parser_props* parser, char* nexttoken, bool needs_trunc
   }
   this_token.kind = invalid;
   strcpy(this_token.string, "");
-  /*
-   * offset is the number of characters consumed by gettoken().
-   * offset >= strlen(this_token->string) since leading whitespace in
-   * nexttoken will be skipped.
-   */
-  size_t offset = 0;
   while (offset <= strlen(nexttoken)) {
     /*
      * Finding the identifier terminates initial stack loading since it comes
@@ -959,6 +1026,13 @@ size_t load_stack(struct parser_props* parser, char* nexttoken, bool needs_trunc
       if (trailing) {
         strlcpy(nexttoken, trimmed, MAXTOKENLEN);
         offset += trailing;
+      }
+      if ((type == this_token.kind) && (!strcmp("union", this_token.string) ||
+                                        !strcmp("struct", this_token.string))) {
+        if (!handled_compound_type(input_cursor, &this_token, &offset)) {
+          free_all_parsers(parser);
+          return 0;
+        }
       }
       push_stack(parser, &this_token);
     }

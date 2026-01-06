@@ -1298,6 +1298,51 @@ TEST_F(ParserSuite, FunctionOutputNoWhitespace) {
   // clang-format on
 }
 
+TEST_F(ParserSuite, UnionSimpleDeclaration) {
+  char inputstr[] = "union msi_domain_cookie;";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  // clang-format off
+  EXPECT_THAT(StdoutMatches("msi_domain_cookie is a(n) union"),
+              IsTrue());
+  // clang-format on
+}
+
+TEST_F(ParserSuite, UnionForwardDeclaration) {
+  char inputstr[] = "union msi_domain_cookie dcookie;";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  // clang-format off
+  EXPECT_THAT(StdoutMatches("dcookie is a(n) union msi_domain_cookie"),
+              IsTrue());
+  // clang-format on
+}
+
+TEST_F(ParserSuite, StructForwardDeclaration) {
+  char inputstr[] = "struct list_head list;";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  // clang-format off
+  EXPECT_THAT(StdoutMatches("list is a(n) struct list_head"),
+              IsTrue());
+  // clang-format on
+}
+
+TEST_F(ParserSuite, StructForwardDeclarationWhitespace) {
+  char inputstr[] = "struct   list_head   list;";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  // clang-format off
+  EXPECT_THAT(StdoutMatches("list is a(n) struct list_head"),
+              IsTrue());
+  // clang-format on
+}
+
+TEST_F(ParserSuite, StructForwardDeclarationNoName) {
+  char inputstr[] = "struct *;";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  // clang-format off
+  EXPECT_THAT(StderrMatches("Input lacks required identifier or type element."),
+              IsTrue());
+  // clang-format on
+}
+
 TEST_F(ParserSuite, Reorder) {
   char nexttoken[MAXTOKENLEN];
   const char *probe = "const int x;";

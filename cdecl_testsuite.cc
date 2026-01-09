@@ -163,6 +163,7 @@ TEST(StringManipulateSuite, GetKindQualifiers) {
   EXPECT_THAT(get_kind("extern"), Eq(qualifier));
   EXPECT_THAT(get_kind("*"), Eq(qualifier));
   EXPECT_THAT(get_kind("unsigned"), Eq(qualifier));
+  EXPECT_THAT(get_kind("restrict"), Eq(qualifier));
 }
 
 TEST(StringManipulateSuite, GetKindTypes) {

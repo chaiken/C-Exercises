@@ -60,7 +60,7 @@ const char *types[] = {"char", "short", "int", "float", "double",
                        "uint8_t", "int8_t", "uint16_t", "int16_t", "uint32_t",
                        "int32_t", "uint64_t", "int64_t"};
 const char *qualifiers[] = {"const", "volatile", "static", "*", "extern",
-                            "unsigned"};
+                            "unsigned", "restrict"};
 enum token_class { invalid = 0, type, qualifier, identifier, length,
                    whitespace };
 const char *kind_names[] = {"invalid", "type", "qualifier", "identifier",

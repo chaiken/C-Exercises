@@ -123,13 +123,13 @@ void usage(void) {
 }
 
 void limitations() {
-  printf("Input must be shorter than %u characters, not including quotation marks and semicolon\n",
+  printf("Input must be shorter than %u characters, not including quotation marks and semicolon.\n",
 	 MAXTOKENLEN);
   printf("Known deficiencies:\n\ta) doesn't handle multi-line struct and union "
          "declarations;\n");
-  printf("\ta) doesn't handle multiple comma-separated declarations;\n");
-  printf("\tb) includes only the qualifiers defined in ANSI C, not LIBC\n");
-  printf("or kernel extensions.\n");
+  printf("\tb) doesn't handle multiple comma-separated declarations;\n");
+  printf("\tc) includes only the qualifiers defined in ANSI C, not LIBC\n");
+  printf("\t   or kernel extensions.\n");
   exit(-1);
 }
 
@@ -1177,6 +1177,7 @@ int main(int argc, char **argv) {
 
   if ((argc != 2)) {
     usage();
+    limitations();
     exit(EXIT_SUCCESS);
   }
   /* For the case where input is provided on stdin, the strlen is 1 for '-'. */
@@ -1187,6 +1188,7 @@ int main(int argc, char **argv) {
   if (!find_input_string(argv[1], inputstr, stdin)) {
     fprintf(stderr, "Input is either malformed or empty.\n");
     usage();
+    limitations();
     exit(EINVAL);
   }
   if (!input_parsing_successful(&parser, inputstr)) {

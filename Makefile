@@ -82,6 +82,9 @@ cdecl-valgrind: cdecl.c
 	$(CCC) $(CBASICFLAGS) $(LDBASICFLAGS) -o cdecl-valgrind cdecl.c
 	valgrind ./cdecl-valgrind
 
+cdecl-preprocess:
+	$(CCC) $(CBASICFLAGS) -E --save-temps cdecl.c
+
 # Listing cdecl_testsuite.cc as a dependency results in linker failure.
 cdecl_test: cdecl_testsuite.o cdecl.c
 	make clean

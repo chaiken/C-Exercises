@@ -51,6 +51,7 @@
  *
  */
 static inline void freep(void *p) {
+  if ((!p) || (NULL == *(void **)p)) return;
   free(*(void **) p);
   *(void**)p = NULL;
 }
@@ -406,7 +407,6 @@ bool process_function_params(struct parser_props *parser, char* nexttoken, size_
   struct parser_props *params_parser;
   struct parser_props *tail_parser = parser;
   size_t increm = 0;
-  /* TODO: use a _cleanup_ macro here. */
   _cleanup_(freep) char *next_param = (char *)malloc(MAXTOKENLEN);
 
   if (!parser->has_function_params) {

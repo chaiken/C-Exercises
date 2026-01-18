@@ -401,7 +401,7 @@ void free_all_parsers(struct parser_props *parser) {
 
 /*
  * function_params_cleanup() is the error handler for process_function_params().
- * It free subsidiary parsers linked through the top-level one and resets the
+ * It frees subsidiary parsers linked through the top-level one and resets the
  * top-level one to signal failure to calling code.
  */
 void function_params_cleanup(void *parserp) {
@@ -412,11 +412,10 @@ void function_params_cleanup(void *parserp) {
   initialize_parser(parser);
 }
 
-/* Spawn a new parser and put the result from processing the function parameters
- * on the stack of the original one. Note that the function name is on the
- * original parser's stack.  The approach is inspired by rzg2l_irqc_common_init() in
- * https://github.com/linux4microchip/linux/blob/4d72aeabedfa202d12869e52c40eeabc5401c839/
-drivers/irqchip/irq-renesas-rzg2l.c#L596
+/*
+ * Spawn a new parser for each function parameter and link it into a
+ * list whose head is the top-level parser.  Note that the function
+ * name is on the original parser's stack.
  */
 bool process_function_params(struct parser_props *parser, char* nexttoken, size_t *offset, char** input_cursor) {
   struct parser_props *params_parser;
@@ -424,8 +423,11 @@ bool process_function_params(struct parser_props *parser, char* nexttoken, size_
   size_t increm = 0;
   _cleanup_(freep) char *next_param = (char *)malloc(MAXTOKENLEN);
   /*
-   * Create a pointer which the code doesn't need as a peg on which to hang the
-   * function's error handler.
+   * Create a pointer which the code doesn't otherwise need as a peg
+   * on which to hang the function's error handler.  The approach is
+   * inspired by rzg2l_irqc_common_init() in
+   * https://github.com/linux4microchip/linux/blob/4d72aeabedfa202d12869e52c40eeabc5401c839/
+   * drivers/irqchip/irq-renesas-rzg2l.c#L596
    */
   _cleanup_(function_params_cleanup)struct parser_props **dummy_parserp = &parser;
 

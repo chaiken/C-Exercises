@@ -625,7 +625,9 @@ void finish_token(struct parser_props* parser, const char *offset_decl,
   this_token->kind = get_kind(this_token->string);
   switch(this_token->kind) {
   case identifier:
-    if (!parser->have_type) {
+    if ((!parser->have_type) ||
+	(!check_for_array_dimensions(parser, offset_decl)) ||
+	(!check_for_function_parameters(parser, offset_decl))) {
       /* Indicate hard failure. */
       reset_parser(parser);
       return;

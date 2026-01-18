@@ -460,6 +460,34 @@ TEST(OverwriteTrailingDelimSuite, OnlyDelim) {
   EXPECT_THAT(overwrite_trailing_delim(&output, input, ')'), IsTrue());
 }
 
+/* finish_token() observes "enum " and sets parser.is_enum = true. */
+TEST(CheckForEnumerators, WellFormedSimple) {
+  struct parser_props parser;
+  const char *offset_decl = "State state";
+  initialize_parser(&parser);
+  parser.is_enum = true;
+  EXPECT_THAT(check_for_enumerators(&parser, offset_decl), IsTrue());
+  EXPECT_THAT(parser.has_enumerators, IsFalse());
+}
+
+TEST(CheckForEnumerators, WellFormedEnumerators) {
+  struct parser_props parser;
+  const char *offset_decl = "State state { SOLID, LIQUID}";
+  initialize_parser(&parser);
+  parser.is_enum = true;
+  EXPECT_THAT(check_for_enumerators(&parser, offset_decl), IsTrue());
+  EXPECT_THAT(parser.has_enumerators, IsTrue());
+}
+
+TEST(CheckForEnumerators, MismatchedDelims) {
+  struct parser_props parser;
+  const char *offset_decl = "State state {";
+  initialize_parser(&parser);
+  parser.is_enum = true;
+  EXPECT_THAT(check_for_enumerators(&parser, offset_decl), IsFalse());
+  EXPECT_THAT(parser.has_enumerators, IsFalse());
+}
+
 bool reset_stream_is_ok(FILE *stream) {
   if (fflush(stream) || fseek(stream, 0, SEEK_SET)) {
     return false;
@@ -1150,6 +1178,31 @@ TEST_F(ParserSuite, LotsOfWhitespace) {
   EXPECT_THAT(parser.next, IsNull());
   EXPECT_THAT(consumed, Eq(0));
   EXPECT_THAT(StderrMatches("Zero-length input string."), IsTrue());
+}
+
+TEST_F(ParserSuite, LegalEnumForwardDeclaration) {
+  char nexttoken[MAXTOKENLEN];
+  const char *probe = "enum State state;";
+  strlcpy(nexttoken, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, nexttoken, true);
+  EXPECT_THAT(consumed, Eq(strlen("enum State state")));
+  EXPECT_THAT(parser.is_enum, IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 0 has kind type and string enum State"),
+      IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 1 has kind identifier and string state"),
+      IsTrue());
+}
+
+TEST_F(ParserSuite, IllegalEnumForwardDeclaration) {
+  char nexttoken[MAXTOKENLEN];
+  const char *probe = "enum State;";
+  strlcpy(nexttoken, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, nexttoken, true);
+  EXPECT_THAT(consumed, Eq(0));
+  EXPECT_THAT(StderrMatches("Enums cannot be forward-declared."), IsTrue());
+  EXPECT_THAT(parser.is_enum, IsFalse());
 }
 
 TEST_F(ParserSuite, SimpleExpression) {

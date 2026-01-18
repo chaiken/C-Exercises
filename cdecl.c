@@ -83,6 +83,8 @@ struct parser_props {
   bool have_type;
   bool last_dimension_unspecified;
   bool is_function;
+  bool is_enum;
+  bool has_enumerators;
   /* ';' for normal parsing and ')' for function parameters. */
   size_t array_dimensions;
   size_t array_lengths;
@@ -100,6 +102,8 @@ void reset_parser(struct parser_props* parser){
   parser->have_type = false;
   parser->last_dimension_unspecified = true;
   parser->is_function = false;
+  parser->is_enum = false;
+  parser->has_enumerators = false;
   parser->array_dimensions = 0;
   parser->array_lengths = 0;
   parser->has_function_params = false;
@@ -549,11 +553,54 @@ bool check_for_function_parameters(struct parser_props *parser,
   return true;
 }
 
+bool have_stacked_compound_type(const struct parser_props *parser) {
+  const char *spacepos = strchr(parser->stack[0].string, ' ');
+  if ((!parser) || (type != parser->stack[0].kind) || (NULL == spacepos)) {
+   return false;
+  }
+  return true;
+}
+
 /*
- * Append the name of a struct or union to the type name since in "struct
- * task_struct ts;", the type is "struct task_struct", not "struct".  The parser
- * has already encountered "union" or "struct", so input_cursor+offset should
- * point past one of them.  The return value indicates success or failure.
+ * A true return value means no errors.
+ * While "enum State;" is invalid, the following are correct:
+ * 0. enum State state; 1. enum State { SOLID, LIQUID };
+ * 2. enum State { SOLID = 1, LIQUID = 3};
+ * Not supported by this program:
+ * 3. enum State { SOLID, LIQUID} state;
+ */
+bool check_for_enumerators(struct parser_props *parser, const char *offset_decl) {
+  const char *spacep = strstr(offset_decl, " ");
+  const char *startbracep = strstr(offset_decl, "{");
+  const char *endbracep  = strstr(offset_decl, "}");
+
+  if (!parser->is_enum) return true;
+  if ((NULL == spacep) && (!have_stacked_compound_type(parser))) {
+    fprintf(parser->err_stream, "Enums cannot be forward-declared.\n");
+    return false;
+    }
+  /* The declaration may be of type 0. */
+  if (NULL == startbracep) {
+      if (NULL == endbracep) {
+        return true;
+      }
+      fprintf(stderr, "\nMalformed enumerator declaration %s.\n", offset_decl);
+      return false;
+  }
+  if ((spacep > startbracep) || (startbracep > endbracep)) {
+    return false;
+  }
+  /* The presence of enumerators is plausible in types 1 or 2. */
+  parser->has_enumerators = true;
+  return true;
+}
+
+/*
+ * Append the name of a struct or union to the type name since in
+ * "struct task_struct ts;", the type is "struct task_struct", not
+ * "struct".  The parser has already encountered "union", "struct" or
+ * "enum", so input_cursor+offset should point past one of them.  The
+ * return value indicates success or failure.
  */
 bool handled_compound_type(const char *input_cursor, struct token *this_token,
                            size_t *offset) {
@@ -627,17 +674,19 @@ void finish_token(struct parser_props* parser, const char *offset_decl,
   case identifier:
     if ((!parser->have_type) ||
 	(!check_for_array_dimensions(parser, offset_decl)) ||
-	(!check_for_function_parameters(parser, offset_decl))) {
+	(!check_for_function_parameters(parser, offset_decl)) ||
+	(!check_for_enumerators(parser, offset_decl))) {
       /* Indicate hard failure. */
       reset_parser(parser);
       return;
     }
     parser->have_identifier = true;
-    check_for_array_dimensions(parser, offset_decl);
-    check_for_function_parameters(parser, offset_decl);
     break;
   case type:
     parser->have_type = true;
+    if (!strcmp("enum",this_token->string)) {
+      parser->is_enum = true;
+    }
     break;
   case length:
     if ((!parser->have_identifier) || (!parser->array_dimensions)) {
@@ -1051,7 +1100,8 @@ size_t load_stack(struct parser_props* parser, char* nexttoken, bool needs_trunc
         offset += trailing;
       }
       if ((type == this_token.kind) && (!strcmp("union", this_token.string) ||
-                                        !strcmp("struct", this_token.string))) {
+                                        !strcmp("struct", this_token.string) ||
+                                        !strcmp("enum", this_token.string))) {
         if (!handled_compound_type(input_cursor, &this_token, &offset)) {
           free_all_parsers(parser);
           return 0;

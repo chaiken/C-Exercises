@@ -360,7 +360,8 @@ void showstack(const struct token* stack, const size_t stacklen, FILE* out_strea
   return;
 }
 
-size_t load_stack(struct parser_props* parser, char* nexttoken, bool needs_truncation);
+size_t load_stack(struct parser_props* parser, char* user_input,
+		  bool needs_truncation);
 
 struct parser_props *make_parser(struct parser_props* const parser) {
     struct parser_props *new_parser = (struct parser_props *)malloc(sizeof(struct parser_props));
@@ -421,7 +422,8 @@ void function_params_cleanup(void *parserp) {
  * list whose head is the top-level parser.  Note that the function
  * name is on the original parser's stack.
  */
-bool process_function_params(struct parser_props *parser, char* nexttoken, size_t *offset, char** input_cursor) {
+bool process_function_params(struct parser_props *parser, char* user_input,
+                             size_t *offset, char** progress_ptr) {
   struct parser_props *params_parser;
   struct parser_props *tail_parser = parser;
   size_t increm = 0;
@@ -439,13 +441,13 @@ bool process_function_params(struct parser_props *parser, char* nexttoken, size_
     return false;
   }
   /* +1 to go past '('. */
-  *input_cursor = nexttoken + *offset + 1;
-  while (strlen(*input_cursor)) {
+  *progress_ptr = user_input + *offset + 1;
+  while (strlen(*progress_ptr)) {
     // Freed in pop_stack().
     params_parser = make_parser(tail_parser);
     /* There may be more than one function parameter yet to process. */
-    if (strchr(*input_cursor, ',')) {
-      if (!overwrite_trailing_delim(&next_param, *input_cursor, ',')) {
+    if (strchr(*progress_ptr, ',')) {
+      if (!overwrite_trailing_delim(&next_param, *progress_ptr, ',')) {
         fprintf(parser->err_stream, "Failed to process list function args %s\n", next_param);
       }
       increm = load_stack(params_parser, next_param, false);
@@ -455,17 +457,17 @@ bool process_function_params(struct parser_props *parser, char* nexttoken, size_
       }
       *offset += increm;
       /* +1 to go past ','. The comma is not included in offset. */
-      *input_cursor += increm + 1;
+      *progress_ptr += increm + 1;
 #ifdef TESTING
       show_parser_list(parser);
 #endif
     } else {
       /*
        * There is only one remaining parameter.
-       * Pass input_cursor rather than nexttoken since the params parser only
+       * Pass progress_ptr rather than user_input since the params parser only
        * processes what's inside the parentheses.
        */
-      if (!overwrite_trailing_delim(&next_param, *input_cursor, ')')) {
+      if (!overwrite_trailing_delim(&next_param, *progress_ptr, ')')) {
         fprintf(parser->err_stream, "Failed to process last function arg\n");
 	return false;
       }
@@ -476,7 +478,7 @@ bool process_function_params(struct parser_props *parser, char* nexttoken, size_
       }
       /* 1 is for ')'. */
       *offset += increm + 1;
-      *input_cursor = nexttoken + *offset; /* Skip past ')'. */
+      *progress_ptr = user_input + *offset; /* Skip past ')'. */
 #ifdef TESTING
   show_parser_list(parser);
 #endif
@@ -599,10 +601,10 @@ bool check_for_enumerators(struct parser_props *parser, const char *offset_decl)
  * Append the name of a struct or union to the type name since in
  * "struct task_struct ts;", the type is "struct task_struct", not
  * "struct".  The parser has already encountered "union", "struct" or
- * "enum", so input_cursor+offset should point past one of them.  The
+ * "enum", so progress_ptr+offset should point past one of them.  The
  * return value indicates success or failure.
  */
-bool handled_compound_type(const char *input_cursor, struct token *this_token,
+bool handled_compound_type(const char *progress_ptr, struct token *this_token,
                            size_t *offset) {
   char compound_type_name[MAXTOKENLEN];
   const char *brace_pos;
@@ -616,9 +618,9 @@ bool handled_compound_type(const char *input_cursor, struct token *this_token,
    * Check if the struct or union is anonymous.
    * Do not yet handle full struct or union declarations.
    */
-  brace_pos = strchr(input_cursor+*offset, '{');
+  brace_pos = strchr(progress_ptr+*offset, '{');
   if (brace_pos) {
-    brace_offset = brace_pos - (input_cursor+*offset);
+    brace_offset = brace_pos - (progress_ptr+*offset);
     *offset += brace_offset;
     return true;
   }
@@ -627,7 +629,8 @@ bool handled_compound_type(const char *input_cursor, struct token *this_token,
    * Starting with "struct page *pp", compound type name is "page" since "pp" is
    * the identifier, not handled by this function.
    */
-  *offset += trim_leading_whitespace(input_cursor+*offset, &compound_type_name[0]);
+  *offset += trim_leading_whitespace(progress_ptr+*offset,
+				     &compound_type_name[0]);
   /*
    * Since there's no leading whitespace, the next blank terminates the compound
    * identifier.
@@ -655,7 +658,7 @@ bool handled_compound_type(const char *input_cursor, struct token *this_token,
   }
   this_token->string[i] = '\0';
   /*
-   * The 1 accounts for the space.  The characters left in input_cursor should
+   * The 1 accounts for the space.  The characters left in progress_ptr should
    *  be an identifier which names the instance of the compound type.
    */
   *offset += j + 1;
@@ -1027,17 +1030,17 @@ void reorder_qualifier_and_type(struct parser_props* parser) {
   }
 }
 
-void process_array_dimensions(struct parser_props* parser, char* nexttoken,
-			      size_t *offset, char** input_cursor, struct token* this_token) {
+void process_array_dimensions(struct parser_props* parser, char* user_input,
+			      size_t *offset, char** progress_ptr, struct token* this_token) {
   char *next_dim;
   do {
     /* Skip '['. */
     (*offset)++;
-    *input_cursor = nexttoken + *offset;
+    *progress_ptr = user_input + *offset;
     /* We've encountered "[]", which always terminates C array-length declarations.
      * Return without incrementing offset.
      */
-    if (']' == **input_cursor) {
+    if (']' == **progress_ptr) {
       /*
        * The first increment of array_dimensions happens in finish_token() after
        * finding the identifier.
@@ -1049,11 +1052,11 @@ void process_array_dimensions(struct parser_props* parser, char* nexttoken,
       }
       break;
     }
-    (*offset) += gettoken(parser, *input_cursor, this_token);
+    (*offset) += gettoken(parser, *progress_ptr, this_token);
     if ((length == this_token->kind) && (strlen(this_token->string))) {
       push_stack(parser, this_token);
     }
-    next_dim = strstr(nexttoken+*offset, "[");
+    next_dim = strstr(user_input+*offset, "[");
     if (next_dim) {
       if (2 >= strlen(next_dim)) {
         /* No array length; return without incrementing offset. */
@@ -1061,48 +1064,48 @@ void process_array_dimensions(struct parser_props* parser, char* nexttoken,
         break;
       }
     }
-  } while ((NULL != next_dim) && (*offset <= strlen(nexttoken)));
+  } while ((NULL != next_dim) && (*offset <= strlen(user_input)));
 }
 
 // Only the tests make use of the return value.
-size_t load_stack(struct parser_props* parser, char* nexttoken, bool needs_truncation) {
+size_t load_stack(struct parser_props* parser, char* user_input, bool needs_truncation) {
   struct token this_token;
   char trimmed[MAXTOKENLEN];
-  char* input_cursor = nexttoken;
+  char* progress_ptr = user_input;
   /*
    * offset is the number of characters consumed by gettoken().
    * offset >= strlen(this_token->string) since leading whitespace in
-   * nexttoken will be skipped.
+   * user_input will be skipped.
    */
   size_t offset = 0;
   if (needs_truncation) {
-   if (!truncate_input(&nexttoken, parser)) {
+   if (!truncate_input(&user_input, parser)) {
       free_all_parsers(parser);
       return 0;
     }
   }
   this_token.kind = invalid;
   strcpy(this_token.string, "");
-  while (offset <= strlen(nexttoken)) {
+  while (offset <= strlen(user_input)) {
     /*
      * Finding the identifier terminates initial stack loading since it comes
      * last, as long as there are no function arguments or array delimiters.
      */
     while (this_token.kind != identifier) {
-      input_cursor = nexttoken + offset;
-      offset += gettoken(parser, input_cursor, &this_token);
+      progress_ptr = user_input + offset;
+      offset += gettoken(parser, progress_ptr, &this_token);
       if ((!offset) || (invalid == this_token.kind)) {
 	break;
       }
-      size_t trailing = trim_trailing_whitespace(nexttoken, trimmed);
+      size_t trailing = trim_trailing_whitespace(user_input, trimmed);
       if (trailing) {
-        strlcpy(nexttoken, trimmed, MAXTOKENLEN);
+        strlcpy(user_input, trimmed, MAXTOKENLEN);
         offset += trailing;
       }
       if ((type == this_token.kind) && (!strcmp("union", this_token.string) ||
                                         !strcmp("struct", this_token.string) ||
                                         !strcmp("enum", this_token.string))) {
-        if (!handled_compound_type(input_cursor, &this_token, &offset)) {
+        if (!handled_compound_type(progress_ptr, &this_token, &offset)) {
           free_all_parsers(parser);
           return 0;
         }
@@ -1110,7 +1113,7 @@ size_t load_stack(struct parser_props* parser, char* nexttoken, bool needs_trunc
       push_stack(parser, &this_token);
     }
     if (parser->array_dimensions) {
-      process_array_dimensions(parser, nexttoken, &offset, &input_cursor,
+      process_array_dimensions(parser, user_input, &offset, &progress_ptr,
 			       &this_token);
     }
     /* Either the parameter list is "()" and there are no new characters
@@ -1119,7 +1122,8 @@ size_t load_stack(struct parser_props* parser, char* nexttoken, bool needs_trunc
      */
     if (parser->has_function_params) {
       /* Move past the already-processed characters and '('. */
-      if (!process_function_params(parser, nexttoken, &offset, &input_cursor)) {
+      if (!process_function_params(parser, user_input, &offset,
+				   &progress_ptr)) {
 	initialize_parser(parser);
 	return 0;
       }
@@ -1155,9 +1159,9 @@ size_t load_stack(struct parser_props* parser, char* nexttoken, bool needs_trunc
  */
 bool input_parsing_successful(struct parser_props *parser, char inputstr[]) {
   /* Allocate and call strlcpy() in case the input is too long. */
-  _cleanup_(freep) char *nexttoken = (char *)malloc(MAXTOKENLEN);
-  strlcpy(nexttoken, inputstr, MAXTOKENLEN);
-  load_stack(parser, nexttoken, true);
+  _cleanup_(freep) char *user_input = (char *)malloc(MAXTOKENLEN);
+  strlcpy(user_input, inputstr, MAXTOKENLEN);
+  load_stack(parser, user_input, true);
   if (0 == parser->stacklen) {
     fprintf(parser->err_stream, "Unable to parse garbled input.\n");
     free_all_parsers(parser);

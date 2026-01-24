@@ -852,7 +852,7 @@ TEST_F(ParserSuite, ProcessFunctionParamsLeadingWhitespace) {
 }
 
 TEST_F(ParserSuite, PopEmpty) {
-  EXPECT_THAT(pop_stack(&parser), Eq(-ENODATA));
+  EXPECT_THAT(pop_stack(&parser, true), Eq(-ENODATA));
   EXPECT_THAT(StderrMatches("Attempt to pop empty stack."), IsTrue());
 }
 
@@ -860,7 +860,7 @@ TEST_F(ParserSuite, PopOne) {
   struct token token0{type, "int"};
   push_stack(&parser, &token0);
 
-  EXPECT_THAT(pop_stack(&parser), Eq(0));
+  EXPECT_THAT(pop_stack(&parser, false), Eq(0));
   EXPECT_THAT(StdoutMatches("int"), IsTrue());
 }
 
@@ -1232,6 +1232,38 @@ TEST_F(ParserSuite, IllegalEnumForwardDeclaration) {
   EXPECT_THAT(parser.is_enum, IsFalse());
 }
 
+TEST_F(ParserSuite, LoadStackOneEnumeratorNoIdentifier) {
+  char user_input[MAXTOKENLEN];
+  const char *probe = "enum State {GAS};";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input, true);
+  EXPECT_THAT(consumed, Eq(strlen("enum State {GAS")));
+  EXPECT_THAT(parser.is_enum, IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 0 has kind type and string enum State"),
+      IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 1 has kind identifier and string GAS"),
+      IsTrue());
+  EXPECT_THAT(parser.enumerator_list, StrEq("GAS"));
+}
+
+TEST_F(ParserSuite, LoadStackOneEnumeratorWithIdentifier) {
+  char user_input[MAXTOKENLEN];
+  const char *probe = "enum State state {GAS};";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input, true);
+  EXPECT_THAT(consumed, Eq(strlen("enum State state {GAS")));
+  EXPECT_THAT(parser.is_enum, IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 0 has kind type and string enum State"),
+      IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 1 has kind identifier and string state"),
+      IsTrue());
+  EXPECT_THAT(parser.enumerator_list, StrEq("GAS"));
+}
+
 TEST_F(ParserSuite, SimpleExpression) {
   char inputstr[] = "int x;";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
@@ -1422,6 +1454,26 @@ TEST_F(ParserSuite, StructForwardDeclarationNoName) {
   EXPECT_THAT(StderrMatches("Input lacks required identifier or type element."),
               IsTrue());
   // clang-format on
+}
+
+TEST_F(ParserSuite, EnumWithIdentifierNoEnumerators) {
+  char inputstr[] = "enum State state;";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("state is a(n) enum State"), IsTrue());
+}
+
+TEST_F(ParserSuite, EnumWithIdentifierOneEnumerator) {
+  char inputstr[] = "enum State state {GAS};";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("state is a(n) enum State with enumerator(s) GAS"),
+              IsTrue());
+}
+
+TEST_F(ParserSuite, EnumNoIdentifierOneEnumerator) {
+  char inputstr[] = "enum State {GAS};";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("enum State has enumerator(s) GAS"), IsTrue());
+  EXPECT_THAT(StdoutMatches("GAS is a"), IsFalse());
 }
 
 TEST_F(ParserSuite, Reorder) {

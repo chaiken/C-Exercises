@@ -437,6 +437,12 @@ bool process_function_params(struct parser_props *parser, char* user_input,
    */
   _cleanup_(function_params_cleanup)struct parser_props **dummy_parserp = &parser;
 
+  /* Guard against the caller swapping the two character strings */
+  if (strlen(user_input) < strlen(*progress_ptr)) {
+    fprintf(parser->err_stream, "Swapped parameters in %s\n", __func__);
+    abort();
+  }
+
   if (!parser->has_function_params) {
     return false;
   }
@@ -1033,6 +1039,13 @@ void reorder_qualifier_and_type(struct parser_props* parser) {
 void process_array_dimensions(struct parser_props* parser, char* user_input,
 			      size_t *offset, char** progress_ptr, struct token* this_token) {
   char *next_dim;
+
+  /* Guard against the caller swapping the two character strings */
+  if (strlen(user_input) < strlen(*progress_ptr)) {
+    fprintf(parser->err_stream, "Swapped parameters in %s\n", __func__);
+    abort();
+  }
+
   do {
     /* Skip '['. */
     (*offset)++;

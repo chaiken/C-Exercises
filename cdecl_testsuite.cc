@@ -460,6 +460,33 @@ TEST(OverwriteTrailingDelimSuite, OnlyDelim) {
   EXPECT_THAT(overwrite_trailing_delim(&output, input, ')'), IsTrue());
 }
 
+TEST(SwappedParameters, ProcessArrayDimensions) {
+  struct parser_props parser;
+  struct token this_token;
+  size_t offset = 1;
+  char user_input[MAXTOKENLEN];
+  _cleanup_(freep) char *progress_ptr = (char *)malloc(MAXTOKENLEN);
+  initialize_parser(&parser);
+  strncpy(user_input, "a", 2);
+  strncpy(progress_ptr, "abc", 4);
+  EXPECT_DEATH(process_array_dimensions(&parser, user_input, &offset,
+                                        &progress_ptr, &this_token),
+               "Swapped parameters in process_array_dimensions");
+}
+
+TEST(SwappedParameters, ProcessFunctionParams) {
+  struct parser_props parser;
+  size_t offset = 1;
+  char user_input[MAXTOKENLEN];
+  _cleanup_(freep) char *progress_ptr = (char *)malloc(MAXTOKENLEN);
+  initialize_parser(&parser);
+  strncpy(user_input, "a", 2);
+  strncpy(progress_ptr, "abc", 4);
+  EXPECT_DEATH(
+      process_function_params(&parser, user_input, &offset, &progress_ptr),
+      "Swapped parameters in process_function_params");
+}
+
 /* finish_token() observes "enum " and sets parser.is_enum = true. */
 TEST(CheckForEnumerators, WellFormedSimple) {
   struct parser_props parser;

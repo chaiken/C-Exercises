@@ -1476,6 +1476,26 @@ TEST_F(ParserSuite, EnumNoIdentifierOneEnumerator) {
   EXPECT_THAT(StdoutMatches("GAS is a"), IsFalse());
 }
 
+TEST_F(ParserSuite, LoadStackForwardDeclarationBadDelim) {
+  char inputstr[] = "enum State state {;";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  // clang-format off
+  EXPECT_THAT(StderrMatches("Input lacks required identifier or type element."),
+              IsTrue());
+  // clang-format on
+  EXPECT_THAT(parser.is_enum, IsFalse());
+}
+
+TEST_F(ParserSuite, LoadStackOneEnumeratorStrayComma) {
+  char inputstr[] = "enum State state {GAS,};";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  // clang-format off
+  EXPECT_THAT(StderrMatches("Unable to parse garbled input."),
+              IsTrue());
+  // clang-format on
+  EXPECT_THAT(parser.is_enum, IsFalse());
+}
+
 TEST_F(ParserSuite, Reorder) {
   char user_input[MAXTOKENLEN];
   const char *probe = "const int x;";

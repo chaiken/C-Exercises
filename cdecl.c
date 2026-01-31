@@ -415,7 +415,7 @@ void function_params_cleanup(void *parserp) {
       !(**(struct parser_props***)parserp)) return;
   struct parser_props *parser = **((struct parser_props ***)parserp);
   free_all_parsers(parser);
-  initialize_parser(parser);
+  reset_parser(parser);
 }
 
 /*
@@ -1245,7 +1245,7 @@ size_t load_stack(struct parser_props* parser, char* user_input, bool needs_trun
       /* Move past the already-processed characters and '('. */
       if (!process_function_params(parser, user_input, &offset,
 				   &progress_ptr)) {
-	initialize_parser(parser);
+	reset_parser(parser);
 	return 0;
       }
     }
@@ -1263,7 +1263,7 @@ size_t load_stack(struct parser_props* parser, char* user_input, bool needs_trun
   reorder_qualifier_and_type(parser);
   if (parser->has_enumerators) {
       if (!process_enumerators(parser, user_input, &offset, &progress_ptr)) {
-	initialize_parser(parser);
+	reset_parser(parser);
 	return 0;
       }
   }

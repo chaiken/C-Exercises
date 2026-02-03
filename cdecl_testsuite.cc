@@ -1005,7 +1005,7 @@ TEST_F(ParserSuite, LoadStackParensTerminatorOneFunctionParam) {
   free(parser.next);
 }
 
-TEST_F(ParserSuite, LoadStackCommaTerminator) {
+TEST_F(ParserSuite, LoadStackCommaTerminatorFunction) {
   char user_input[MAXTOKENLEN];
   const char *probe = "uint64_t hash(char *str, uint64_t seed);";
   strlcpy(user_input, probe, strlen(probe) + 1);
@@ -1435,10 +1435,26 @@ TEST_F(ParserSuite, EnumWithIdentifierOneEnumerator) {
               IsTrue());
 }
 
+TEST_F(ParserSuite, EnumNoIdentifierTwoEnumerators) {
+  char inputstr[] = "enum State {GAS,LIQUID};";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("enum State has enumerator(s) GAS,LIQUID"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("GAS is a"), IsFalse());
+}
+
 TEST_F(ParserSuite, EnumNoIdentifierOneEnumerator) {
   char inputstr[] = "enum State {GAS};";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("enum State has enumerator(s) GAS"), IsTrue());
+  EXPECT_THAT(StdoutMatches("GAS is a"), IsFalse());
+}
+
+TEST_F(ParserSuite, EnumNoIdentifierTwoEnumerator) {
+  char inputstr[] = "enum State {GAS, LIQUID };";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("enum State has enumerator(s) GAS,LIQUID"),
+              IsTrue());
   EXPECT_THAT(StdoutMatches("GAS is a"), IsFalse());
 }
 
@@ -1453,7 +1469,7 @@ TEST_F(ParserSuite, LoadStackForwardDeclarationBadDelim) {
 }
 
 TEST_F(ParserSuite, LoadStackOneEnumeratorStrayComma) {
-  char inputstr[] = "enum State state {GAS,};";
+  char inputstr[] = "enum State state {,GAS};";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
   // clang-format off
   EXPECT_THAT(StderrMatches("Unable to parse garbled input."),

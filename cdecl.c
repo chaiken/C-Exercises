@@ -1143,40 +1143,49 @@ void process_array_dimensions(struct parser_props* parser, char* user_input,
  * be any.  Return false if an error is encountered.  Otherwise, add
  * any enumerators to the enumerator_list and return true.
  */
-bool process_enumerators(struct parser_props *parser, const char* user_input,
-			 size_t *offset) {
-  size_t brace_offset;
-  const char *startbracep = strchr(user_input, '{');
-  char *commapos = strchr((char *)user_input, ',');
+bool process_enumerators(struct parser_props *parser, char* user_input, size_t *offset) {
   struct token this_token;
+  char *progress_ptr = user_input + *offset;
+  const char *startbracep = strchr(progress_ptr, '{');
+  const char *endbracep = strchr(progress_ptr, '}');
+  char *commapos;
+  size_t list_capacity;
+  int brace_offset = 0;
 
-  if (startbracep) {
-    brace_offset = startbracep - (user_input+*offset);
-    /* 1 is to go past '{'. */
-    *offset += brace_offset + 1;
-  } else {
+  if (!startbracep) {
+    parser->has_enumerators = false;
+    return true;
+  }
+  if (startbracep > endbracep) {
     parser->has_enumerators = false;
     return false;
   }
-  (*offset) += gettoken(parser, user_input + *offset, &this_token);
-  /*
-   * The classifier should assess the enumerators as identifiers, but
-   * the type is not used.  Strictly speaking, the code should fail if
-   * it encounters an identifier when the parser already has one, but
-   * instead it ignores identifiers after the first, except in this case.
-   */
-  if ((invalid == this_token.kind) || (0 == strlen(this_token.string)) ||
-      (strlen(this_token.string) > MAXTOKENLEN)) {
-    reset_parser(parser);
-    return false;
-  }
-  strlcpy(parser->enumerator_list, this_token.string,
-	  strlen(this_token.string) + 1);
-  if (!commapos) {
-    return true;
-  }
-  /* REMOVE */
-  return false;
+  brace_offset = startbracep - (user_input + *offset);
+  *offset += brace_offset;
+  do {
+    progress_ptr = user_input + *offset;
+    if (',' == *progress_ptr) progress_ptr++;
+    (*offset) += gettoken(parser, progress_ptr, &this_token);
+    /*
+     * The classifier should assess the enumerators as identifiers, but
+     * the type is not used.  Strictly speaking, the code should fail if
+     * it encounters an identifier when the parser already has one, but
+     * instead it ignores identifiers after the first, except in this case.
+     */
+    if ((invalid == this_token.kind) || (0 == strlen(this_token.string)) ||
+        (strlen(this_token.string) > MAXTOKENLEN)) {
+      reset_parser(parser);
+      return false;
+    }
+    list_capacity = (MAXTOKENLEN - strlen(parser->enumerator_list)) - 1;
+    if (strlen(parser->enumerator_list)) {
+      strlcat(parser->enumerator_list, ",", list_capacity);
+    }
+    strlcat(parser->enumerator_list, this_token.string, list_capacity);
+    commapos = strchr(progress_ptr, ',');
+    progress_ptr = user_input + *offset + 1;
+  } while (commapos && (commapos < endbracep) && (progress_ptr < endbracep));
+  return true;
 }
 
 // Only the tests make use of the return value.
@@ -1229,6 +1238,13 @@ size_t load_stack(struct parser_props* parser, char* user_input, bool needs_trun
        */
       if ((identifier == this_token.kind) &&
 	  (first_identifier_is_enumerator(parser, user_input, offset))) {
+        /*
+         * Put the characters in the token and '{' back on the stack for
+         * process_enumerators().  This clumsy approach means that the parser
+         * state upon entry to process_enumerators() does  not depend on whether
+         * or not the enum has an instance name.
+	 */
+        offset -= strlen(this_token.string) + 1;
 	break;
       }
       push_stack(parser, &this_token);

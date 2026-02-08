@@ -424,10 +424,12 @@ void function_params_cleanup(void *parserp) {
  * name is on the original parser's stack.
  */
 bool process_function_params(struct parser_props *parser, char* user_input,
-                             size_t *offset, char** progress_ptr) {
+                             size_t *offset) {
   struct parser_props *params_parser;
   struct parser_props *tail_parser = parser;
   size_t increm = 0;
+  /* +1 to go past '('. */
+  const char *progress_ptr = user_input + *offset + 1;
   _cleanup_(freep) char *next_param = (char *)malloc(MAXTOKENLEN);
   /*
    * Create a pointer which the code doesn't otherwise need as a peg
@@ -438,23 +440,15 @@ bool process_function_params(struct parser_props *parser, char* user_input,
    */
   _cleanup_(function_params_cleanup)struct parser_props **dummy_parserp = &parser;
 
-  /* Guard against the caller swapping the two character strings */
-  if (strlen(user_input) < strlen(*progress_ptr)) {
-    fprintf(parser->err_stream, "Swapped parameters in %s\n", __func__);
-    abort();
-  }
-
   if (!parser->has_function_params) {
     return false;
   }
-  /* +1 to go past '('. */
-  *progress_ptr = user_input + *offset + 1;
-  while (strlen(*progress_ptr)) {
+  while (strlen(progress_ptr)) {
     // Freed in pop_stack().
     params_parser = make_parser(tail_parser);
     /* There may be more than one function parameter yet to process. */
-    if (strchr(*progress_ptr, ',')) {
-      if (!overwrite_trailing_delim(&next_param, *progress_ptr, ',')) {
+    if (strchr(progress_ptr, ',')) {
+      if (!overwrite_trailing_delim(&next_param, progress_ptr, ',')) {
         fprintf(parser->err_stream, "Failed to process list function args %s\n", next_param);
       }
       increm = load_stack(params_parser, next_param, false);
@@ -464,7 +458,7 @@ bool process_function_params(struct parser_props *parser, char* user_input,
       }
       *offset += increm;
       /* +1 to go past ','. The comma is not included in offset. */
-      *progress_ptr += increm + 1;
+      progress_ptr += increm + 1;
 #ifdef TESTING
       show_parser_list(parser);
 #endif
@@ -474,7 +468,7 @@ bool process_function_params(struct parser_props *parser, char* user_input,
        * Pass progress_ptr rather than user_input since the params parser only
        * processes what's inside the parentheses.
        */
-      if (!overwrite_trailing_delim(&next_param, *progress_ptr, ')')) {
+      if (!overwrite_trailing_delim(&next_param, progress_ptr, ')')) {
         fprintf(parser->err_stream, "Failed to process last function arg\n");
 	return false;
       }
@@ -485,7 +479,6 @@ bool process_function_params(struct parser_props *parser, char* user_input,
       }
       /* 1 is for ')'. */
       *offset += increm + 1;
-      *progress_ptr = user_input + *offset; /* Skip past ')'. */
 #ifdef TESTING
   show_parser_list(parser);
 #endif
@@ -1095,23 +1088,18 @@ void reorder_qualifier_and_type(struct parser_props* parser) {
 
 
 void process_array_dimensions(struct parser_props* parser, char* user_input,
-			      size_t *offset, char** progress_ptr, struct token* this_token) {
+			      size_t *offset, struct token* this_token) {
   char *next_dim;
-
-  /* Guard against the caller swapping the two character strings */
-  if (strlen(user_input) < strlen(*progress_ptr)) {
-    fprintf(parser->err_stream, "Swapped parameters in %s\n", __func__);
-    abort();
-  }
+  char *progress_ptr;
 
   do {
     /* Skip '['. */
     (*offset)++;
-    *progress_ptr = user_input + *offset;
+    progress_ptr = user_input + *offset;
     /* We've encountered "[]", which always terminates C array-length declarations.
      * Return without incrementing offset.
      */
-    if (']' == **progress_ptr) {
+    if (']' == *progress_ptr) {
       /*
        * The first increment of array_dimensions happens in finish_token() after
        * finding the identifier.
@@ -1123,7 +1111,7 @@ void process_array_dimensions(struct parser_props* parser, char* user_input,
       }
       break;
     }
-    (*offset) += gettoken(parser, *progress_ptr, this_token);
+    (*offset) += gettoken(parser, progress_ptr, this_token);
     if ((length == this_token->kind) && (strlen(this_token->string))) {
       push_stack(parser, this_token);
     }
@@ -1145,17 +1133,11 @@ void process_array_dimensions(struct parser_props* parser, char* user_input,
  * any enumerators to the enumerator_list and return true.
  */
 bool process_enumerators(struct parser_props *parser, const char* user_input,
-			 size_t *offset, char** progress_ptr) {
+			 size_t *offset) {
   size_t brace_offset;
   const char *startbracep = strchr(user_input, '{');
   char *commapos = strchr((char *)user_input, ',');
   struct token this_token;
-
-  /* Guard against the caller swapping the two character strings */
-  if (strlen(user_input) < strlen(*progress_ptr)) {
-    fprintf(parser->err_stream, "Swapped parameters in %s\n", __func__);
-    abort();
-  }
 
   if (startbracep) {
     brace_offset = startbracep - (user_input+*offset);
@@ -1165,9 +1147,7 @@ bool process_enumerators(struct parser_props *parser, const char* user_input,
     parser->has_enumerators = false;
     return false;
   }
-  *progress_ptr = (char *)user_input + *offset;
   (*offset) += gettoken(parser, user_input + *offset, &this_token);
-  *progress_ptr = (char *)user_input + *offset;
   /*
    * The classifier should assess the enumerators as identifiers, but
    * the type is not used.  Strictly speaking, the code should fail if
@@ -1234,8 +1214,7 @@ size_t load_stack(struct parser_props* parser, char* user_input, bool needs_trun
       push_stack(parser, &this_token);
     }
     if (parser->array_dimensions) {
-      process_array_dimensions(parser, user_input, &offset, &progress_ptr,
-			       &this_token);
+      process_array_dimensions(parser, user_input, &offset, &this_token);
     }
     /* Either the parameter list is "()" and there are no new characters
      * processed, or there are new function parameters,
@@ -1243,8 +1222,7 @@ size_t load_stack(struct parser_props* parser, char* user_input, bool needs_trun
      */
     if (parser->has_function_params) {
       /* Move past the already-processed characters and '('. */
-      if (!process_function_params(parser, user_input, &offset,
-				   &progress_ptr)) {
+      if (!process_function_params(parser, user_input, &offset)) {
 	reset_parser(parser);
 	return 0;
       }
@@ -1262,7 +1240,7 @@ size_t load_stack(struct parser_props* parser, char* user_input, bool needs_trun
   reorder_array_identifier_and_lengths(parser);
   reorder_qualifier_and_type(parser);
   if (parser->has_enumerators) {
-      if (!process_enumerators(parser, user_input, &offset, &progress_ptr)) {
+      if (!process_enumerators(parser, user_input, &offset)) {
 	reset_parser(parser);
 	return 0;
       }

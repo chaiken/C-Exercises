@@ -1206,11 +1206,9 @@ TEST_F(ParserSuite, LoadStackOneEnumeratorNoIdentifier) {
   std::size_t consumed = load_stack(&parser, user_input, true);
   EXPECT_THAT(consumed, Eq(strlen("enum State {GAS")));
   EXPECT_THAT(parser.is_enum, IsTrue());
+  EXPECT_THAT(parser.stacklen, Eq(1));
   EXPECT_THAT(
       StdoutMatches("Token number 0 has kind type and string enum State"),
-      IsTrue());
-  EXPECT_THAT(
-      StdoutMatches("Token number 1 has kind identifier and string GAS"),
       IsTrue());
   EXPECT_THAT(parser.enumerator_list, StrEq("GAS"));
 }
@@ -1222,6 +1220,7 @@ TEST_F(ParserSuite, LoadStackOneEnumeratorWithIdentifier) {
   std::size_t consumed = load_stack(&parser, user_input, true);
   EXPECT_THAT(consumed, Eq(strlen("enum State state {GAS")));
   EXPECT_THAT(parser.is_enum, IsTrue());
+  EXPECT_THAT(parser.stacklen, Eq(2));
   EXPECT_THAT(
       StdoutMatches("Token number 0 has kind type and string enum State"),
       IsTrue());

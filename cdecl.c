@@ -582,7 +582,23 @@ bool all_identifiers_are_enumerators(const struct parser_props *parser) {
   return true;
 }
 
-
+bool first_identifier_is_enumerator(const struct parser_props *parser,
+				       const char *user_input, size_t offset) {
+  const char *startbracep = strstr(user_input, "{");
+  if ((!parser->is_enum) || (!parser->has_enumerators)) {
+    return false;
+  }
+  if (!startbracep) return false;
+  /*
+   * The parser already started processing enumerators, so there is no enum
+   * instance name.
+   */
+  if ((user_input + offset) > startbracep) {
+    return true;
+  }
+  /* Should not be reaached? */
+  return false;
+}
 
 /*
  * A true return value means no errors.
@@ -602,15 +618,10 @@ bool check_for_enumerators(struct parser_props *parser, const char *offset_decl)
    *  there is nothing to check.
    */
   if ((!parser->is_enum) || (parser->has_enumerators)) return true;
-  /*
-   * The enumerators were already checked when handling the compound type
-   * name.
-   */
-  if (parser->has_enumerators) return true;
   if ((NULL == spacep) && (!have_stacked_compound_type(parser))) {
     fprintf(parser->err_stream, "Enums cannot be forward-declared.\n");
     return false;
-    }
+  }
   /* The declaration may be of type 0. */
   if (NULL == startbracep) {
       if (NULL == endbracep) {
@@ -676,7 +687,7 @@ bool handled_compound_type(const char *progress_ptr, struct token *this_token,
   this_token->string[i] = '\0';
   /*
    * The 1 accounts for the space.  The characters left in progress_ptr should
-   *  be an identifier which names the instance of the compound type.
+   *  be an identifier which names the instance, if any, of the compound type.
    */
   *offset += j + 1;
   return true;
@@ -1210,6 +1221,15 @@ size_t load_stack(struct parser_props* parser, char* user_input, bool needs_trun
           free_all_parsers(parser);
           return 0;
         }
+      }
+      /*
+       * If there is no enum instance name, only a type declaration, then do not
+       * place the encountered enumerator on the stack. Set
+       * parser->have_identifier true so that pop_stack() doesn't fail.
+       */
+      if ((identifier == this_token.kind) &&
+	  (first_identifier_is_enumerator(parser, user_input, offset))) {
+	break;
       }
       push_stack(parser, &this_token);
     }

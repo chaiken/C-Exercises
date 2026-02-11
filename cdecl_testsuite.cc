@@ -1435,10 +1435,10 @@ TEST_F(ParserSuite, EnumWithIdentifierOneEnumerator) {
               IsTrue());
 }
 
-TEST_F(ParserSuite, EnumNoIdentifierTwoEnumerators) {
-  char inputstr[] = "enum State {GAS,LIQUID};";
+TEST_F(ParserSuite, EnumNoIdentifierThreeEnumerators) {
+  char inputstr[] = "enum State {GAS,LIQUID,SOLID};";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(StdoutMatches("enum State has enumerator(s) GAS,LIQUID"),
+  EXPECT_THAT(StdoutMatches("enum State has enumerator(s) GAS,LIQUID,SOLID"),
               IsTrue());
   EXPECT_THAT(StdoutMatches("GAS is a"), IsFalse());
 }

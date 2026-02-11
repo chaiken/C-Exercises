@@ -1162,8 +1162,8 @@ bool process_enumerators(struct parser_props *parser, char* user_input, size_t *
   }
   brace_offset = startbracep - (user_input + *offset);
   *offset += brace_offset;
+  progress_ptr = user_input + *offset;
   do {
-    progress_ptr = user_input + *offset;
     if (',' == *progress_ptr) progress_ptr++;
     (*offset) += gettoken(parser, progress_ptr, &this_token);
     /*

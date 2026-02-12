@@ -795,6 +795,7 @@ size_t gettoken(struct parser_props* parser, const char *declstring,
    */
   int ctr = 0;
   char trimmed[MAXTOKENLEN];
+  const char* startbracep = strchr(declstring, '{');
   memset(this_token->string, '\0', MAXTOKENLEN);
   this_token->kind = invalid;
 
@@ -841,7 +842,9 @@ size_t gettoken(struct parser_props* parser, const char *declstring,
        * parsing unless we are processing an enum with an enumerator list.
        */
       if (!is_name_char(nextchar)) {
-        if (parser->is_enum && ('{' == nextchar)) {
+        if (parser->is_enum && (('{' == nextchar) ||
+				(startbracep && isblank(nextchar) &&
+				 (startbracep < (declstring +  tokenoffset))))) {
           /*
 	   * Setting has_enumerators prevents check_for_enumerators() from
 	   * running later.
@@ -1216,6 +1219,7 @@ size_t load_stack(struct parser_props* parser, char* user_input, bool needs_trun
       progress_ptr = user_input + offset;
       offset += gettoken(parser, progress_ptr, &this_token);
       if ((!offset) || (invalid == this_token.kind)) {
+        /* Reached end of input, or hit an error. */
 	break;
       }
       size_t trailing = trim_trailing_whitespace(user_input, trimmed);

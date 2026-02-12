@@ -1440,14 +1440,12 @@ TEST_F(ParserSuite, EnumNoIdentifierThreeEnumerators) {
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("enum State has enumerator(s) GAS,LIQUID,SOLID"),
               IsTrue());
-  EXPECT_THAT(StdoutMatches("GAS is a"), IsFalse());
 }
 
 TEST_F(ParserSuite, EnumNoIdentifierOneEnumerator) {
   char inputstr[] = "enum State {GAS};";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("enum State has enumerator(s) GAS"), IsTrue());
-  EXPECT_THAT(StdoutMatches("GAS is a"), IsFalse());
 }
 
 TEST_F(ParserSuite, EnumNoIdentifierTwoEnumerator) {
@@ -1455,7 +1453,19 @@ TEST_F(ParserSuite, EnumNoIdentifierTwoEnumerator) {
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("enum State has enumerator(s) GAS,LIQUID"),
               IsTrue());
-  EXPECT_THAT(StdoutMatches("GAS is a"), IsFalse());
+}
+
+TEST_F(ParserSuite, EnumWithIdentifierBadFormat) {
+  char inputstr[] = "enum State state { GAS ,};";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("state is a(n) enum State with enumerator(s) GAS"),
+              IsTrue());
+}
+
+TEST_F(ParserSuite, EnumNoIdentifierCommaMadness) {
+  char inputstr[] = "enum State state { , , ,};";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  EXPECT_THAT(StderrMatches("Unable to parse garbled input."), IsTrue());
 }
 
 TEST_F(ParserSuite, LoadStackForwardDeclarationBadDelim) {

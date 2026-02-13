@@ -1471,6 +1471,51 @@ TEST_F(ParserSuite, LoadStackOneEnumeratorStrayComma) {
   EXPECT_THAT(parser.is_enum, IsFalse());
 }
 
+TEST_F(ParserSuite, LoadStackOneEnumeratorWithAssignment) {
+  char inputstr[] = "enum State state { GAS=1,};";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("state is a(n) enum State with enumerator(s) GAS"),
+              IsTrue());
+}
+
+TEST_F(ParserSuite, LoadStackOneEnumeratorWithEndingAssignment) {
+  char inputstr[] = "enum State state {GAS,LIQUID,SOLID=5};";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(
+      StdoutMatches(
+          "state is a(n) enum State with enumerator(s) GAS,LIQUID,SOLID"),
+      IsTrue());
+}
+
+TEST_F(ParserSuite, LoadStackOneEnumeratorWitMiddleAssignment) {
+  char inputstr[] = "enum State state {GAS,LIQUID=4,SOLID};";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(
+      StdoutMatches(
+          "state is a(n) enum State with enumerator(s) GAS,LIQUID,SOLID"),
+      IsTrue());
+}
+
+TEST_F(ParserSuite, LoadStackOneEnumeratorWithAssignmentNoInstanceName) {
+  char inputstr[] = "enum State {GAS=1,};";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("enum State has enumerator(s) GAS"), IsTrue());
+}
+
+TEST_F(ParserSuite, LoadStackTwoEnumeratorWithAssignmentNoInstanceName) {
+  char inputstr[] = "enum State {GAS=1,LIQUID};";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("enum State has enumerator(s) GAS,LIQUID"), IsTrue());
+}
+
+TEST_F(ParserSuite,
+       LoadStackOneEnumeratorWithTrailingAssignmentNoInstanceName) {
+  char inputstr[] = "enum State {GAS,LIQUID=4};";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("enum State has enumerator(s) GAS,LIQUID"),
+              IsTrue());
+}
+
 TEST_F(ParserSuite, Reorder) {
   char user_input[MAXTOKENLEN];
   const char *probe = "const int x;";

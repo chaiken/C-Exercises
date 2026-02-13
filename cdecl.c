@@ -258,16 +258,61 @@ bool is_numeric(const char* input) {
 }
 
 /*
+ * Starting at the '=' of a enumeration constant assignment, overwrite
+ * in place subsequent numeric digits and whitespace with the alphanumeric
+ * characters which follow them.
+ */
+void elide_assignments(char **input) {
+  size_t equals_offset = strcspn(*input, "=");
+  char *cursor = *input + equals_offset;
+  const size_t input_len = strlen(*input);
+  /* 1 is to go past '='. */
+  size_t to_skip = 1;
+
+  if (equals_offset == input_len) {
+    return;
+  }
+  while ((cursor + to_skip) < (*input + input_len)) {
+    /* Go past initializer values. */
+    while (isdigit(*(cursor + to_skip)) || isblank(*(cursor + to_skip))) {
+      to_skip++;
+    }
+    /*
+     * Copy characters past (cursor + to_skip) to cursor, thereby
+     * making *input to_skip characters shorter.
+     */
+    for (; cursor < ((*input + input_len) - (to_skip - 1)); cursor++) {
+      *cursor = *(cursor + to_skip);
+    }
+    *cursor = '\0';
+    /* Check for additional assignments. Do not skip past comma. */
+    equals_offset = strcspn(*input + equals_offset + 1, "=");
+  }
+}
+
+/*
  * Remove any characters following ';' , ')' or '=' plus any whitespace which
  * precedes these characters.  Returns true if the input contains one of those
- * chars and has any non-whitespace characters before them.
+ * chars and has any non-whitespace characters before them.  The parser is in
+ * its initial state, so checking if it contains an enum or function via
+ * parser_props boolean values is not yet possible.
  */
 bool truncate_input(char** input, const struct parser_props *parser) {
   char trimmed[MAXTOKENLEN];
   char *input_end = NULL;
+  const char *found_enum = strstr(*input, "enum ");
 
-  /* Dump chars after '=', if any. */
-  input_end = strstr(*input, "=");
+  /*
+   * Mixing the levels here is awful, but there's not an obvious way to avoid it.
+   * Make sure that "enum " starts the input so that "bool renum = true" doesn't
+   * pass.
+   */
+  if (found_enum && (found_enum == *input) && strstr(*input, "=")) {
+    elide_assignments(input);
+  } else {
+    /* Dump chars after '=', if any. */
+    input_end = strstr(*input, "=");
+  }
   /*
    * If the input after '=' or ',' is not lopped off, the input should terminate
    * with ';' or ')'.
@@ -792,13 +837,14 @@ size_t gettoken(struct parser_props* parser, const char *declstring,
 		struct token *this_token) {
 
   const size_t tokenlen = strlen(declstring);
+  /* tokenoffset is the parser's overall progress counter. */
   size_t tokenoffset = 0;
   /*
-   * ctr may = -1 if the first character is '{' since the ctr loop
-   * below will otherwise fail to write the first character of the
-   * output.
+   * ctr records how many characters are written to the output token.
+   * tokenoffset is >= ctr because it includes delimiters which are not
+   * copied into tokens.
    */
-  int ctr = 0;
+  size_t ctr = 0;
   char trimmed[MAXTOKENLEN];
   const char* startbracep = strchr(declstring, '{');
   memset(this_token->string, '\0', MAXTOKENLEN);
@@ -839,7 +885,7 @@ size_t gettoken(struct parser_props* parser, const char *declstring,
   }
 
   /* The token has multiple characters, so copy them all. */
-  for (ctr = 0; ctr <= (int)tokenlen; ctr++) {
+  for (int i = 0; i < (int)tokenlen; i++) {
     char nextchar = *(declstring + tokenoffset);
     if (parser->have_type) {
       /*
@@ -847,21 +893,19 @@ size_t gettoken(struct parser_props* parser, const char *declstring,
        * parsing unless we are processing an enum with an enumerator list.
        */
       if (!is_name_char(nextchar)) {
-        if (parser->is_enum && (('{' == nextchar) ||
-				(startbracep && isblank(nextchar) &&
-				 (startbracep < (declstring +  tokenoffset))))) {
-          /*
-	   * Setting has_enumeration constants prevents check_for_enum_constants() from
-	   * running later.
-	   */
-          parser->has_enum_constants = true;
-          tokenoffset++;
-          /*
-	   * The loop increases the ctr without having written anything to the
-	   * output.
-	   */
-	  ctr--;
-	  continue;
+        if (parser->is_enum) {
+	  if ((('{' == nextchar) || ('=' == nextchar) ||
+	       (isdigit(nextchar) || isblank(nextchar))) &&
+		(startbracep &&
+		 (startbracep <= (declstring +  tokenoffset)))) {
+            /*
+             * Setting has_enum_constants prevents check_for_enumerators() from
+	     * running later.
+	     */
+             parser->has_enum_constants = true;
+             tokenoffset++;
+             continue;
+          }
         }
         break;
       }
@@ -875,6 +919,7 @@ size_t gettoken(struct parser_props* parser, const char *declstring,
       }
     }
     this_token->string[ctr] = nextchar;
+    ctr++;
     tokenoffset++;
   }
   /* Overwrite any trailing dash with a NUL. */
@@ -954,9 +999,9 @@ int pop_stack(struct parser_props* parser, bool no_enum_instance) {
 	}
         if (parser->has_enum_constants) {
 	  if (no_enum_instance) {
-	    fprintf(parser->out_stream, "has enum constants(s)");
+	    fprintf(parser->out_stream, "has enum constant(s)");
 	  } else {
-	    fprintf(parser->out_stream, "with enumerator(s)");
+	    fprintf(parser->out_stream, "with enum constant(s)");
 	  }
           fprintf(parser->out_stream, " %s ", parser->enumerator_list);
         }
@@ -1165,7 +1210,7 @@ bool process_enum_constants(struct parser_props *parser, char* user_input, size_
     parser->has_enum_constants = false;
     return true;
   }
-  if (startbracep > endbracep) {
+  if (endbracep && (startbracep > endbracep)) {
     parser->has_enum_constants = false;
     return false;
   }

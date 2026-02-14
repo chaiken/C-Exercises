@@ -84,7 +84,7 @@ struct parser_props {
   bool last_dimension_unspecified;
   bool is_function;
   bool is_enum;
-  bool has_enumerators;
+  bool has_enum_constants;
   char enumerator_list[MAXTOKENLEN];
   size_t array_dimensions;
   size_t array_lengths;
@@ -103,7 +103,7 @@ void reset_parser(struct parser_props* parser){
   parser->last_dimension_unspecified = true;
   parser->is_function = false;
   parser->is_enum = false;
-  parser->has_enumerators = false;
+  parser->has_enum_constants = false;
   parser->enumerator_list[0] = '\0';
   parser->array_dimensions = 0;
   parser->array_lengths = 0;
@@ -564,12 +564,12 @@ bool have_stacked_compound_type(const struct parser_props *parser) {
 }
 
 /*
- * Check to see if there are any identifiers which do not appear in enumerator
- * list.  If so, the identifier must be the name of an enum instance.
+ * Check to see if there are any identifiers which do not appear in enumeration
+ * constant list.  If so, the identifier must be the name of an enum instance.
  */
-bool all_identifiers_are_enumerators(const struct parser_props *parser) {
+bool all_identifiers_are_enum_constants(const struct parser_props *parser) {
   size_t stacknum = parser->stacklen;
-  if (!parser->has_enumerators) {
+  if (!parser->has_enum_constants) {
     return false;
   }
   while (--stacknum) {
@@ -585,12 +585,12 @@ bool all_identifiers_are_enumerators(const struct parser_props *parser) {
 bool first_identifier_is_enumerator(const struct parser_props *parser,
 				       const char *user_input, size_t offset) {
   const char *startbracep = strstr(user_input, "{");
-  if ((!parser->is_enum) || (!parser->has_enumerators)) {
+  if ((!parser->is_enum) || (!parser->has_enum_constants)) {
     return false;
   }
   if (!startbracep) return false;
   /*
-   * The parser already started processing enumerators, so there is no enum
+   * The parser already started processing enum_constants, so there is no enum
    * instance name.
    */
   if ((user_input + offset) > startbracep) {
@@ -608,16 +608,17 @@ bool first_identifier_is_enumerator(const struct parser_props *parser,
  * Not supported by this program:
  * 3. enum State { SOLID, LIQUID} state;
  */
-bool check_for_enumerators(struct parser_props *parser, const char *offset_decl) {
+bool check_for_enum_constants(struct parser_props *parser,
+			      const char *offset_decl) {
   const char *spacep = strstr(offset_decl, " ");
   const char *startbracep = strstr(offset_decl, "{");
   const char *endbracep  = strstr(offset_decl, "}");
 
   /*
-   * If the declaration is not an enum, or we've already found enumerators,
+   * If the declaration is not an enum, or we've already found enum_constants,
    *  there is nothing to check.
    */
-  if ((!parser->is_enum) || (parser->has_enumerators)) return true;
+  if ((!parser->is_enum) || (parser->has_enum_constants)) return true;
   if ((NULL == spacep) && (!have_stacked_compound_type(parser))) {
     fprintf(parser->err_stream, "Enums cannot be forward-declared.\n");
     return false;
@@ -633,8 +634,8 @@ bool check_for_enumerators(struct parser_props *parser, const char *offset_decl)
   if ((spacep > startbracep) || (startbracep > endbracep)) {
     return false;
   }
-  /* The presence of enumerators is plausible in types 1 or 2. */
-  parser->has_enumerators = true;
+  /* The presence of enumeration constants is plausible in types 1 or 2. */
+  parser->has_enum_constants = true;
   return true;
 }
 
@@ -706,7 +707,7 @@ void finish_token(struct parser_props* parser, const char *offset_decl,
     if ((!parser->have_type) ||
 	(!check_for_array_dimensions(parser, offset_decl)) ||
 	(!check_for_function_parameters(parser, offset_decl)) ||
-	(!check_for_enumerators(parser, offset_decl))) {
+	(!check_for_enum_constants(parser, offset_decl))) {
       /* Indicate hard failure. */
       reset_parser(parser);
       return;
@@ -846,10 +847,10 @@ size_t gettoken(struct parser_props* parser, const char *declstring,
 				(startbracep && isblank(nextchar) &&
 				 (startbracep < (declstring +  tokenoffset))))) {
           /*
-	   * Setting has_enumerators prevents check_for_enumerators() from
+	   * Setting has_enumeration constants prevents check_for_enum_constants() from
 	   * running later.
 	   */
-          parser->has_enumerators = true;
+          parser->has_enum_constants = true;
           tokenoffset++;
           /*
 	   * The loop increases the ctr without having written anything to the
@@ -947,9 +948,9 @@ int pop_stack(struct parser_props* parser, bool no_enum_instance) {
 	    if (ret) return ret;
           }
 	}
-        if (parser->has_enumerators) {
+        if (parser->has_enum_constants) {
 	  if (no_enum_instance) {
-	    fprintf(parser->out_stream, "has enumerator(s)");
+	    fprintf(parser->out_stream, "has enum constants(s)");
 	  } else {
 	    fprintf(parser->out_stream, "with enumerator(s)");
 	  }
@@ -963,8 +964,9 @@ int pop_stack(struct parser_props* parser, bool no_enum_instance) {
       } else if (parser->is_function) {
         fprintf(parser->out_stream, "%s is a function which returns ",
 	        parser->stack[stacktop].string);
-      } else if ((parser->has_enumerators) && strlen(parser->enumerator_list) &&
-		 (strstr(parser->enumerator_list, parser->stack[stacktop].string))) {
+      } else if ((parser->has_enum_constants) && strlen(parser->enumerator_list)
+                 &&
+                 (strstr(parser->enumerator_list, parser->stack[stacktop].string))) {
         /*
 	 * If the identifier is in the enumerator_list, it is not the
 	 * name of a enum instance.
@@ -1007,11 +1009,11 @@ int pop_stack(struct parser_props* parser, bool no_enum_instance) {
 
 int pop_all(struct parser_props *parser) {
   int ret;
-  /* If there is a non-enumerator identifier, it will be at the top of
+  /* If there is a non-enumeration constant identifier, it will be at the top of
    * the stack.  Therefore, the comparison with the enumerator_list
    * must proceed the first call to pop_stack() and be passed to it.
    */
-  const bool no_enum_instance = all_identifiers_are_enumerators(parser);
+  const bool no_enum_instance = all_identifiers_are_enum_constants(parser);
   while (parser && parser->stacklen) {
     ret = pop_stack(parser, no_enum_instance);
     if (ret) return ret;
@@ -1141,12 +1143,12 @@ void process_array_dimensions(struct parser_props* parser, char* user_input,
 }
 
 /*
- * check_for_enumerators() has performed limited sanity-checking for
- * enumerators and set has_enumerators = true, but there still may not
- * be any.  Return false if an error is encountered.  Otherwise, add
- * any enumerators to the enumerator_list and return true.
+ * check_for_enum_constants() has performed limited sanity-checking for
+ * enumeration constants and set has_enum_constants = true, but there still may
+ * not be any.  Return false if an error is encountered.  Otherwise, add
+ * any enumeration constants to the enumerator_list and return true.
  */
-bool process_enumerators(struct parser_props *parser, char* user_input, size_t *offset) {
+bool process_enum_constants(struct parser_props *parser, char* user_input, size_t *offset) {
   struct token this_token;
   char *progress_ptr = user_input + *offset;
   const char *startbracep = strchr(progress_ptr, '{');
@@ -1156,11 +1158,11 @@ bool process_enumerators(struct parser_props *parser, char* user_input, size_t *
   int brace_offset = 0;
 
   if (!startbracep) {
-    parser->has_enumerators = false;
+    parser->has_enum_constants = false;
     return true;
   }
   if (startbracep > endbracep) {
-    parser->has_enumerators = false;
+    parser->has_enum_constants = false;
     return false;
   }
   brace_offset = startbracep - (user_input + *offset);
@@ -1170,8 +1172,8 @@ bool process_enumerators(struct parser_props *parser, char* user_input, size_t *
     if (',' == *progress_ptr) progress_ptr++;
     (*offset) += gettoken(parser, progress_ptr, &this_token);
     /*
-     * The classifier should assess the enumerators as identifiers, but
-     * the type is not used.  Strictly speaking, the code should fail if
+     * The classifier should assess the enumeration constants as identifiers,
+     * but the type is not used.  Strictly speaking, the code should fail if
      * it encounters an identifier when the parser already has one, but
      * instead it ignores identifiers after the first, except in this case.
      */
@@ -1244,9 +1246,9 @@ size_t load_stack(struct parser_props* parser, char* user_input, bool needs_trun
 	  (first_identifier_is_enumerator(parser, user_input, offset))) {
         /*
          * Put the characters in the token and '{' back on the stack for
-         * process_enumerators().  This clumsy approach means that the parser
-         * state upon entry to process_enumerators() does  not depend on whether
-         * or not the enum has an instance name.
+         * process_enum_constants().  This clumsy approach means that the parser
+         * state upon entry to process_enum_constants() does  not depend on
+	 * whether or not the enum has an instance name.
 	 */
         offset -= strlen(this_token.string) + 1;
 	break;
@@ -1279,8 +1281,8 @@ size_t load_stack(struct parser_props* parser, char* user_input, bool needs_trun
   }
   reorder_array_identifier_and_lengths(parser);
   reorder_qualifier_and_type(parser);
-  if (parser->has_enumerators) {
-      if (!process_enumerators(parser, user_input, &offset)) {
+  if (parser->has_enum_constants) {
+      if (!process_enum_constants(parser, user_input, &offset)) {
 	reset_parser(parser);
 	return 0;
       }

@@ -466,8 +466,8 @@ TEST(CheckForEnumerators, WellFormedSimple) {
   const char *offset_decl = "State state";
   initialize_parser(&parser);
   parser.is_enum = true;
-  EXPECT_THAT(check_for_enumerators(&parser, offset_decl), IsTrue());
-  EXPECT_THAT(parser.has_enumerators, IsFalse());
+  EXPECT_THAT(check_for_enum_constants(&parser, offset_decl), IsTrue());
+  EXPECT_THAT(parser.has_enum_constants, IsFalse());
 }
 
 TEST(CheckForEnumerators, WellFormedEnumerators) {
@@ -475,8 +475,8 @@ TEST(CheckForEnumerators, WellFormedEnumerators) {
   const char *offset_decl = "State state { SOLID, LIQUID}";
   initialize_parser(&parser);
   parser.is_enum = true;
-  EXPECT_THAT(check_for_enumerators(&parser, offset_decl), IsTrue());
-  EXPECT_THAT(parser.has_enumerators, IsTrue());
+  EXPECT_THAT(check_for_enum_constants(&parser, offset_decl), IsTrue());
+  EXPECT_THAT(parser.has_enum_constants, IsTrue());
 }
 
 TEST(CheckForEnumerators, MismatchedDelims) {
@@ -484,8 +484,8 @@ TEST(CheckForEnumerators, MismatchedDelims) {
   const char *offset_decl = "State state {";
   initialize_parser(&parser);
   parser.is_enum = true;
-  EXPECT_THAT(check_for_enumerators(&parser, offset_decl), IsFalse());
-  EXPECT_THAT(parser.has_enumerators, IsFalse());
+  EXPECT_THAT(check_for_enum_constants(&parser, offset_decl), IsFalse());
+  EXPECT_THAT(parser.has_enum_constants, IsFalse());
 }
 
 bool reset_stream_is_ok(FILE *stream) {
@@ -1438,20 +1438,21 @@ TEST_F(ParserSuite, EnumWithIdentifierOneEnumerator) {
 TEST_F(ParserSuite, EnumNoIdentifierThreeEnumerators) {
   char inputstr[] = "enum State {GAS,LIQUID,SOLID};";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(StdoutMatches("enum State has enumerator(s) GAS,LIQUID,SOLID"),
-              IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("enum State has enum constants(s) GAS,LIQUID,SOLID"),
+      IsTrue());
 }
 
 TEST_F(ParserSuite, EnumNoIdentifierOneEnumerator) {
   char inputstr[] = "enum State {GAS};";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(StdoutMatches("enum State has enumerator(s) GAS"), IsTrue());
+  EXPECT_THAT(StdoutMatches("enum State has enum constants(s) GAS"), IsTrue());
 }
 
 TEST_F(ParserSuite, EnumNoIdentifierTwoEnumerator) {
   char inputstr[] = "enum State {GAS, LIQUID };";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(StdoutMatches("enum State has enumerator(s) GAS,LIQUID"),
+  EXPECT_THAT(StdoutMatches("enum State has enum constants(s) GAS,LIQUID"),
               IsTrue());
 }
 

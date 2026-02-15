@@ -134,8 +134,8 @@ void limitations() {
   printf("Known deficiencies:\n\ta) doesn't handle multi-line struct and union "
          "declarations;\n");
   printf("\tb) doesn't handle multiple comma-separated declarations;\n");
-  printf("\tc) includes only the qualifiers defined in ANSI C, not LIBC\n");
-  printf("\t   or kernel extensions.\n");
+  printf("\tc) includes only the qualifiers defined in ANSI C, not LIBC,\n");
+  printf("\t   kernel extensions, typedef or compiler attributes.\n");
   exit(-1);
 }
 

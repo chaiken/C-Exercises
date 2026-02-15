@@ -264,11 +264,7 @@ bool truncate_input(char** input, const struct parser_props *parser) {
    * with ';' or ')'.
    */
   if (!input_end) {
-    if ((!parser->is_function)) {
-      input_end = strstr(*input, ";");
-    } else {
-      input_end = strstr(*input, ")");
-    }
+    input_end = strstr(*input, ";");
    /* Input with two semicolons or ')' could reach this point. */
     if (input_end == *input) {
       fprintf(parser->err_stream, "Zero-length input string.\n");

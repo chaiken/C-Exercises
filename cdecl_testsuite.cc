@@ -659,27 +659,6 @@ TEST_F(ParserSuite, Truncation) {
   EXPECT_THAT(strlen(token), Eq(strlen("uint32_t f[2]")));
   EXPECT_THAT(token, StrEq("uint32_t f[2]"));
 
-  bzero(token, MAXTOKENLEN);
-  strlcpy(token, "uint32_t f();", MAXTOKENLEN);
-  parser.is_function = true;
-  EXPECT_THAT(truncate_input(&token, &parser), IsTrue());
-  EXPECT_THAT(strlen(token), Eq(strlen("uint32_t f(")));
-  EXPECT_THAT(token, StrEq("uint32_t f("));
-
-  bzero(token, MAXTOKENLEN);
-  strlcpy(token, "uint32_t f(long val);", MAXTOKENLEN);
-  parser.is_function = true;
-  EXPECT_THAT(truncate_input(&token, &parser), IsTrue());
-  EXPECT_THAT(strlen(token), Eq(strlen("uint32_t f(long val")));
-  EXPECT_THAT(token, StrEq("uint32_t f(long val"));
-
-  bzero(token, MAXTOKENLEN);
-  strlcpy(token, "uint32_t f(long val, bool init);", MAXTOKENLEN);
-  parser.is_function = true;
-  EXPECT_THAT(truncate_input(&token, &parser), IsTrue());
-  EXPECT_THAT(strlen(token), Eq(strlen("uint32_t f(long val, bool init")));
-  EXPECT_THAT(token, StrEq("uint32_t f(long val, bool init"));
-
   free(token);
 }
 

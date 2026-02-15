@@ -256,10 +256,9 @@ bool is_numeric(const char* input) {
 bool truncate_input(char** input, const struct parser_props *parser) {
   char trimmed[MAXTOKENLEN];
   char *input_end = NULL;
-  if (!parser->is_function) {
-    /* Dump chars after '=', if any. */
-    input_end = strstr(*input, "=");
-  }
+
+  /* Dump chars after '=', if any. */
+  input_end = strstr(*input, "=");
   /*
    * If the input after '=' or ',' is not lopped off, the input should terminate
    * with ';' or ')'.

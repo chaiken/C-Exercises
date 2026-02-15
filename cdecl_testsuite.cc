@@ -120,9 +120,10 @@ TEST(StringManipulateSuite, TrimmedTrailingWhitepace) {
   char *trimmed = (char *)malloc(MAXTOKENLEN);
   EXPECT_THAT(trim_trailing_whitespace("a", trimmed), Eq(0));
   EXPECT_THAT(trim_trailing_whitespace(" b", trimmed), Eq(0));
+  EXPECT_THAT(trim_trailing_whitespace("\0", trimmed), Eq(0));
+  EXPECT_THAT(trim_trailing_whitespace("    ", trimmed), Eq(4));
   EXPECT_THAT(trim_trailing_whitespace("c    ", trimmed), Eq(4));
   EXPECT_THAT(std::string(trimmed), StrEq("c"));
-  EXPECT_THAT(trim_trailing_whitespace("    ", trimmed), Eq(4));
   free(trimmed);
 }
 
@@ -130,6 +131,8 @@ TEST(StringManipulateSuite, TrimmedLeadingWhitepace) {
   char *trimmed = (char *)malloc(MAXTOKENLEN);
   EXPECT_THAT(trim_leading_whitespace("a", trimmed), Eq(0));
   EXPECT_THAT(trim_leading_whitespace("c    ", trimmed), Eq(0));
+  EXPECT_THAT(trim_leading_whitespace(" ", trimmed), Eq(1));
+  EXPECT_THAT(trim_leading_whitespace("\0", trimmed), Eq(0));
   EXPECT_THAT(trim_leading_whitespace(" b", trimmed), Eq(1));
   EXPECT_THAT(std::string(trimmed), StrEq("b"));
   free(trimmed);

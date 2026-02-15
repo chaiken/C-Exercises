@@ -162,23 +162,24 @@ bool is_all_blanks(const char* input) {
  * Caller must allocate trimmed.
  */
 size_t trim_trailing_whitespace(const char* input, char* trimmed) {
+  _cleanup_(freep) char* copy = strdup(input);
+  char* last_char = copy + (strlen(copy) - 1);
+  /*
+   * last_char should be greater than input when the loop exits, as otherwise
+   * input is all blanks.
+   */
+  size_t removed = 0;
+
+  bzero(trimmed, MAXTOKENLEN);
   if (!input || (0 == strlen(input))) {
     return 0;
   }
   if (is_all_blanks(input)) {
-    bzero(trimmed, MAXTOKENLEN);
-    return(strlen(input));
+    return strlen(input);
   }
-  _cleanup_(freep) char* copy = strdup(input);
-  char* last_char = copy + (strlen(copy) - 1);
-  // last_char should be greater than input when the loop exits, as otherwise input is all blanks.
-  size_t removed = 0;
   while ((last_char > copy) && (isblank(*last_char))) {
     last_char--;
     removed++;
-  }
-  if ((copy + (strlen(copy) - 1)) == last_char) {
-    return 0;
   }
   /* Copy the non-blank part of the input to the output.*/
   for (char* cptr = copy; cptr <= last_char; cptr++ ) {
@@ -189,15 +190,23 @@ size_t trim_trailing_whitespace(const char* input, char* trimmed) {
   return removed;
 }
 
-/* Caller must allocate trimmed. */
+/*
+ * Return value is the number of trimmed characters.
+ * trimmed is the same as input except that it will end in a non-whitespace character.
+ * If there are no non-whitespace characters, trimmed will be empty.
+ * Caller must allocate trimmed.
+ */
 size_t trim_leading_whitespace(const char* input, char* trimmed) {
   char* copy = strdup(input);
   _cleanup_(freep) char* saveptr = copy;
   size_t removed = 0;
-  /* Make sure trimmed starts empty. */
-  *trimmed = '\0';
-  if (!input || (0 == strlen(input)) || (is_all_blanks(input))) {
+
+  bzero(trimmed, MAXTOKENLEN);
+  if (!input || (0 == strlen(input))) {
     return 0;
+  }
+  if (is_all_blanks(input)) {
+    return strlen(input);
   }
   if (!isblank(*input)) {
     return 0;

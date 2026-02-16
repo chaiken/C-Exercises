@@ -491,6 +491,129 @@ TEST(CheckForEnumerators, MismatchedDelims) {
   EXPECT_THAT(parser.has_enum_constants, IsFalse());
 }
 
+TEST(ElideAssignments, NoEquals) {
+  const char *probe = "enum State state;";
+  _cleanup_(freep) char *input = (char *)malloc(strlen(probe) + 1);
+  strlcpy(input, probe, strlen(probe) + 1);
+  elide_assignments(&input);
+  EXPECT_THAT(input, StrEq(probe));
+}
+
+TEST(ElideAssignments, OneEnumConstantNoAssignment) {
+  const char *probe = "enum State state {GAS};";
+  _cleanup_(freep) char *input = (char *)malloc(strlen(probe) + 1);
+  strlcpy(input, probe, strlen(probe) + 1);
+  elide_assignments(&input);
+  EXPECT_THAT(input, StrEq(probe));
+}
+
+TEST(ElideAssignments, OneEnumConstantNoIdentifierNoAssignment) {
+  const char *probe = "enum State {GAS};";
+  _cleanup_(freep) char *input = (char *)malloc(strlen(probe) + 1);
+  strlcpy(input, probe, strlen(probe) + 1);
+  elide_assignments(&input);
+  EXPECT_THAT(input, StrEq(probe));
+}
+
+TEST(ElideAssignments, OneEnumConstantNoIdentifierOneAssignment) {
+  const char *probe = "enum State {GAS=1};";
+  _cleanup_(freep) char *input = (char *)malloc(strlen(probe) + 1);
+  strlcpy(input, probe, strlen(probe) + 1);
+  elide_assignments(&input);
+  EXPECT_THAT(input, StrEq("enum State {GAS};"));
+}
+
+TEST(ElideAssignments, OneEnumConstantWithIdentifierOneAssignment) {
+  const char *probe = "enum State state {GAS=1};";
+  _cleanup_(freep) char *input = (char *)malloc(strlen(probe) + 1);
+  strlcpy(input, probe, strlen(probe) + 1);
+  elide_assignments(&input);
+  EXPECT_THAT(input, StrEq("enum State state {GAS};"));
+}
+
+TEST(ElideAssignments, TwoEnumConstantNoIdentifierTwoConstantsOneAssignment) {
+  const char *probe = "enum State {GAS=1,LIQUID};";
+  _cleanup_(freep) char *input = (char *)malloc(strlen(probe) + 1);
+  strlcpy(input, probe, strlen(probe) + 1);
+  elide_assignments(&input);
+  EXPECT_THAT(input, StrEq("enum State {GAS,LIQUID};"));
+}
+
+TEST(ElideAssignments,
+     TwoEnumConstantNoIdentifierTwoConstantsOneAssignmentWhitespace) {
+  const char *probe = "enum State { GAS=1 , LIQUID };";
+  _cleanup_(freep) char *input = (char *)malloc(strlen(probe) + 1);
+  strlcpy(input, probe, strlen(probe) + 1);
+  elide_assignments(&input);
+  EXPECT_THAT(input, StrEq("enum State { GAS, LIQUID };"));
+}
+
+TEST(ElideAssignments,
+     TwoEnumConstantNoIdentifierTwoConstantsTrailingAssignment) {
+  const char *probe = "enum State {GAS,LIQUID=3};";
+  _cleanup_(freep) char *input = (char *)malloc(strlen(probe) + 1);
+  strlcpy(input, probe, strlen(probe) + 1);
+  elide_assignments(&input);
+  EXPECT_THAT(input, StrEq("enum State {GAS,LIQUID};"));
+}
+
+TEST(ElideAssignments,
+     ThreeEnumConstantNoIdentifierTwoConstantsMiddleAssignment) {
+  const char *probe = "enum State {GAS,LIQUID=3,SOLID};";
+  _cleanup_(freep) char *input = (char *)malloc(strlen(probe) + 1);
+  strlcpy(input, probe, strlen(probe) + 1);
+  elide_assignments(&input);
+  EXPECT_THAT(input, StrEq("enum State {GAS,LIQUID,SOLID};"));
+}
+
+TEST(ElideAssignments, TwoEnumConstantsNoIdentifierSpaceAfterComma) {
+  const char *probe = "enum State {GAS,LIQUID ,};";
+  _cleanup_(freep) char *input = (char *)malloc(strlen(probe) + 1);
+  strlcpy(input, probe, strlen(probe) + 1);
+  elide_assignments(&input);
+  EXPECT_THAT(input, StrEq(probe));
+}
+
+TEST(ElideAssignments, TwoEnumConstantsNoIdentifierSpaceAfterFirstComma) {
+  const char *probe = "enum State {GAS, LIQUID=3};";
+  _cleanup_(freep) char *input = (char *)malloc(strlen(probe) + 1);
+  strlcpy(input, probe, strlen(probe) + 1);
+  elide_assignments(&input);
+  EXPECT_THAT(input, StrEq("enum State {GAS, LIQUID};"));
+}
+
+TEST(ElideAssignments, TwoEnumConstantsNoIdentifierSpaceBeforeFirstComma) {
+  const char *probe = "enum State {GAS=2 ,LIQUID,};";
+  _cleanup_(freep) char *input = (char *)malloc(strlen(probe) + 1);
+  strlcpy(input, probe, strlen(probe) + 1);
+  elide_assignments(&input);
+  EXPECT_THAT(input, StrEq("enum State {GAS,LIQUID,};"));
+}
+
+TEST(ElideAssignments, TwoEnumConstantsNoIdentifierSpaceBeforeSecondComma) {
+  const char *probe = "enum State {GAS,LIQUID=2 ,};";
+  _cleanup_(freep) char *input = (char *)malloc(strlen(probe) + 1);
+  strlcpy(input, probe, strlen(probe) + 1);
+  elide_assignments(&input);
+  EXPECT_THAT(input, StrEq("enum State {GAS,LIQUID,};"));
+}
+
+TEST(ElideAssignments, ThreeEnumConstantsNoIdentifierSpaceBeforeComma) {
+  const char *probe = "enum State {GAS,LIQUID=3 ,SOLID};";
+  _cleanup_(freep) char *input = (char *)malloc(strlen(probe) + 1);
+  strlcpy(input, probe, strlen(probe) + 1);
+  elide_assignments(&input);
+  EXPECT_THAT(input, StrEq("enum State {GAS,LIQUID,SOLID};"));
+}
+
+TEST(ElideAssignments, ThreeEnumConstantsWihIdentifierSpaceBeforeComma) {
+  const char *probe = "enum State state {GAS,LIQUID=3 ,SOLID};";
+  _cleanup_(freep) char *input = (char *)malloc(strlen(probe) + 1);
+  strlcpy(input, probe, strlen(probe) + 1);
+  elide_assignments(&input);
+  EXPECT_THAT(input, StrEq("enum State state {GAS,LIQUID,SOLID};"));
+}
+
 bool reset_stream_is_ok(FILE *stream) {
   if (fflush(stream) || fseek(stream, 0, SEEK_SET)) {
     return false;
@@ -1413,42 +1536,44 @@ TEST_F(ParserSuite, EnumWithIdentifierNoEnumerators) {
 TEST_F(ParserSuite, EnumWithIdentifierOneEnumerator) {
   char inputstr[] = "enum State state {GAS};";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(StdoutMatches("state is a(n) enum State with enumerator(s) GAS"),
-              IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("state is a(n) enum State with enum constant(s) GAS"),
+      IsTrue());
 }
 
 TEST_F(ParserSuite, EnumNoIdentifierThreeEnumerators) {
   char inputstr[] = "enum State {GAS,LIQUID,SOLID};";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(
-      StdoutMatches("enum State has enum constants(s) GAS,LIQUID,SOLID"),
-      IsTrue());
+  EXPECT_THAT(StdoutMatches("enum State has enum constant(s) GAS,LIQUID,SOLID"),
+              IsTrue());
 }
 
 TEST_F(ParserSuite, EnumNoIdentifierOneEnumerator) {
   char inputstr[] = "enum State {GAS};";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(StdoutMatches("enum State has enum constants(s) GAS"), IsTrue());
+  EXPECT_THAT(StdoutMatches("enum State has enum constant(s) GAS"), IsTrue());
 }
 
-TEST_F(ParserSuite, EnumNoIdentifierTwoEnumerator) {
+TEST_F(ParserSuite, EnumNoIdentifierTwoEnumerators) {
   char inputstr[] = "enum State {GAS, LIQUID };";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(StdoutMatches("enum State has enum constants(s) GAS,LIQUID"),
+  EXPECT_THAT(StdoutMatches("enum State has enum constant(s) GAS,LIQUID"),
               IsTrue());
 }
 
 TEST_F(ParserSuite, EnumWithIdentifierBadFormat) {
   char inputstr[] = "enum State state { GAS ,};";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(StdoutMatches("state is a(n) enum State with enumerator(s) GAS"),
-              IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("state is a(n) enum State with enum constant(s) GAS"),
+      IsTrue());
 }
 
 TEST_F(ParserSuite, EnumNoIdentifierCommaMadness) {
   char inputstr[] = "enum State state { , , ,};";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
-  EXPECT_THAT(StderrMatches("Unable to parse garbled input."), IsTrue());
+  EXPECT_THAT(StderrMatches("Enumeration constant list cannot be empty."),
+              IsTrue());
 }
 
 TEST_F(ParserSuite, LoadStackForwardDeclarationBadDelim) {
@@ -1474,8 +1599,9 @@ TEST_F(ParserSuite, LoadStackOneEnumeratorStrayComma) {
 TEST_F(ParserSuite, LoadStackOneEnumeratorWithAssignment) {
   char inputstr[] = "enum State state { GAS=1,};";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(StdoutMatches("state is a(n) enum State with enumerator(s) GAS"),
-              IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("state is a(n) enum State with enum constant(s) GAS"),
+      IsTrue());
 }
 
 TEST_F(ParserSuite, LoadStackOneEnumeratorWithEndingAssignment) {
@@ -1483,7 +1609,7 @@ TEST_F(ParserSuite, LoadStackOneEnumeratorWithEndingAssignment) {
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(
       StdoutMatches(
-          "state is a(n) enum State with enumerator(s) GAS,LIQUID,SOLID"),
+          "state is a(n) enum State with enum constant(s) GAS,LIQUID,SOLID"),
       IsTrue());
 }
 
@@ -1492,27 +1618,60 @@ TEST_F(ParserSuite, LoadStackOneEnumeratorWitMiddleAssignment) {
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(
       StdoutMatches(
-          "state is a(n) enum State with enumerator(s) GAS,LIQUID,SOLID"),
+          "state is a(n) enum State with enum constant(s) GAS,LIQUID,SOLID"),
       IsTrue());
 }
 
 TEST_F(ParserSuite, LoadStackOneEnumeratorWithAssignmentNoInstanceName) {
   char inputstr[] = "enum State {GAS=1,};";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(StdoutMatches("enum State has enumerator(s) GAS"), IsTrue());
+  EXPECT_THAT(StdoutMatches("enum State has enum constant(s) GAS"), IsTrue());
 }
 
 TEST_F(ParserSuite, LoadStackTwoEnumeratorWithAssignmentNoInstanceName) {
   char inputstr[] = "enum State {GAS=1,LIQUID};";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(StdoutMatches("enum State has enumerator(s) GAS,LIQUID"), IsTrue());
+  EXPECT_THAT(StdoutMatches("enum State has enum constant(s) GAS,LIQUID"),
+              IsTrue());
 }
 
 TEST_F(ParserSuite,
        LoadStackOneEnumeratorWithTrailingAssignmentNoInstanceName) {
   char inputstr[] = "enum State {GAS,LIQUID=4};";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(StdoutMatches("enum State has enumerator(s) GAS,LIQUID"),
+  EXPECT_THAT(StdoutMatches("enum State has enum constant(s) GAS,LIQUID"),
+              IsTrue());
+}
+
+TEST_F(ParserSuite,
+       LoadStackTwoEnumeratorWithAssignmentInstanceNameWhitespace) {
+  char inputstr[] = "enum State {GAS,LIQUID=2 ,};";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("enum State has enum constant(s) GAS,LIQUID"),
+              IsTrue());
+}
+
+TEST_F(ParserSuite,
+       LoadStackTwoEnumeratorWithAssignmentInstanceNameWhitespaceComma) {
+  char inputstr[] = "enum State {GAS,LIQUID=2 ,};";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("enum State has enum constant(s) GAS,LIQUID"),
+              IsTrue());
+}
+
+TEST_F(ParserSuite,
+       LoadStackTwoEnumeratorWithAssignmentInstanceNameWhitespaceComma1) {
+  char inputstr[] = "enum State {GAS,LIQUID=2 ,};";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("enum State has enum constant(s) GAS,LIQUID"),
+              IsTrue());
+}
+
+TEST_F(ParserSuite,
+       LoadStackTwoEnumeratorWithAssignmentInstanceNameWhitespaceComma2) {
+  char inputstr[] = "enum State {GAS,LIQUID =2,};";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("enum State has enum constant(s) GAS,LIQUID"),
               IsTrue());
 }
 

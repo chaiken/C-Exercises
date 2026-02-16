@@ -551,6 +551,17 @@ static bool is_name_char(const char c) {
   return false;
 }
 
+static bool has_any_name_chars(const char *s) {
+  char c;
+  for (size_t ctr = 0;  ctr < strlen(s); ctr++) {
+    c = *(s + ctr);
+    if (is_name_char(c)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 const char typechars[] = {'1', '2', '3', '4', '6', '8', 'a', 'b', 'c', 'd', 'e',
 			  'f', 'g', 'h', 'i', 'l', 'n', 'o', 'r', 's', 't', 'u'};
 
@@ -1214,11 +1225,25 @@ bool process_enum_constants(struct parser_props *parser, char* user_input, size_
     parser->has_enum_constants = false;
     return false;
   }
+  /*
+   * Rather than skipping over the '{' here, do so in gettoken() since braces
+   * are not limited to enumeration constants.
+   */
   brace_offset = startbracep - (user_input + *offset);
   *offset += brace_offset;
   progress_ptr = user_input + *offset;
   do {
-    if (',' == *progress_ptr) progress_ptr++;
+    if (',' == *progress_ptr) {
+      progress_ptr++;
+    }
+    /* Parsing is done. */
+    if (('}' == *progress_ptr) || (!has_any_name_chars(progress_ptr))) {
+      if (!strlen(parser->enumerator_list)) {
+	fprintf(parser->err_stream, "Enumeration constant list cannot be empty.\n");
+	return false;
+      }
+      break;
+    }
     (*offset) += gettoken(parser, progress_ptr, &this_token);
     /*
      * The classifier should assess the enumeration constants as identifiers,
@@ -1228,6 +1253,7 @@ bool process_enum_constants(struct parser_props *parser, char* user_input, size_
      */
     if ((invalid == this_token.kind) || (0 == strlen(this_token.string)) ||
         (strlen(this_token.string) > MAXTOKENLEN)) {
+      fprintf(parser->err_stream, "Invalid enumerator %s\n", this_token.string);
       reset_parser(parser);
       return false;
     }

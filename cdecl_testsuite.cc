@@ -1653,9 +1653,10 @@ TEST_F(ParserSuite,
 
 TEST_F(ParserSuite,
        LoadStackTwoEnumeratorWithAssignmentInstanceNameWhitespaceComma) {
-  char inputstr[] = "enum State {GAS,LIQUID=2 ,};";
+  char inputstr[] = "enum State state {GAS, LIQUID = 2,};";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(StdoutMatches("enum State has enum constant(s) GAS,LIQUID"),
+  EXPECT_THAT(StdoutMatches(
+                  "state is a(n) enum State with enum constant(s) GAS,LIQUID"),
               IsTrue());
 }
 

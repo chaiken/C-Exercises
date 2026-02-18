@@ -135,7 +135,9 @@ void limitations() {
          "declarations;\n");
   printf("\tb) doesn't handle multiple comma-separated declarations;\n");
   printf("\tc) includes only the qualifiers defined in ANSI C, not LIBC,\n");
-  printf("\t   kernel extensions, typedef or compiler attributes.\n");
+  printf("\t   kernel extensions, typedef or compiler attributes;\n");
+  printf("\td) does not support restricted keyword or enumeration instance names\n");
+  printf("\t   which appear after enumeration constant lists.\n");
   exit(-1);
 }
 

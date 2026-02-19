@@ -1343,10 +1343,25 @@ TEST_F(ParserSuite, SimpleExpression) {
 }
 
 TEST_F(ParserSuite, PtrExpression) {
-  char inputstr[] = "int* x;";
+  char inputstr[] = "int *x;";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // The output has a trailng space in case there's output after the type.
   EXPECT_THAT(StdoutMatches("x is a(n) pointer(s) to int "), IsTrue());
+}
+
+TEST_F(ParserSuite, RestrictedPtrExpression) {
+  char inputstr[] = "int * restrict x;";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(parser.is_pointer, IsTrue());
+  EXPECT_THAT(parser.have_identifier, IsTrue());
+  // The output has a trailng space in case there's output after the type.
+  EXPECT_THAT(StdoutMatches("x is a(n) restrict pointer(s) to int "), IsTrue());
+}
+
+TEST_F(ParserSuite, RestrictedPtrWithQualifierExpression) {
+  char inputstr[] = "const int * restrict x;";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  EXPECT_THAT(parser.is_pointer, IsFalse());
 }
 
 TEST_F(ParserSuite, QualfiedExpression) {

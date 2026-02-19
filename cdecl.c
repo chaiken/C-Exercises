@@ -81,10 +81,12 @@ struct token {
 struct parser_props {
   bool have_identifier;
   bool have_type;
+  bool have_qualifier;
   bool last_dimension_unspecified;
   bool is_function;
   bool is_enum;
   bool has_enum_constants;
+  bool is_pointer;
   char enumerator_list[MAXTOKENLEN];
   size_t array_dimensions;
   size_t array_lengths;
@@ -100,10 +102,12 @@ struct parser_props {
 void reset_parser(struct parser_props* parser){
   parser->have_identifier = false;
   parser->have_type = false;
+  parser->have_qualifier = false;
   parser->last_dimension_unspecified = true;
   parser->is_function = false;
   parser->is_enum = false;
   parser->has_enum_constants = false;
+  parser->is_pointer = false;
   parser->enumerator_list[0] = '\0';
   parser->array_dimensions = 0;
   parser->array_lengths = 0;
@@ -136,7 +140,7 @@ void limitations() {
   printf("\tb) doesn't handle multiple comma-separated declarations;\n");
   printf("\tc) includes only the qualifiers defined in ANSI C, not LIBC,\n");
   printf("\t   kernel extensions, typedef or compiler attributes;\n");
-  printf("\td) does not support restricted keyword or enumeration instance names\n");
+  printf("\td) does not support enumeration instance names\n");
   printf("\t   which appear after enumeration constant lists.\n");
   exit(-1);
 }
@@ -809,7 +813,19 @@ void finish_token(struct parser_props* parser, const char *offset_decl,
     }
     break;
   case qualifier:
-      __attribute__((fallthrough));
+    if (!strcmp("*", this_token->string)) {
+      parser->is_pointer = true;
+    } else if (!strcmp("restrict", this_token->string)) {
+      if (!parser->is_pointer || parser->have_qualifier) {
+        fprintf(parser->err_stream,
+          "The restrict qualifier only applies to otherwise unqualified pointers.\n");
+	reset_parser(parser);
+	return;
+      }
+    } else {
+      parser->have_qualifier = true;
+    }
+    break;
   case invalid:
       __attribute__((fallthrough));
   default:
@@ -886,10 +902,7 @@ size_t gettoken(struct parser_props* parser, const char *declstring,
     return tokenoffset;
   }
 
-  /*
-   * The token is a single character.  Even stdint types include numerals, they
-   *  do not begin with them.
-   */
+  /* The token is a single character. */
   if ('*' == *(declstring + tokenoffset)) {
     strlcpy(this_token->string, "*", 2);
     tokenoffset++;

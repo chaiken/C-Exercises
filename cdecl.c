@@ -62,10 +62,10 @@ const char *types[] = {"char", "short", "int", "float", "double",
                        "int32_t", "uint64_t", "int64_t"};
 const char *qualifiers[] = {"const", "volatile", "static", "*", "extern",
                             "unsigned", "restrict"};
-enum token_class { invalid = 0, type, qualifier, identifier, length,
+enum token_class { invalid = 0, type, qualifier, identifier, length, typedefn,
                    whitespace };
 const char *kind_names[] = {"invalid", "type", "qualifier", "identifier",
-                            "length", "whitespace" };
+                            "length", "typedefn", "whitespace" };
 
 struct token {
   enum token_class kind;
@@ -85,8 +85,9 @@ struct parser_props {
   bool last_dimension_unspecified;
   bool is_function;
   bool is_enum;
-  bool has_enum_constants;
   bool is_pointer;
+  bool is_typedef;
+  bool has_enum_constants;
   char enumerator_list[MAXTOKENLEN];
   size_t array_dimensions;
   size_t array_lengths;
@@ -106,8 +107,9 @@ void reset_parser(struct parser_props* parser){
   parser->last_dimension_unspecified = true;
   parser->is_function = false;
   parser->is_enum = false;
-  parser->has_enum_constants = false;
   parser->is_pointer = false;
+  parser->is_typedef = false;
+  parser->has_enum_constants = false;
   parser->enumerator_list[0] = '\0';
   parser->array_dimensions = 0;
   parser->array_lengths = 0;
@@ -139,7 +141,7 @@ void limitations() {
          "declarations;\n");
   printf("\tb) doesn't handle multiple comma-separated declarations;\n");
   printf("\tc) includes only the qualifiers defined in ANSI C, not LIBC,\n");
-  printf("\t   kernel extensions, typedef or compiler attributes;\n");
+  printf("\t   kernel extensions or compiler attributes;\n");
   printf("\td) does not support enumeration instance names\n");
   printf("\t   which appear after enumeration constant lists.\n");
   exit(-1);
@@ -355,16 +357,19 @@ enum token_class get_kind(const char *intoken) {
     return whitespace;
   }
 
+  if (!strcmp(intoken, "typedef")) {
+    return typedefn;
+  }
   numel = ARRAY_SIZE(types);
   for (ctr = 0; ctr < numel; ctr++) {
     if (!strcmp(intoken, types[ctr]))
-      return (type);
+      return type;
   }
 
   numel = ARRAY_SIZE(qualifiers);
   for (ctr = 0; ctr < numel; ctr++) {
     if (!strcmp(intoken, qualifiers[ctr]))
-      return (qualifier);
+      return qualifier;
   }
 
   if (is_numeric(intoken)) {
@@ -738,7 +743,6 @@ bool handled_compound_type(const char *progress_ptr, struct token *this_token,
   if (!name_end_ptr) {
     return true;
   }
-
   existing_token_len = strlen(this_token->string);
   this_token->string[existing_token_len] = ' ';
   /* +1 for the space and +1 for terminating NULL */
@@ -747,7 +751,10 @@ bool handled_compound_type(const char *progress_ptr, struct token *this_token,
   }
   j = 0;
   for (i = existing_token_len+1; i < existing_token_len + 1 + strlen(compound_type_name); i++, j++) {
-    /* Reached the end of the compound_type_name, so stop before copying the identifier into the type. */
+    /*
+     * Reached the end of the compound_type_name, so stop before copying the
+     * identifier into the type.
+     */
     if (' ' == compound_type_name[j]) break;
     this_token->string[i] = compound_type_name[j];
   }
@@ -825,6 +832,9 @@ void finish_token(struct parser_props* parser, const char *offset_decl,
     } else {
       parser->have_qualifier = true;
     }
+    break;
+  case typedefn:
+    parser->is_typedef = true;
     break;
   case invalid:
       __attribute__((fallthrough));
@@ -988,7 +998,7 @@ int pop_stack(struct parser_props* parser, bool no_enum_instance) {
    * object to which the pointer points.
    */
   if (!strcmp(parser->stack[stacktop].string, "*")) {
-    fprintf(parser->out_stream, "pointer(s) to ");
+    fprintf(parser->out_stream, "pointer to ");
   } else {
     switch (parser->stack[stacktop].kind) {
     case whitespace:
@@ -1010,7 +1020,7 @@ int pop_stack(struct parser_props* parser, bool no_enum_instance) {
             if (depth) {
               fprintf(parser->out_stream, "and ");
             } else {
-              fprintf(parser->out_stream, "and takes param(s) ");
+              fprintf(parser->out_stream, "and takes param ");
 	    }
             ret = pop_all(cursor);
 	    depth++;
@@ -1025,20 +1035,23 @@ int pop_stack(struct parser_props* parser, bool no_enum_instance) {
 	}
         if (parser->has_enum_constants) {
 	  if (no_enum_instance) {
-	    fprintf(parser->out_stream, "has enum constant(s)");
+	    fprintf(parser->out_stream, "has enum constant");
 	  } else {
-	    fprintf(parser->out_stream, "with enum constant(s)");
+	    fprintf(parser->out_stream, "with enum constant");
 	  }
           fprintf(parser->out_stream, " %s ", parser->enumerator_list);
         }
       break;
     case identifier:
-      if (parser->array_dimensions) {
-        fprintf(parser->out_stream, "%s is an array of ",
-		parser->stack[stacktop].string);
-      } else if (parser->is_function) {
-        fprintf(parser->out_stream, "%s is a function which returns ",
+      fprintf(parser->out_stream, "%s is a(n) ",
 	        parser->stack[stacktop].string);
+      if (parser->is_typedef) {
+        fprintf(parser->out_stream, "alias for ");
+      }
+      if (parser->array_dimensions) {
+        fprintf(parser->out_stream, "array of ");
+      } else if (parser->is_function) {
+        fprintf(parser->out_stream, "function which returns ");
       } else if ((parser->has_enum_constants) && strlen(parser->enumerator_list)
                  &&
                  (strstr(parser->enumerator_list, parser->stack[stacktop].string))) {
@@ -1047,9 +1060,6 @@ int pop_stack(struct parser_props* parser, bool no_enum_instance) {
 	 * name of a enum instance.
 	 */
 	  break;
-      } else {
-        fprintf(parser->out_stream, "%s is a(n) ",
-		parser->stack[stacktop].string);
       }
       break;
     case length:
@@ -1071,6 +1081,8 @@ int pop_stack(struct parser_props* parser, bool no_enum_instance) {
       break;
     case invalid:
       __attribute__((fallthrough));
+    case typedefn:
+      break;
     default:
       fprintf(parser->err_stream, "\nError: element %s is of unknown type %d.\n",
               parser->stack[stacktop].string, parser->stack[stacktop].kind);
@@ -1319,10 +1331,14 @@ size_t load_stack(struct parser_props* parser, char* user_input, bool needs_trun
         strlcpy(user_input, trimmed, MAXTOKENLEN);
         offset += trailing;
       }
+      /* Don't place "typedef" on the stack. */
+      if (!strcmp("typedef", this_token.string)) {
+	continue;
+      }
       if ((type == this_token.kind) && (!strcmp("union", this_token.string) ||
                                         !strcmp("struct", this_token.string) ||
                                         !strcmp("enum", this_token.string))) {
-        if (!handled_compound_type(progress_ptr, &this_token, &offset)) {
+        if (!handled_compound_type(user_input, &this_token, &offset)) {
           free_all_parsers(parser);
           return 0;
         }

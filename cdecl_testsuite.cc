@@ -723,7 +723,7 @@ struct ParserSuite : public Test {
   // save the initial value of output_str and free() that, but memory which
   // glibc allocated will still leak:
   // ==2131242==ERROR: LeakSanitizer: detected memory leaks
-  // Direct leak of 120 byte(s) in 1 object(s) allocated from:
+  // Direct leak of 120 byte in 1 object allocated from:
   // #0 0x7f8587cf4c57 in malloc
   // ../../../../src/libsanitizer/asan/asan_malloc_linux.cpp:69 #1
   // 0x7f8586e896dd in __GI___getdelim libio/iogetdelim.c:65
@@ -946,7 +946,7 @@ TEST_F(ParserSuite, PopAll) {
 
   EXPECT_THAT(pop_all(&parser), Eq(0));
   EXPECT_THAT(StdoutMatches("buffer"), IsTrue());
-  EXPECT_THAT(StdoutMatches("is a(n) pointer(s) to"), IsTrue());
+  EXPECT_THAT(StdoutMatches("is a(n) pointer to"), IsTrue());
   EXPECT_THAT(StdoutMatches("char"), IsTrue());
 }
 
@@ -1294,6 +1294,20 @@ TEST_F(ParserSuite, LegalEnumForwardDeclaration) {
       IsTrue());
 }
 
+TEST_F(ParserSuite, TypedefEnumForwardDeclaration) {
+  char user_input[MAXTOKENLEN];
+  const char *probe = "typedef enum State state;";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input, true);
+  EXPECT_THAT(consumed, Eq(strlen("typedef enum State state")));
+  EXPECT_THAT(parser.is_enum, IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 0 has kind type and string enum State"),
+      IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 1 has kind identifier and string state"),
+      IsTrue());
+}
 TEST_F(ParserSuite, IllegalEnumForwardDeclaration) {
   char user_input[MAXTOKENLEN];
   const char *probe = "enum State;";
@@ -1335,6 +1349,21 @@ TEST_F(ParserSuite, LoadStackOneEnumeratorWithIdentifier) {
   EXPECT_THAT(parser.enumerator_list, StrEq("GAS"));
 }
 
+TEST_F(ParserSuite, LoadStackTypedef) {
+  char user_input[MAXTOKENLEN];
+  const char *probe = "typedef int mm_id_t;";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input, true);
+  EXPECT_THAT(consumed, Eq(strlen(probe) - 1));
+  EXPECT_THAT(parser.is_typedef, IsTrue());
+  EXPECT_THAT(parser.stacklen, Eq(2));
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string int"),
+              IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 1 has kind identifier and string mm_id_t"),
+      IsTrue());
+}
+
 TEST_F(ParserSuite, SimpleExpression) {
   char inputstr[] = "int x;";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
@@ -1346,7 +1375,7 @@ TEST_F(ParserSuite, PtrExpression) {
   char inputstr[] = "int *x;";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // The output has a trailng space in case there's output after the type.
-  EXPECT_THAT(StdoutMatches("x is a(n) pointer(s) to int "), IsTrue());
+  EXPECT_THAT(StdoutMatches("x is a(n) pointer to int "), IsTrue());
 }
 
 TEST_F(ParserSuite, RestrictedPtrExpression) {
@@ -1355,7 +1384,7 @@ TEST_F(ParserSuite, RestrictedPtrExpression) {
   EXPECT_THAT(parser.is_pointer, IsTrue());
   EXPECT_THAT(parser.have_identifier, IsTrue());
   // The output has a trailng space in case there's output after the type.
-  EXPECT_THAT(StdoutMatches("x is a(n) restrict pointer(s) to int "), IsTrue());
+  EXPECT_THAT(StdoutMatches("x is a(n) restrict pointer to int "), IsTrue());
 }
 
 TEST_F(ParserSuite, RestrictedPtrWithQualifierExpression) {
@@ -1374,22 +1403,21 @@ TEST_F(ParserSuite, QualfiedExpression) {
 TEST_F(ParserSuite, ConstPtr) {
   char inputstr[] = "int * const x;";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(StdoutMatches("x is a(n) const pointer(s) to int "), IsTrue());
+  EXPECT_THAT(StdoutMatches("x is a(n) const pointer to int "), IsTrue());
 }
 
 TEST_F(ParserSuite, SimpleArray) {
   char inputstr[] = "const double x[]];";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(parser.array_lengths, Eq(0));
-  EXPECT_THAT(StdoutMatches("x is an array of const double "), IsTrue());
+  EXPECT_THAT(StdoutMatches("x is a(n) array of const double "), IsTrue());
 }
 
 TEST_F(ParserSuite, PtrArray) {
   char inputstr[] = "double* x[]];";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(parser.array_lengths, Eq(0));
-  EXPECT_THAT(StdoutMatches("x is an array of pointer(s) to double "),
-              IsTrue());
+  EXPECT_THAT(StdoutMatches("x is a(n) array of pointer to double "), IsTrue());
 }
 
 TEST_F(ParserSuite, ArrayWithLength) {
@@ -1397,7 +1425,7 @@ TEST_F(ParserSuite, ArrayWithLength) {
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // pop_stack() decrements array_lengths.
   EXPECT_THAT(parser.array_lengths, Eq(0));
-  EXPECT_THAT(StdoutMatches("val is an array of 9 char"), IsTrue());
+  EXPECT_THAT(StdoutMatches("val is a(n) array of 9 char"), IsTrue());
 }
 
 TEST_F(ParserSuite, ArrayWithTwoDimsOneLength) {
@@ -1405,7 +1433,7 @@ TEST_F(ParserSuite, ArrayWithTwoDimsOneLength) {
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // pop_stack() decrements array_lengths.
   EXPECT_THAT(parser.array_lengths, Eq(0));
-  EXPECT_THAT(StdoutMatches("val is an array of 9x? char"), IsTrue());
+  EXPECT_THAT(StdoutMatches("val is a(n) array of 9x? char"), IsTrue());
 }
 
 TEST_F(ParserSuite, ArrayWithTwoLengths) {
@@ -1413,7 +1441,7 @@ TEST_F(ParserSuite, ArrayWithTwoLengths) {
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // pop_stack() decrements array_lengths.
   EXPECT_THAT(parser.array_lengths, Eq(0));
-  EXPECT_THAT(StdoutMatches("val is an array of 9x11 char"), IsTrue());
+  EXPECT_THAT(StdoutMatches("val is a(n) array of 9x11 char"), IsTrue());
 }
 
 TEST_F(ParserSuite, ArrayWithThreeDimTwoLengths) {
@@ -1421,7 +1449,7 @@ TEST_F(ParserSuite, ArrayWithThreeDimTwoLengths) {
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // pop_stack() decrements array_lengths.
   EXPECT_THAT(parser.array_lengths, Eq(0));
-  EXPECT_THAT(StdoutMatches("val is an array of 9x11x? char"), IsTrue());
+  EXPECT_THAT(StdoutMatches("val is a(n) array of 9x11x? char"), IsTrue());
 }
 
 TEST_F(ParserSuite, ArrayWithThreeLengths) {
@@ -1429,7 +1457,7 @@ TEST_F(ParserSuite, ArrayWithThreeLengths) {
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // pop_stack() decrements array_lengths.
   EXPECT_THAT(parser.array_lengths, Eq(0));
-  EXPECT_THAT(StdoutMatches("val is an array of 9x11x6 char"), IsTrue());
+  EXPECT_THAT(StdoutMatches("val is a(n) array of 9x11x6 char"), IsTrue());
 }
 
 TEST_F(ParserSuite, ArrayWithBadLength) {
@@ -1443,7 +1471,7 @@ TEST_F(ParserSuite, SimpleFunctionOutput) {
   char inputstr[] = "double sqrt();";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(parser.has_function_params, IsFalse());
-  EXPECT_THAT(StdoutMatches("sqrt is a function which returns double"),
+  EXPECT_THAT(StdoutMatches("sqrt is a(n) function which returns double"),
               IsTrue());
 }
 
@@ -1452,7 +1480,7 @@ TEST_F(ParserSuite, FunctionOutputOneParam) {
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(parser.has_function_params, IsTrue());
   // clang-format off
-  EXPECT_THAT(StdoutMatches("sqrt is a function which returns double and takes param(s) x is a(n) const double"),
+  EXPECT_THAT(StdoutMatches("sqrt is a(n) function which returns double and takes param x is a(n) const double"),
               IsTrue());
   // clang-format on
 }
@@ -1462,7 +1490,7 @@ TEST_F(ParserSuite, FunctionOutputOneParamQualifier) {
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(parser.has_function_params, IsTrue());
   // clang-format off
-  EXPECT_THAT(StdoutMatches("sqrt is a function which returns volatile double and takes param(s) x is a(n) const double"),
+  EXPECT_THAT(StdoutMatches("sqrt is a(n) function which returns volatile double and takes param x is a(n) const double"),
               IsTrue());
   // clang-format on
 }
@@ -1472,7 +1500,7 @@ TEST_F(ParserSuite, FunctionOutputTwoParams) {
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(parser.has_function_params, IsTrue());
   // clang-format off
-  EXPECT_THAT(StdoutMatches("hash is a function which returns uint64_t and takes param(s) key is a(n) pointer(s) to char and seed is a(n) uint64_t"),
+  EXPECT_THAT(StdoutMatches("hash is a(n) function which returns uint64_t and takes param key is a(n) pointer to char and seed is a(n) uint64_t"),
               IsTrue());
   // clang-format on
 }
@@ -1482,7 +1510,7 @@ TEST_F(ParserSuite, FunctionOutputLeadingWhitespace) {
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(parser.has_function_params, IsTrue());
   // clang-format off
-  EXPECT_THAT(StdoutMatches("sqrt is a function which returns double and takes param(s) x is a(n) const double"),
+  EXPECT_THAT(StdoutMatches("sqrt is a(n) function which returns double and takes param x is a(n) const double"),
               IsTrue());
   // clang-format on
 }
@@ -1492,7 +1520,7 @@ TEST_F(ParserSuite, FunctionOutputNoWhitespace) {
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(parser.has_function_params, IsTrue());
   // clang-format off
-  EXPECT_THAT(StdoutMatches("hash is a function which returns uint64_t and takes param(s) key is a(n) pointer(s) to char and seed is a(n) uint64_t"),
+  EXPECT_THAT(StdoutMatches("hash is a(n) function which returns uint64_t and takes param key is a(n) pointer to char and seed is a(n) uint64_t"),
               IsTrue());
   // clang-format on
 }
@@ -1551,37 +1579,35 @@ TEST_F(ParserSuite, EnumWithIdentifierNoEnumerators) {
 TEST_F(ParserSuite, EnumWithIdentifierOneEnumerator) {
   char inputstr[] = "enum State state {GAS};";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(
-      StdoutMatches("state is a(n) enum State with enum constant(s) GAS"),
-      IsTrue());
+  EXPECT_THAT(StdoutMatches("state is a(n) enum State with enum constant GAS"),
+              IsTrue());
 }
 
 TEST_F(ParserSuite, EnumNoIdentifierThreeEnumerators) {
   char inputstr[] = "enum State {GAS,LIQUID,SOLID};";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(StdoutMatches("enum State has enum constant(s) GAS,LIQUID,SOLID"),
+  EXPECT_THAT(StdoutMatches("enum State has enum constant GAS,LIQUID,SOLID"),
               IsTrue());
 }
 
 TEST_F(ParserSuite, EnumNoIdentifierOneEnumerator) {
   char inputstr[] = "enum State {GAS};";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(StdoutMatches("enum State has enum constant(s) GAS"), IsTrue());
+  EXPECT_THAT(StdoutMatches("enum State has enum constant GAS"), IsTrue());
 }
 
 TEST_F(ParserSuite, EnumNoIdentifierTwoEnumerators) {
   char inputstr[] = "enum State {GAS, LIQUID };";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(StdoutMatches("enum State has enum constant(s) GAS,LIQUID"),
+  EXPECT_THAT(StdoutMatches("enum State has enum constant GAS,LIQUID"),
               IsTrue());
 }
 
 TEST_F(ParserSuite, EnumWithIdentifierBadFormat) {
   char inputstr[] = "enum State state { GAS ,};";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(
-      StdoutMatches("state is a(n) enum State with enum constant(s) GAS"),
-      IsTrue());
+  EXPECT_THAT(StdoutMatches("state is a(n) enum State with enum constant GAS"),
+              IsTrue());
 }
 
 TEST_F(ParserSuite, EnumNoIdentifierCommaMadness) {
@@ -1614,9 +1640,8 @@ TEST_F(ParserSuite, LoadStackOneEnumeratorStrayComma) {
 TEST_F(ParserSuite, LoadStackOneEnumeratorWithAssignment) {
   char inputstr[] = "enum State state { GAS=1,};";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(
-      StdoutMatches("state is a(n) enum State with enum constant(s) GAS"),
-      IsTrue());
+  EXPECT_THAT(StdoutMatches("state is a(n) enum State with enum constant GAS"),
+              IsTrue());
 }
 
 TEST_F(ParserSuite, LoadStackOneEnumeratorWithEndingAssignment) {
@@ -1624,7 +1649,7 @@ TEST_F(ParserSuite, LoadStackOneEnumeratorWithEndingAssignment) {
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(
       StdoutMatches(
-          "state is a(n) enum State with enum constant(s) GAS,LIQUID,SOLID"),
+          "state is a(n) enum State with enum constant GAS,LIQUID,SOLID"),
       IsTrue());
 }
 
@@ -1633,20 +1658,20 @@ TEST_F(ParserSuite, LoadStackOneEnumeratorWitMiddleAssignment) {
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(
       StdoutMatches(
-          "state is a(n) enum State with enum constant(s) GAS,LIQUID,SOLID"),
+          "state is a(n) enum State with enum constant GAS,LIQUID,SOLID"),
       IsTrue());
 }
 
 TEST_F(ParserSuite, LoadStackOneEnumeratorWithAssignmentNoInstanceName) {
   char inputstr[] = "enum State {GAS=1,};";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(StdoutMatches("enum State has enum constant(s) GAS"), IsTrue());
+  EXPECT_THAT(StdoutMatches("enum State has enum constant GAS"), IsTrue());
 }
 
 TEST_F(ParserSuite, LoadStackTwoEnumeratorWithAssignmentNoInstanceName) {
   char inputstr[] = "enum State {GAS=1,LIQUID};";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(StdoutMatches("enum State has enum constant(s) GAS,LIQUID"),
+  EXPECT_THAT(StdoutMatches("enum State has enum constant GAS,LIQUID"),
               IsTrue());
 }
 
@@ -1654,7 +1679,7 @@ TEST_F(ParserSuite,
        LoadStackOneEnumeratorWithTrailingAssignmentNoInstanceName) {
   char inputstr[] = "enum State {GAS,LIQUID=4};";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(StdoutMatches("enum State has enum constant(s) GAS,LIQUID"),
+  EXPECT_THAT(StdoutMatches("enum State has enum constant GAS,LIQUID"),
               IsTrue());
 }
 
@@ -1662,7 +1687,7 @@ TEST_F(ParserSuite,
        LoadStackTwoEnumeratorWithAssignmentInstanceNameWhitespace) {
   char inputstr[] = "enum State {GAS,LIQUID=2 ,};";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(StdoutMatches("enum State has enum constant(s) GAS,LIQUID"),
+  EXPECT_THAT(StdoutMatches("enum State has enum constant GAS,LIQUID"),
               IsTrue());
 }
 
@@ -1670,16 +1695,16 @@ TEST_F(ParserSuite,
        LoadStackTwoEnumeratorWithAssignmentInstanceNameWhitespaceComma) {
   char inputstr[] = "enum State state {GAS, LIQUID = 2,};";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(StdoutMatches(
-                  "state is a(n) enum State with enum constant(s) GAS,LIQUID"),
-              IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("state is a(n) enum State with enum constant GAS,LIQUID"),
+      IsTrue());
 }
 
 TEST_F(ParserSuite,
        LoadStackTwoEnumeratorWithAssignmentInstanceNameWhitespaceComma1) {
   char inputstr[] = "enum State {GAS,LIQUID=2 ,};";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(StdoutMatches("enum State has enum constant(s) GAS,LIQUID"),
+  EXPECT_THAT(StdoutMatches("enum State has enum constant GAS,LIQUID"),
               IsTrue());
 }
 
@@ -1687,7 +1712,38 @@ TEST_F(ParserSuite,
        LoadStackTwoEnumeratorWithAssignmentInstanceNameWhitespaceComma2) {
   char inputstr[] = "enum State {GAS,LIQUID =2,};";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(StdoutMatches("enum State has enum constant(s) GAS,LIQUID"),
+  EXPECT_THAT(StdoutMatches("enum State has enum constant GAS,LIQUID"),
+              IsTrue());
+}
+
+TEST_F(ParserSuite, ParseTypedef) {
+  char inputstr[] = "typedef int mm_id_t;";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("mm_id_t is a(n) alias for int"), IsTrue());
+}
+
+TEST_F(ParserSuite, ParseTypedefArray) {
+  char inputstr[] = "typedef int A[]];";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("A is a(n) alias for array of int"), IsTrue());
+}
+
+TEST_F(ParserSuite, ParseTypedefCompoundType) {
+  char inputstr[] = "typedef struct list_head list;";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  // clang-format off
+  EXPECT_THAT(StdoutMatches("list is a(n) alias for struct list_head"),
+              IsTrue());
+  // clang-format on
+}
+
+TEST_F(ParserSuite, ParseTypedefFunction) {
+  char inputstr[] = "typedef int proc_handler(const struct ctl_table *ctl);";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  // clang-format off
+  EXPECT_THAT(
+      StdoutMatches("proc_handler is a(n) alias for function which returns int and takes param ctl is a(n) pointer to const struct ctl_table"),
+              // clang-format on
               IsTrue());
 }
 

@@ -37,6 +37,11 @@ CPPCC = /usr/bin/g++
 	@echo 'Finished building: $<'
 	@echo ' '
 
+CLANG_TIDY_BINARY=/usr/bin/clang-tidy
+CLANG_TIDY_OPTIONS=--warnings-as-errors --header_filter=.*
+CLANG_TIDY_CLANG_OPTIONS=-std=c++17 -x c++ -I ~/gitsrc/googletest/googletest/include/
+CLANG_TIDY_CHECKS=bugprone,core,cplusplus,cppcoreguidelines,deadcode,modernize,performance,readability,security,unix,apiModeling.StdCLibraryFunctions,apiModeling.google.GTest
+
 # helloc_testsuite.cc says "#include "myapp.c".  Therefore myapp.o is not part
 # of the explicit dependencies of helloc.   myapp.o will not link with -DTESTING
 helloc: helloc_testsuite.o
@@ -91,6 +96,10 @@ cdecl_test: cdecl_testsuite.o cdecl.c
 	make cdecl
 	make cdecl_testsuite.o
 	$(CPPCC) $(CFLAGS) $(LDFLAGS)  -o cdecl_test -I$(GMOCK_HEADERS) cdecl_testsuite.o $(GTESTLIBS) $(GMOCKLIBS)
+
+cdecl-clangtidy: cdecl.c
+	$(CLANG_TIDY_BINARY) $(CLANG_TIDY_OPTIONS) -checks=$(CLANG_TIDY_CHECKS) $^ -- $(CLANG_TIDY_CLANG_OPTIONS)
+
 
 clean:
 	/bin/rm -rf *.o *~ *.d *test *-valgrind palindrome palindrome_test helloc matrix-determinant cdecl cdecl_test kernel-doubly-linked-macros

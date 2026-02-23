@@ -157,7 +157,7 @@ bool is_all_blanks(const char* input) {
       token_copy++;
   }
   // Reached end of the string.
-  if (!strlen(token_copy)) {
+  if (!(token_copy && *token_copy)) {
     return true;
   }
   return false;
@@ -178,7 +178,7 @@ size_t trim_trailing_whitespace(const char* input, char* trimmed) {
    */
   size_t removed = 0;
 
-  bzero(trimmed, MAXTOKENLEN);
+  memset(trimmed, '\0', MAXTOKENLEN);
   if (!input || (0 == strlen(input))) {
     return 0;
   }
@@ -209,7 +209,7 @@ size_t trim_leading_whitespace(const char* input, char* trimmed) {
   _cleanup_(freep) char* saveptr = copy;
   size_t removed = 0;
 
-  bzero(trimmed, MAXTOKENLEN);
+  memset(trimmed, '\0', MAXTOKENLEN);
   if (!input || (0 == strlen(input))) {
     return 0;
   }
@@ -224,7 +224,7 @@ size_t trim_leading_whitespace(const char* input, char* trimmed) {
     removed++;
   }
   /* Copy the non-blank part of the input to the output.*/
-  while (*copy) {
+  while (copy && *copy) {
     *trimmed = *copy;
     trimmed++;
     copy++;
@@ -798,7 +798,7 @@ void finish_token(struct parser_props* parser, const char *offset_decl,
       /* Indicate hard failure. */
       reset_parser(parser);
       this_token->kind = invalid;
-      strcpy(this_token->string, "");
+      strncpy(this_token->string, "\0", 1);
       break;
     }
     /* The first array dimension is accounted for in the identifier block above.
@@ -977,7 +977,8 @@ void push_stack(struct parser_props* parser, struct token* this_token) {
   }
 
   parser->stack[parser->stacklen].kind = this_token->kind;
-  strcpy(parser->stack[parser->stacklen].string, this_token->string);
+  strlcpy(parser->stack[parser->stacklen].string, this_token->string,
+          strlen(this_token->string) + 1);
   parser->stacklen++;
   return;
 }

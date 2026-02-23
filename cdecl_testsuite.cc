@@ -42,13 +42,8 @@ TEST(ProcesStringInputSuite, LeadingDash) {
 }
 
 struct ProcessInputSuite : public Test {
-  ProcessInputSuite()
-      : ftemplate("/tmp/fake_stdin_path.XXXXXX"),
-        fpath(mktemp(const_cast<char *>(ftemplate.c_str()))) {
-    fake_stdin = fopen(fpath, std::string("w+").c_str());
-  }
+  ProcessInputSuite() : fake_stdin(tmpfile()) {}
   ~ProcessInputSuite() override { fclose(fake_stdin); }
-  void TearDown() override { ASSERT_THAT(unlink(fpath), Eq(0)); }
   void WriteStdin(const std::string &input) {
     ASSERT_THAT(fake_stdin, Ne(nullptr));
     // Without the newline, the code will seek past the end of the buffer.
@@ -62,8 +57,6 @@ struct ProcessInputSuite : public Test {
     // Otherwise code will see EOF even though the buffer has content.
     rewind(fake_stdin);
   }
-  std::string ftemplate;
-  char *fpath;
   FILE *fake_stdin;
   char inputstr[MAXTOKENLEN];
 };
@@ -636,7 +629,7 @@ struct ParserSuite : public Test {
     fake_stderr = fopen(fepath, std::string("w+").c_str());
     EXPECT_THAT(fake_stderr, Ne(nullptr));
     this_token.kind = invalid;
-    bzero(this_token.string, MAXTOKENLEN);
+    memset(this_token.string, '\0', MAXTOKENLEN);
     initialize_parser(&parser);
     set_test_streams(&parser, fake_stdout, fake_stderr);
   }
@@ -740,46 +733,46 @@ TEST_F(ParserSuite, Truncation) {
   EXPECT_THAT(strlen(token), Eq(5));
   EXPECT_THAT(token, StrEq("int x"));
 
-  bzero(token, MAXTOKENLEN);
+  memset(token, '\0', MAXTOKENLEN);
   strlcpy(token, "int x   ;", MAXTOKENLEN);
   EXPECT_THAT(truncate_input(&token, &parser), IsTrue());
   EXPECT_THAT(strlen(token), Eq(5));
   EXPECT_THAT(token, StrEq("int x"));
 
-  bzero(token, MAXTOKENLEN);
+  memset(token, '\0', MAXTOKENLEN);
   strlcpy(token, "int x = 2;", MAXTOKENLEN);
   EXPECT_THAT(truncate_input(&token, &parser), IsTrue());
   EXPECT_THAT(strlen(token), Eq(5));
   EXPECT_THAT(token, StrEq("int x"));
 
-  bzero(token, MAXTOKENLEN);
+  memset(token, '\0', MAXTOKENLEN);
   strlcpy(token, "const int x;", MAXTOKENLEN);
   EXPECT_THAT(truncate_input(&token, &parser), IsTrue());
   EXPECT_THAT(strlen(token), Eq(11));
   EXPECT_THAT(token, StrEq("const int x"));
 
-  bzero(token, MAXTOKENLEN);
+  memset(token, '\0', MAXTOKENLEN);
   strlcpy(token, "int x", MAXTOKENLEN);
   EXPECT_THAT(truncate_input(&token, &parser), IsFalse());
   EXPECT_THAT(StderrMatches("Improperly terminated declaration."), IsTrue());
 
-  bzero(token, MAXTOKENLEN);
+  memset(token, '\0', MAXTOKENLEN);
   strlcpy(token, ";int x", MAXTOKENLEN);
   EXPECT_THAT(truncate_input(&token, &parser), IsFalse());
   EXPECT_THAT(StderrMatches("Zero-length input string."), IsTrue());
 
-  bzero(token, MAXTOKENLEN);
+  memset(token, '\0', MAXTOKENLEN);
   strlcpy(token, "   = ", MAXTOKENLEN);
   EXPECT_THAT(truncate_input(&token, &parser), IsFalse());
   EXPECT_THAT(StderrMatches("Zero-length input string."), IsTrue());
 
-  bzero(token, MAXTOKENLEN);
+  memset(token, '\0', MAXTOKENLEN);
   strlcpy(token, "uint32_t f[21];", MAXTOKENLEN);
   EXPECT_THAT(truncate_input(&token, &parser), IsTrue());
   EXPECT_THAT(strlen(token), Eq(strlen("uint32_t f[21]")));
   EXPECT_THAT(token, StrEq("uint32_t f[21]"));
 
-  bzero(token, MAXTOKENLEN);
+  memset(token, '\0', MAXTOKENLEN);
   strlcpy(token, "uint32_t f[2] = {3,4};", MAXTOKENLEN);
   EXPECT_THAT(truncate_input(&token, &parser), IsTrue());
   EXPECT_THAT(strlen(token), Eq(strlen("uint32_t f[2]")));
@@ -1743,8 +1736,8 @@ TEST_F(ParserSuite, ParseTypedefFunction) {
   // clang-format off
   EXPECT_THAT(
       StdoutMatches("proc_handler is a(n) alias for function which returns int and takes param ctl is a(n) pointer to const struct ctl_table"),
-              // clang-format on
-              IsTrue());
+      // clang-format on
+      IsTrue());
 }
 
 TEST_F(ParserSuite, Reorder) {

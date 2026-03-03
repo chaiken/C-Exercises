@@ -618,16 +618,7 @@ bool reset_stream_is_ok(FILE *stream) {
 }
 
 struct ParserSuite : public Test {
-  ParserSuite()
-      : fotemplate("/tmp/fake_stdout_path.XXXXXX"),
-        fetemplate("/tmp/fake_stderr_path.XXXXXX"),
-        fopath(mktemp(const_cast<char *>(fotemplate.c_str()))),
-        fepath(mktemp(const_cast<char *>(fetemplate.c_str()))) {
-    // Opening with "r+" means that the file is not created if it doesn't exist.
-    fake_stdout = fopen(fopath, std::string("w+").c_str());
-    EXPECT_THAT(fake_stdout, Ne(nullptr));
-    fake_stderr = fopen(fepath, std::string("w+").c_str());
-    EXPECT_THAT(fake_stderr, Ne(nullptr));
+  ParserSuite() : fake_stdout(tmpfile()), fake_stderr(tmpfile()) {
     this_token.kind = invalid;
     memset(this_token.string, '\0', MAXTOKENLEN);
     initialize_parser(&parser);
@@ -637,10 +628,6 @@ struct ParserSuite : public Test {
   ~ParserSuite() override {
     fclose(fake_stdout);
     fclose(fake_stderr);
-  }
-  void TearDown() override {
-    ASSERT_THAT(unlink(fopath), Eq(0));
-    ASSERT_THAT(unlink(fepath), Eq(0));
   }
   bool StdoutMatches(const std::string &expected) {
     // Cannot have an assertion in a googletest function which returns a value,
@@ -703,10 +690,6 @@ struct ParserSuite : public Test {
     return false;
   }
   struct parser_props parser;
-  std::string fotemplate;
-  std::string fetemplate;
-  char *fopath;
-  char *fepath;
   FILE *fake_stdout;
   FILE *fake_stderr;
   // The following causes a memory leak:

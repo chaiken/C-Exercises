@@ -1299,7 +1299,8 @@ TEST_F(ParserSuite, LoadStackOneEnumeratorNoIdentifier) {
   const char *probe = "enum State {GAS};";
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input, true);
-  EXPECT_THAT(consumed, Eq(strlen("enum State {GAS")));
+  // -1 because ';' is not counted.
+  EXPECT_THAT(consumed, Eq(strlen(probe) - 1));
   EXPECT_THAT(parser.is_enum, IsTrue());
   EXPECT_THAT(parser.stacklen, Eq(1));
   EXPECT_THAT(
@@ -1313,7 +1314,7 @@ TEST_F(ParserSuite, LoadStackOneEnumeratorWithIdentifier) {
   const char *probe = "enum State state {GAS};";
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input, true);
-  EXPECT_THAT(consumed, Eq(strlen("enum State state {GAS")));
+  EXPECT_THAT(consumed, Eq(strlen(probe) - 1));
   EXPECT_THAT(parser.is_enum, IsTrue());
   EXPECT_THAT(parser.stacklen, Eq(2));
   EXPECT_THAT(

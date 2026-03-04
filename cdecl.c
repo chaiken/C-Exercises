@@ -143,7 +143,8 @@ void limitations() {
   printf("\tc) includes only the qualifiers defined in ANSI C, not LIBC,\n");
   printf("\t   kernel extensions or compiler attributes;\n");
   printf("\td) does not support enumeration instance names\n");
-  printf("\t   which appear after enumeration constant lists.\n");
+  printf("\t   which appear after enumeration constant lists;\n");
+  printf("\te) does not support atomic types.\n");
   exit(-1);
 }
 
@@ -1291,7 +1292,9 @@ bool process_enum_constants(struct parser_props *parser, char* user_input, size_
     }
     strlcat(parser->enumerator_list, this_token.string, list_capacity);
     commapos = strchr(progress_ptr, ',');
-    progress_ptr = user_input + *offset + 1;
+    /* Go past comma or end brace. */
+    (*offset)++;
+    progress_ptr = user_input + *offset;
   } while (commapos && (commapos < endbracep) && (progress_ptr < endbracep));
   return true;
 }
@@ -1378,7 +1381,7 @@ size_t load_stack(struct parser_props* parser, char* user_input, bool needs_trun
     }
     break;
   }
-  if (!parser->have_identifier) {
+  if (!(parser->have_identifier || parser->has_enum_constants)) {
     free_all_parsers(parser);
     return 0;
   }

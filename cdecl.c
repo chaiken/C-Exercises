@@ -1229,6 +1229,9 @@ void process_array_dimensions(struct parser_props* parser, char* user_input,
       }
     }
   } while ((NULL != next_dim) && (*offset <= strlen(user_input)));
+  if (parser->array_dimensions == parser->array_lengths) {
+      parser->last_dimension_unspecified = false;
+  }
 }
 
 /*
@@ -1299,6 +1302,44 @@ bool process_enum_constants(struct parser_props *parser, char* user_input, size_
   return true;
 }
 
+/* Order the stacked token for the convenience of the pop_stack() function. */
+void reorder_stacks(struct parser_props *parser) {
+  reorder_array_identifier_and_lengths(parser);
+  reorder_qualifier_and_type(parser);
+  struct parser_props *next_parser = parser->next;
+  while (next_parser) {
+    reorder_array_identifier_and_lengths(next_parser);
+    reorder_qualifier_and_type(next_parser);
+    next_parser = next_parser->next;
+  }
+}
+
+/* Deal with arrays, functions and enumeration constants. */
+bool handled_extended_parsing(struct parser_props *parser, char *user_input,
+                              size_t *offset, struct token *this_token) {
+  if (parser->array_dimensions) {
+    process_array_dimensions(parser, user_input, offset, this_token);
+  }
+  /* Either the parameter list is "()" and there are no new characters
+   * processed, or there are new function parameters,
+   * each handled by a new parser.
+   */
+  if (parser->has_function_params) {
+    /* Move past the already-processed characters and '('. */
+    if (!process_function_params(parser, user_input, offset)) {
+      reset_parser(parser);
+      return false;
+    }
+  }
+  if (parser->has_enum_constants) {
+      if (!process_enum_constants(parser, user_input, offset)) {
+	reset_parser(parser);
+	return false;
+      }
+  }
+  return true;
+}
+
 // Only the tests make use of the return value.
 size_t load_stack(struct parser_props* parser, char* user_input, bool needs_truncation) {
   struct token this_token;
@@ -1364,45 +1405,18 @@ size_t load_stack(struct parser_props* parser, char* user_input, bool needs_trun
 	break;
       }
       push_stack(parser, &this_token);
-    }
-    if (parser->array_dimensions) {
-      process_array_dimensions(parser, user_input, &offset, &this_token);
-    }
-    /* Either the parameter list is "()" and there are no new characters
-     * processed, or there are new function parameters,
-     * each handled by a new parser.
-     */
-    if (parser->has_function_params) {
-      /* Move past the already-processed characters and '('. */
-      if (!process_function_params(parser, user_input, &offset)) {
-	reset_parser(parser);
-	return 0;
-      }
-    }
+    } /* while !parser->have_identifier */
     break;
-  }
+  } /* while offset <= strlen(user_input) */
   if (!(parser->have_identifier || parser->has_enum_constants)) {
     free_all_parsers(parser);
     return 0;
   }
-  if (parser->array_dimensions &&
-      (parser->array_dimensions == parser->array_lengths)) {
-    parser->last_dimension_unspecified = false;
+  if (!handled_extended_parsing(parser, user_input, &offset, &this_token)) {
+    reset_parser(parser);
+    return 0;
   }
-  reorder_array_identifier_and_lengths(parser);
-  reorder_qualifier_and_type(parser);
-  if (parser->has_enum_constants) {
-      if (!process_enum_constants(parser, user_input, &offset)) {
-	reset_parser(parser);
-	return 0;
-      }
-  }
-  struct parser_props *next_parser = parser->next;
-  while (next_parser) {
-    reorder_array_identifier_and_lengths(next_parser);
-    reorder_qualifier_and_type(next_parser);
-    next_parser = next_parser->next;
-  }
+  reorder_stacks(parser);
 #ifdef TESTING
   showstack(parser->stack, parser->stacklen, parser->out_stream);
 #endif

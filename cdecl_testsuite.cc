@@ -1326,6 +1326,23 @@ TEST_F(ParserSuite, LoadStackOneEnumeratorWithIdentifier) {
   EXPECT_THAT(parser.enumerator_list, StrEq("GAS"));
 }
 
+TEST_F(ParserSuite, LoadStackOneEnumeratorWithTrailingIdentifier) {
+  char user_input[MAXTOKENLEN];
+  const char *probe = "enum State {GAS} state;";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input, true);
+  EXPECT_THAT(consumed, Eq(strlen(probe) - 1));
+  EXPECT_THAT(parser.is_enum, IsTrue());
+  EXPECT_THAT(parser.stacklen, Eq(2));
+  EXPECT_THAT(
+      StdoutMatches("Token number 0 has kind type and string enum State"),
+      IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 1 has kind identifier and string state"),
+      IsTrue());
+  EXPECT_THAT(parser.enumerator_list, StrEq("GAS"));
+}
+
 TEST_F(ParserSuite, LoadStackTypedef) {
   char user_input[MAXTOKENLEN];
   const char *probe = "typedef int mm_id_t;";
@@ -1560,6 +1577,20 @@ TEST_F(ParserSuite, EnumWithIdentifierOneEnumerator) {
               IsTrue());
 }
 
+TEST_F(ParserSuite, EnumWithIdentifierOneEnumeratorTrailingInstanceName) {
+  char inputstr[] = "enum State {GAS} state;";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("state is a(n) enum State with enum constant GAS"),
+              IsTrue());
+}
+
+TEST_F(ParserSuite, EnumWithIdentifierOneEnumeratorDoubleInstanceNames) {
+  char inputstr[] = "enum State state {GAS} foo;";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("state is a(n) enum State with enum constant GAS"),
+              IsTrue());
+}
+
 TEST_F(ParserSuite, EnumNoIdentifierThreeEnumerators) {
   char inputstr[] = "enum State {GAS,LIQUID,SOLID};";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
@@ -1602,6 +1633,15 @@ TEST_F(ParserSuite, LoadStackForwardDeclarationBadDelim) {
               IsTrue());
   // clang-format on
   EXPECT_THAT(parser.is_enum, IsFalse());
+}
+
+TEST_F(ParserSuite, LoadStackForwardDeclarationBadDelim2) {
+  char inputstr[] = "enum State } state;";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  // clang-format off
+  EXPECT_THAT(StderrMatches("Input lacks required identifier or type element."),
+              IsTrue());
+  // clang-format on
 }
 
 TEST_F(ParserSuite, LoadStackOneEnumeratorStrayComma) {

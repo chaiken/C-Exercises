@@ -142,9 +142,7 @@ void limitations() {
   printf("\tb) doesn't handle multiple comma-separated declarations;\n");
   printf("\tc) includes only the qualifiers defined in ANSI C, not LIBC,\n");
   printf("\t   kernel extensions or compiler attributes;\n");
-  printf("\td) does not support enumeration instance names\n");
-  printf("\t   which appear after enumeration constant lists;\n");
-  printf("\te) does not support atomic types.\n");
+  printf("\td) does not support atomic types.\n");
   exit(-1);
 }
 
@@ -958,7 +956,7 @@ size_t gettoken(struct parser_props* parser, const char *declstring,
     this_token->string[ctr] = nextchar;
     ctr++;
     tokenoffset++;
-  }
+  } /* end of character-copying for-loop */
   /* Overwrite any trailing dash with a NUL. */
   if ('-' == this_token->string[ctr-1]) {
     this_token->string[ctr-1] = '\0';
@@ -1235,12 +1233,41 @@ void process_array_dimensions(struct parser_props* parser, char* user_input,
 }
 
 /*
+ * Handle the case of an enumeration instance name which follows the enumeration
+ * constant list.
+ */
+void handle_trailing_enum_instance_name(struct parser_props *parser,
+                                        char* user_input, size_t *offset) {
+  const char *endbracep = strchr(user_input, '}');
+  struct token this_token;
+  /*
+   * There can only be one enumeration instance name.
+   * If the first identifier on the stack is not an enumerator, it's an
+   * enumeration instance name which precedes the enumeration constant list.
+   */
+  if ((*offset < strlen(user_input)) &&
+      first_identifier_is_enumerator(parser, user_input, *offset)) {
+    this_token.kind = invalid;
+    strcpy(this_token.string, "");
+    /*
+     * Advance processing to the char after the brace which closes the
+     * enumerator list.
+     */
+    (*offset) += (endbracep - (user_input + *offset)) + 1;
+    (*offset) += gettoken(parser, user_input + *offset, &this_token);
+    push_stack(parser, &this_token);
+  }
+}
+
+/*
  * check_for_enum_constants() has performed limited sanity-checking for
  * enumeration constants and set has_enum_constants = true, but there still may
  * not be any.  Return false if an error is encountered.  Otherwise, add
- * any enumeration constants to the enumerator_list and return true.
+ * any enumeration constants to the enumerator_list, check for a trailing
+ * instance name, and return true.
  */
-bool process_enum_constants(struct parser_props *parser, char* user_input, size_t *offset) {
+bool process_enum_constants(struct parser_props *parser, char* user_input,
+                            size_t *offset) {
   struct token this_token;
   char *progress_ptr = user_input + *offset;
   const char *startbracep = strchr(progress_ptr, '{');
@@ -1299,6 +1326,7 @@ bool process_enum_constants(struct parser_props *parser, char* user_input, size_
     (*offset)++;
     progress_ptr = user_input + *offset;
   } while (commapos && (commapos < endbracep) && (progress_ptr < endbracep));
+  handle_trailing_enum_instance_name(parser, user_input, offset);
   return true;
 }
 
@@ -1340,7 +1368,7 @@ bool handled_extended_parsing(struct parser_props *parser, char *user_input,
   return true;
 }
 
-// Only the tests make use of the return value.
+/* Only the tests make use of the return value. */
 size_t load_stack(struct parser_props* parser, char* user_input, bool needs_truncation) {
   struct token this_token;
   char trimmed[MAXTOKENLEN];
@@ -1408,7 +1436,7 @@ size_t load_stack(struct parser_props* parser, char* user_input, bool needs_trun
     } /* while !parser->have_identifier */
     break;
   } /* while offset <= strlen(user_input) */
-  if (!(parser->have_identifier || parser->has_enum_constants)) {
+  if (!parser->have_identifier) {
     free_all_parsers(parser);
     return 0;
   }
@@ -1467,7 +1495,7 @@ size_t process_stdin(char stdinp[], FILE *input_stream) {
     /* A line from stdin which will always end in '\n'. */
     char *newline_pos = strstr(raw_input, "\n");
     if (NULL == newline_pos) {
-      // Input was truncated by fgets().
+      /* Input was truncated by fgets(). */
       fprintf(stderr, "Input from stdin must be less than %u characters long.\n",
 	      MAXTOKENLEN-1);
     } else {

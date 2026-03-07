@@ -675,7 +675,6 @@ bool first_identifier_is_enumerator(const struct parser_props *parser,
  * While "enum State;" is invalid, the following are correct:
  * 0. enum State state; 1. enum State { SOLID, LIQUID };
  * 2. enum State { SOLID = 1, LIQUID = 3};
- * Not supported by this program:
  * 3. enum State { SOLID, LIQUID} state;
  */
 bool check_for_enum_constants(struct parser_props *parser,

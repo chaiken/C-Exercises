@@ -465,11 +465,11 @@ void free_all_parsers(struct parser_props *parser) {
 }
 
 /*
- * function_params_cleanup() is the error handler for process_function_params().
- * It frees subsidiary parsers linked through the top-level one and resets the
- * top-level one to signal failure to calling code.
+ * subsidiary_parsers_cleanup() is the error handler for
+ * process_function_params(). It frees subsidiary parsers linked through the
+ * top-level one and resets the top-level one to signal failure to calling code.
  */
-void function_params_cleanup(void *parserp) {
+void subsidiary_parsers_cleanup(void *parserp) {
   if (!parserp || !(*(struct parser_props ***)parserp) ||
       !(**(struct parser_props***)parserp)) return;
   struct parser_props *parser = **((struct parser_props ***)parserp);
@@ -497,8 +497,8 @@ bool process_function_params(struct parser_props *parser, char* user_input,
    * https://github.com/linux4microchip/linux/blob/4d72aeabedfa202d12869e52c40eeabc5401c839/
    * drivers/irqchip/irq-renesas-rzg2l.c#L596
    */
-  _cleanup_(function_params_cleanup)struct parser_props **dummy_parserp = &parser;
-
+  _cleanup_(subsidiary_parsers_cleanup)struct parser_props **dummy_parserp
+        = &parser;
   if (!parser->has_function_params) {
     return false;
   }

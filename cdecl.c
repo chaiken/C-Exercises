@@ -85,6 +85,7 @@ struct parser_props {
   bool last_dimension_unspecified;
   bool is_function;
   bool is_enum;
+  bool is_struct;
   bool is_pointer;
   bool is_typedef;
   bool has_enum_constants;
@@ -92,6 +93,7 @@ struct parser_props {
   size_t array_dimensions;
   size_t array_lengths;
   bool has_function_params;
+  bool has_struct_members;
   size_t stacklen;
   struct token stack[MAXTOKENS];
   struct parser_props *prev;
@@ -107,6 +109,7 @@ void reset_parser(struct parser_props* parser){
   parser->last_dimension_unspecified = true;
   parser->is_function = false;
   parser->is_enum = false;
+  parser->is_struct = false;
   parser->is_pointer = false;
   parser->is_typedef = false;
   parser->has_enum_constants = false;
@@ -114,6 +117,7 @@ void reset_parser(struct parser_props* parser){
   parser->array_dimensions = 0;
   parser->array_lengths = 0;
   parser->has_function_params = false;
+  parser->has_struct_members = false;
   parser->stacklen = 0;
   parser->stack[0].kind = invalid;
   parser->prev = NULL;
@@ -137,12 +141,14 @@ void usage(void) {
 void limitations() {
   printf("Input must be shorter than %u characters, not including quotation marks and semicolon.\n",
 	 MAXTOKENLEN);
-  printf("Known deficiencies:\n\ta) doesn't handle multi-line struct and union "
+  printf("Known deficiencies:\n\ta) doesn't handle multi-line union "
          "declarations;\n");
   printf("\tb) doesn't handle multiple comma-separated declarations;\n");
   printf("\tc) includes only the qualifiers defined in ANSI C, not LIBC,\n");
   printf("\t   kernel extensions or compiler attributes;\n");
-  printf("\td) does not support atomic types.\n");
+  printf("\te) does not support atomic types.\n");
+  printf("\tf) does not support structs without instance names which proceed the"
+         "member list.\n");;
   exit(-1);
 }
 
@@ -199,8 +205,8 @@ size_t trim_trailing_whitespace(const char* input, char* trimmed) {
 
 /*
  * Return value is the number of trimmed characters.
- * trimmed is the same as input except that it will end in a non-whitespace character.
- * If there are no non-whitespace characters, trimmed will be empty.
+ * trimmed is the same as input except that it will start with a non-whitespace
+ * character. If there are no non-whitespace characters, trimmed will be empty.
  * Caller must allocate trimmed.
  */
 size_t trim_leading_whitespace(const char* input, char* trimmed) {
@@ -325,8 +331,13 @@ bool truncate_input(char** input, const struct parser_props *parser) {
    * with ';' or ')'.
    */
   if (!input_end) {
-    input_end = strstr(*input, ";");
-   /* Input with two semicolons or ')' could reach this point. */
+    /*
+    * When the declaration only includes one semicolon, strchr() and strrchr()
+    * produce the same result.  struct and union definitions may contain
+    * arbitrarily many semicolons.
+    */
+    input_end = strrchr(*input, ';');
+    /* Input with two semicolons or ')' could reach this point. */
     if (input_end == *input) {
       fprintf(parser->err_stream, "Zero-length input string.\n");
       return false;
@@ -464,95 +475,6 @@ void free_all_parsers(struct parser_props *parser) {
   }
 }
 
-/*
- * subsidiary_parsers_cleanup() is the error handler for
- * process_function_params(). It frees subsidiary parsers linked through the
- * top-level one and resets the top-level one to signal failure to calling code.
- */
-void subsidiary_parsers_cleanup(void *parserp) {
-  if (!parserp || !(*(struct parser_props ***)parserp) ||
-      !(**(struct parser_props***)parserp)) return;
-  struct parser_props *parser = **((struct parser_props ***)parserp);
-  free_all_parsers(parser);
-  reset_parser(parser);
-}
-
-/*
- * Spawn a new parser for each function parameter and link it into a
- * list whose head is the top-level parser.  Note that the function
- * name is on the original parser's stack.
- */
-bool process_function_params(struct parser_props *parser, char* user_input,
-                             size_t *offset) {
-  struct parser_props *params_parser;
-  struct parser_props *tail_parser = parser;
-  size_t increm = 0;
-  /* +1 to go past '('. */
-  const char *progress_ptr = user_input + *offset + 1;
-  _cleanup_(freep) char *next_param = (char *)malloc(MAXTOKENLEN);
-  /*
-   * Create a pointer which the code doesn't otherwise need as a peg
-   * on which to hang the function's error handler.  The approach is
-   * inspired by rzg2l_irqc_common_init() in
-   * https://github.com/linux4microchip/linux/blob/4d72aeabedfa202d12869e52c40eeabc5401c839/
-   * drivers/irqchip/irq-renesas-rzg2l.c#L596
-   */
-  _cleanup_(subsidiary_parsers_cleanup)struct parser_props **dummy_parserp
-        = &parser;
-  if (!parser->has_function_params) {
-    return false;
-  }
-  while (strlen(progress_ptr)) {
-    // Freed in pop_stack().
-    params_parser = make_parser(tail_parser);
-    /* There may be more than one function parameter yet to process. */
-    if (strchr(progress_ptr, ',')) {
-      if (!overwrite_trailing_delim(&next_param, progress_ptr, ',')) {
-        fprintf(parser->err_stream, "Failed to process list function args %s\n", next_param);
-      }
-      increm = load_stack(params_parser, next_param, false);
-      if (!increm) {
-        fprintf(parser->err_stream, "Failed to load list function parameter %s\n", next_param);
-	return false;
-      }
-      *offset += increm;
-      /* +1 to go past ','. The comma is not included in offset. */
-      progress_ptr += increm + 1;
-#ifdef TESTING
-      show_parser_list(parser);
-#endif
-    } else {
-      /*
-       * There is only one remaining parameter.
-       * Pass progress_ptr rather than user_input since the params parser only
-       * processes what's inside the parentheses.
-       */
-      if (!overwrite_trailing_delim(&next_param, progress_ptr, ')')) {
-        fprintf(parser->err_stream, "Failed to process last function arg\n");
-	return false;
-      }
-      increm = load_stack(params_parser, next_param, false);
-      if (!increm) {
-        fprintf(parser->err_stream, "Failed to load last function arg %s\n", next_param);
-        return false;
-      }
-      /* 1 is for ')'. */
-      *offset += increm + 1;
-#ifdef TESTING
-  show_parser_list(parser);
-#endif
-       break;
-    }
-    tail_parser = params_parser;
-  }
-  /*
-   * Prevent the error handler from running by, essentially, putting the
-   * dummy_parserp flag down.
-   */
-  dummy_parserp = NULL;
-  return true;
-}
-
 /* Do not allow any characters in identifiers besides a-z, '_' and '-'. */
 static bool is_name_char(const char c) {
   if (isalpha(c) || ('-' == c) || ('_' == c)) {
@@ -570,6 +492,106 @@ static bool has_any_name_chars(const char *s) {
     }
   }
   return false;
+}
+
+/*
+ * subsidiary_parsers_cleanup() is the error handler for
+ * process_params(). It frees subsidiary parsers linked through the top-level
+ * one and resets the top-level one to signal failure to calling code.
+ */
+void subsidiary_parsers_cleanup(void *parserp) {
+  if (!parserp || !(*(struct parser_props ***)parserp) ||
+      !(**(struct parser_props***)parserp)) return;
+  struct parser_props *parser = **((struct parser_props ***)parserp);
+  free_all_parsers(parser);
+  reset_parser(parser);
+}
+
+/*
+ * Spawn a new parser for each function parameter and link it into a
+ * list whose head is the top-level parser.  Note that the function
+ * name is on the original parser's stack.
+ */
+bool process_params(struct parser_props *parser, char* user_input,
+                             size_t *offset) {
+  struct parser_props *params_parser;
+  struct parser_props *tail_parser = parser;
+  size_t increm = 0;
+  char *progress_ptr = user_input + *offset;
+  _cleanup_(freep) char *next_param = (char *)malloc(MAXTOKENLEN);
+  /*
+   * Create a pointer which the code doesn't otherwise need as a peg
+   * on which to hang the function's error handler.  The approach is
+   * inspired by rzg2l_irqc_common_init() in
+   * https://github.com/linux4microchip/linux/blob/4d72aeabedfa202d12869e52c40eeabc5401c839/
+   * drivers/irqchip/irq-renesas-rzg2l.c#L596
+   */
+  _cleanup_(subsidiary_parsers_cleanup) struct parser_props **dummy_parserp
+        = &parser;
+  _cleanup_(freep) char *next_member = (char *)malloc(MAXTOKENLEN);
+  const char *err_string = parser->has_function_params ? "function parameter" : "struct member";
+  const char separator = parser->has_function_params ? ',' : ';';
+  const char delimiter = parser->has_function_params ? ')' : '}';
+  if (!parser->has_function_params && !parser->has_struct_members) {
+    return true;
+  }
+  /* +1 to go past leading delimiter after first removing whitespace. */
+  *offset += trim_leading_whitespace(progress_ptr, next_member) + 1;
+  progress_ptr = user_input + *offset;
+  while (strlen(progress_ptr)) {
+    if (has_any_name_chars(progress_ptr)) {
+      // Freed in pop_stack().
+      params_parser = make_parser(tail_parser);
+    } else {
+      /* Parsing is done. */
+      break;
+    }
+    /* There may be more than one function parameter yet to process. */
+    if (strchr(progress_ptr, separator)) {
+      if (!overwrite_trailing_delim(&next_param, progress_ptr, separator)) {
+        fprintf(parser->err_stream, "Failed to process list %s %s\n", err_string, next_param);
+      }
+      increm = load_stack(params_parser, next_param, false);
+      if (!increm) {
+        fprintf(parser->err_stream, "Failed to load list %s %s\n", err_string, next_param);
+	return false;
+      }
+      *offset += increm;
+      /* +1 to go past separator. The delimiter is not included in offset. */
+      progress_ptr += increm + 1;
+#ifdef TESTING
+      show_parser_list(parser);
+#endif
+    } else {
+      /*
+       * There is only one remaining parameter.
+       * Pass progress_ptr rather than user_input since the params parser only
+       * processes what's inside the parentheses.
+       */
+      if (!overwrite_trailing_delim(&next_param, progress_ptr, delimiter)) {
+        fprintf(parser->err_stream, "Failed to process last %s\n", err_string);
+	return false;
+      }
+      increm = load_stack(params_parser, next_param, false);
+      if (!increm) {
+        fprintf(parser->err_stream, "Failed to load last %s %s\n", err_string, next_param);
+        return false;
+      }
+      /* 1 is for ')'. */
+      *offset += increm + 1;
+#ifdef TESTING
+  show_parser_list(parser);
+#endif
+       break;
+    }
+    tail_parser = params_parser;
+  }
+  /*
+   * Prevent the error handler from running by, essentially, putting the
+   * dummy_parserp flag down.
+   */
+  dummy_parserp = NULL;
+  return true;
 }
 
 const char typechars[] = {'1', '2', '3', '4', '6', '8', 'a', 'b', 'c', 'd', 'e',
@@ -622,6 +644,40 @@ bool check_for_function_parameters(struct parser_props *parser,
    * There is possibly a type within the parentheses and thus a function
    * parameter. */
   parser->has_function_params = true;
+  return true;
+}
+
+/* A true return value means no errors. */
+bool check_for_struct_members(struct parser_props *parser,
+				   const char *offset_decl) {
+  size_t num_blanks = 0;
+  while (isblank(*(offset_decl + num_blanks))) num_blanks++;
+  const char *member_start = offset_decl + num_blanks;
+  if (parser->is_enum || parser->has_struct_members) {
+    return true;
+  }
+  if ('{' != *(member_start)) {
+    return true;
+  }
+  const char *params_end = strstr(member_start, "}");
+  if (!params_end) {
+    reset_parser(parser);
+    fprintf(parser->err_stream, "Malformed struct declaration.\n");
+    return false;
+  }
+  parser->is_struct = true;
+  /* No struct members since types are at least 3 chars long. */
+  if (3 > (params_end - member_start)) {
+    return true;
+  }
+  if (is_all_blanks(member_start)) {
+    return true;
+  }
+  /*
+   * There is possibly a type within the parentheses and thus a struct
+   * member.
+   */
+  parser->has_struct_members = true;
   return true;
 }
 
@@ -682,6 +738,9 @@ bool check_for_enum_constants(struct parser_props *parser,
   const char *spacep = strstr(offset_decl, " ");
   const char *startbracep = strstr(offset_decl, "{");
   const char *endbracep  = strstr(offset_decl, "}");
+  if (parser->has_struct_members) {
+    return true;
+  }
 
   /*
    * If the declaration is not an enum, or we've already found enum_constants,
@@ -778,6 +837,7 @@ void finish_token(struct parser_props* parser, const char *offset_decl,
     if ((!parser->have_type) ||
 	(!check_for_array_dimensions(parser, offset_decl)) ||
 	(!check_for_function_parameters(parser, offset_decl)) ||
+	(!check_for_struct_members(parser, offset_decl)) ||
 	(!check_for_enum_constants(parser, offset_decl))) {
       /* Indicate hard failure. */
       reset_parser(parser);
@@ -789,6 +849,9 @@ void finish_token(struct parser_props* parser, const char *offset_decl,
     parser->have_type = true;
     if (!strcmp("enum",this_token->string)) {
       parser->is_enum = true;
+    }
+    if (!strcmp("struct",this_token->string)) {
+      parser->is_struct = true;
     }
     break;
   case length:
@@ -927,11 +990,11 @@ size_t gettoken(struct parser_props* parser, const char *declstring,
        * parsing unless we are processing an enum with an enumerator list.
        */
       if (!is_name_char(nextchar)) {
-        if (parser->is_enum) {
-	  if ((('{' == nextchar) || ('=' == nextchar) ||
+        if ((('{' == nextchar) || ('=' == nextchar) ||
 	       (isdigit(nextchar) || isblank(nextchar))) &&
 		(startbracep &&
 		 (startbracep <= (declstring +  tokenoffset)))) {
+          if (parser->is_enum) {
             /*
              * Setting has_enum_constants prevents check_for_enumerators() from
 	     * running later.
@@ -939,6 +1002,9 @@ size_t gettoken(struct parser_props* parser, const char *declstring,
              parser->has_enum_constants = true;
              tokenoffset++;
              continue;
+          }
+          if (parser->is_struct) {
+             parser->has_struct_members = true;
           }
         }
         break;
@@ -1020,6 +1086,26 @@ int pop_stack(struct parser_props* parser, bool no_enum_instance) {
               fprintf(parser->out_stream, "and ");
             } else {
               fprintf(parser->out_stream, "and takes param ");
+	    }
+            ret = pop_all(cursor);
+	    depth++;
+            struct parser_props *save = cursor->next;
+#ifdef TESTING
+            fprintf(stderr, "pop_stack(): freeing %p\n", cursor);
+#endif
+            free(cursor);
+	    cursor = save;
+	    if (ret) return ret;
+          }
+	}
+      if(parser->has_struct_members) {
+          struct parser_props *cursor = parser->next;
+	  size_t depth = 0;
+          while (cursor && cursor->stacklen) {
+            if (depth) {
+              fprintf(parser->out_stream, "and ");
+            } else {
+              fprintf(parser->out_stream, "and has members ");
 	    }
             ret = pop_all(cursor);
 	    depth++;
@@ -1342,23 +1428,21 @@ void reorder_stacks(struct parser_props *parser) {
 }
 
 /* Deal with arrays, functions and enumeration constants. */
+  /* Either function parameter list is "()" and there are no new characters
+   * processed, or there are new function parameters,
+   * each handled by a new parser.  For structs, "{}" is illegal.
+   */
 bool handled_extended_parsing(struct parser_props *parser, char *user_input,
                               size_t *offset, struct token *this_token) {
   if (parser->array_dimensions) {
     process_array_dimensions(parser, user_input, offset, this_token);
-  }
-  /* Either the parameter list is "()" and there are no new characters
-   * processed, or there are new function parameters,
-   * each handled by a new parser.
-   */
-  if (parser->has_function_params) {
+  } else if (parser->has_function_params || parser->has_struct_members) {
     /* Move past the already-processed characters and '('. */
-    if (!process_function_params(parser, user_input, offset)) {
+    if (!process_params(parser, user_input, offset)) {
       reset_parser(parser);
       return false;
     }
-  }
-  if (parser->has_enum_constants) {
+  } else if (parser->has_enum_constants) {
       if (!process_enum_constants(parser, user_input, offset)) {
 	reset_parser(parser);
 	return false;
@@ -1465,7 +1549,8 @@ bool input_parsing_successful(struct parser_props *parser, char inputstr[]) {
     free_all_parsers(parser);
     return false;
   }
-  if ((!parser->have_type) || (!parser->have_identifier && (!strlen(parser->enumerator_list)))) {
+  if ((!parser->have_type) || (!parser->have_identifier &&
+                               (!strlen(parser->enumerator_list) || !parser->has_struct_members))) {
     fprintf(parser->err_stream, "Input lacks required identifier or type element.\n");
     free_all_parsers(parser);
     return false;

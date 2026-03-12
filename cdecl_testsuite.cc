@@ -1770,6 +1770,15 @@ TEST_F(ParserSuite,
               IsTrue());
 }
 
+TEST_F(ParserSuite, LoadStackTwoStructMembers) {
+  char inputstr[] = "struct node nodelist {int payload; struct node *next;};";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("nodelist is a(n) struct node and has members payload is "
+                    "a(n) int and next is a(n) pointer to struct node"),
+      IsTrue());
+}
+
 TEST_F(ParserSuite, ParseTypedef) {
   char inputstr[] = "typedef int mm_id_t;";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());

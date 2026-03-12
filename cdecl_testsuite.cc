@@ -936,6 +936,15 @@ TEST_F(ParserSuite, ProcessStructMembersOneMember) {
   free_all_parsers(&parser);
 }
 
+TEST_F(ParserSuite, LoadStackTwoStructMembers) {
+  char inputstr[] = "struct node nodelist {int payload; struct node *next;};";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("nodelist is a(n) struct node and has members payload is "
+                    "a(n) int and next is a(n) pointer to struct node"),
+      IsTrue());
+}
+
 TEST_F(ParserSuite, PopEmpty) {
   EXPECT_THAT(pop_stack(&parser, true), Eq(-ENODATA));
   EXPECT_THAT(StderrMatches("Attempt to pop empty stack."), IsTrue());
@@ -1768,15 +1777,6 @@ TEST_F(ParserSuite,
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("enum State has enum constant GAS,LIQUID"),
               IsTrue());
-}
-
-TEST_F(ParserSuite, LoadStackTwoStructMembers) {
-  char inputstr[] = "struct node nodelist {int payload; struct node *next;};";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(
-      StdoutMatches("nodelist is a(n) struct node and has members payload is "
-                    "a(n) int and next is a(n) pointer to struct node"),
-      IsTrue());
 }
 
 TEST_F(ParserSuite, ParseTypedef) {

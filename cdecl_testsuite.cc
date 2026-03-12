@@ -773,9 +773,9 @@ TEST_F(ParserSuite, ProcessFunctionParamsOneParam) {
   parser.has_function_params = true;
   strlcpy(user_input, query, strlen(query) + 1);
 
-  process_params(&parser, user_input, &offset);
+  process_secondary_params(&parser, user_input, &offset);
 
-  // When process_params() runs, the first parser has already handled
+  // When process_secondary_params() runs, the first parser has already handled
   // all the text before the opening parentheses.
   EXPECT_THAT(parser.stacklen, Eq(0));
   EXPECT_THAT(offset, Eq(strlen("double sqrt(double val)")));
@@ -800,7 +800,7 @@ TEST_F(ParserSuite, ProcessFunctionParamsOneParamBadDelim) {
   parser.has_function_params = true;
   strlcpy(user_input, query, strlen(query) + 1);
 
-  process_params(&parser, user_input, &offset);
+  process_secondary_params(&parser, user_input, &offset);
   ASSERT_THAT(parser.next, IsNull());
   EXPECT_THAT(StderrMatches("Failed to process last function parameter"),
               IsTrue());
@@ -815,7 +815,7 @@ TEST_F(ParserSuite, ProcessFunctionParamsTwoParams) {
   parser.has_function_params = true;
   strlcpy(user_input, query, strlen(query) + 1);
 
-  process_params(&parser, user_input, &offset);
+  process_secondary_params(&parser, user_input, &offset);
   ASSERT_THAT(parser.next, Not(IsNull()));
 
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string char"),
@@ -848,7 +848,7 @@ TEST_F(ParserSuite, ProcessFunctionParamsStrayComma) {
   parser.has_function_params = true;
   strlcpy(user_input, query, strlen(query) + 1);
 
-  EXPECT_THAT(process_params(&parser, user_input, &offset), IsTrue());
+  EXPECT_THAT(process_secondary_params(&parser, user_input, &offset), IsTrue());
   ASSERT_THAT(parser.next, Not(IsNull()));
   free_all_parsers(&parser);
 }
@@ -862,7 +862,7 @@ TEST_F(ParserSuite, ProcessFunctionParamsStrayMiddleComma) {
   parser.has_function_params = true;
   strlcpy(user_input, query, strlen(query) + 1);
 
-  process_params(&parser, user_input, &offset);
+  process_secondary_params(&parser, user_input, &offset);
   ASSERT_THAT(parser.next, IsNull());
   EXPECT_THAT(StderrMatches("Failed to load list function parameter"),
               IsTrue());
@@ -877,7 +877,7 @@ TEST_F(ParserSuite, ProcessFunctionParamsLeadingWhitespace) {
   parser.has_function_params = true;
   strlcpy(user_input, query, strlen(query) + 1);
 
-  process_params(&parser, user_input, &offset);
+  process_secondary_params(&parser, user_input, &offset);
   ASSERT_THAT(parser.next, Not(IsNull()));
 
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string char"),
@@ -911,9 +911,9 @@ TEST_F(ParserSuite, ProcessStructMembersOneMember) {
   parser.has_struct_members = true;
   strlcpy(user_input, query, strlen(query) + 1);
 
-  process_params(&parser, user_input, &offset);
+  process_secondary_params(&parser, user_input, &offset);
 
-  // When process_params() runs, the first parser has already handled
+  // When process_secondary_params() runs, the first parser has already handled
   // all the text before the opening parentheses.
   EXPECT_THAT(parser.stacklen, Eq(0));
   EXPECT_THAT(offset, Eq(strlen("struct node nodelist {int payload")));

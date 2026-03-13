@@ -91,8 +91,7 @@ bool check_for_enum_constants(struct parser_props *parser,
 size_t trim_leading_whitespace(const char *input, char *trimmed);
 size_t trim_trailing_whitespace(const char *input, char *trimmed);
 void elide_assignments(char **input);
-bool overwrite_trailing_delim(char **output, const char *input,
-                              const char delim);
+bool handle_trailing_delim(char **output, const char *input, const char delim);
 bool truncate_input(char **input, const struct parser_props *parser);
 
 /* debugging functions */
@@ -107,8 +106,8 @@ bool handled_compound_type(const char *progress_ptr, struct token *this_token,
 bool all_identifiers_are_enum_constants(const struct parser_props *parser);
 bool first_identifier_is_enumerator(const struct parser_props *parser,
                                     const char *user_input, size_t offset);
-void handle_trailing_enum_instance_name(struct parser_props *parser,
-                                        char *user_input, size_t *offset);
+void handle_trailing_instance_name(struct parser_props *parser,
+                                   char *user_input, size_t *offset);
 bool process_secondary_params(struct parser_props *parser, char *user_input,
                               size_t *offset);
 size_t process_array_length(struct parser_props *parser,

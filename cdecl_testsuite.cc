@@ -438,23 +438,29 @@ TEST_F(TokenizerSuite, Push2ndElement) {
 }
 
 // c_str() and unique_ptr.get() are both r-values.
-TEST(OverwriteTrailingDelimSuite, InputOk) {
+TEST(HandleTrailingDelimSuite, InputOk) {
   _cleanup_(freep) char *output = (char *)malloc(MAXTOKENLEN);
   const char *input = "double val)";
-  EXPECT_THAT(overwrite_trailing_delim(&output, input, ')'), IsTrue());
+  EXPECT_THAT(handle_trailing_delim(&output, input, ')'), IsTrue());
   EXPECT_THAT(output, StrEq("double val"));
 }
 
-TEST(OverwriteTrailingDelimSuite, MissingDelim) {
+TEST(HandleTrailingDelimSuite, MissingDelim) {
   _cleanup_(freep) char *output = (char *)malloc(MAXTOKENLEN);
   const char *input = "double val";
-  EXPECT_THAT(overwrite_trailing_delim(&output, input, ')'), IsFalse());
+  EXPECT_THAT(handle_trailing_delim(&output, input, ')'), IsFalse());
 }
 
-TEST(OverwriteTrailingDelimSuite, OnlyDelim) {
+TEST(HandleTrailingDelimSuite, OnlyDelim) {
   _cleanup_(freep) char *output = (char *)malloc(MAXTOKENLEN);
   const char *input = ")";
-  EXPECT_THAT(overwrite_trailing_delim(&output, input, ')'), IsTrue());
+  EXPECT_THAT(handle_trailing_delim(&output, input, ')'), IsTrue());
+}
+
+TEST(HandleTrailingDelimSuite, DelimWithSpaces) {
+  _cleanup_(freep) char *output = (char *)malloc(MAXTOKENLEN);
+  const char *input = "struct node *next; } ";
+  EXPECT_THAT(handle_trailing_delim(&output, input, '}'), IsTrue());
 }
 
 /* finish_token() observes "enum " and sets parser.is_enum = true. */
@@ -902,7 +908,7 @@ TEST_F(ParserSuite, ProcessFunctionParamsLeadingWhitespace) {
   }
 }
 
-TEST_F(ParserSuite, ProcessStructMembersOneMember) {
+TEST_F(ParserSuite, ProcessStructMembersOneMemberWithInstanceName) {
   char user_input[MAXTOKENLEN];
   const char *query = "struct node nodelist {int payload;}";
   // The following characters were processed by the first parser.
@@ -917,9 +923,8 @@ TEST_F(ParserSuite, ProcessStructMembersOneMember) {
   // When process_secondary_params() runs, the first parser has already handled
   // all the text before the opening parentheses.
   EXPECT_THAT(parser.stacklen, Eq(0));
-  EXPECT_THAT(offset, Eq(strlen("struct node nodelist {int payload")));
-  EXPECT_THAT(user_input + offset, StrEq(";}"));
-  EXPECT_THAT(parser.is_struct, IsTrue());
+  EXPECT_THAT(offset, Eq(strlen("struct node nodelist {int payload};")));
+  EXPECT_THAT(user_input + offset, StrEq(""));
   EXPECT_THAT(parser.is_function, IsFalse());
   EXPECT_THAT(parser.is_enum, IsFalse());
   ASSERT_THAT(parser.next, Not(IsNull()));
@@ -1153,9 +1158,10 @@ TEST_F(ParserSuite, LoadStackParensTerminatorOneFunctionParam) {
   char user_input[MAXTOKENLEN];
   const char *probe = "uint64_t hash(char *str);";
   strlcpy(user_input, probe, strlen(probe) + 1);
-  // Final ')' terminates processing.
   EXPECT_THAT(load_stack(&parser, user_input, true),
               Eq(strlen("uint64_t hash(char *str)")));
+  EXPECT_THAT(parser.is_function, IsTrue());
+  EXPECT_THAT(parser.has_function_params, IsTrue());
   ASSERT_THAT(parser.next, Not(IsNull()));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string char"),
               IsTrue());
@@ -1177,9 +1183,44 @@ TEST_F(ParserSuite, LoadStackCommaTerminatorFunction) {
   char user_input[MAXTOKENLEN];
   const char *probe = "uint64_t hash(char *str, uint64_t seed);";
   strlcpy(user_input, probe, strlen(probe) + 1);
-  // The ',' is not included in the accounting.
+  // The ',' is not included in the accounting because handle_trailing_delim()
+  // overwrites it with NULL.
   EXPECT_THAT(load_stack(&parser, user_input, true),
               Eq(strlen("uint64_t hash(char *str, uint64_t seed)") - 1));
+  show_parser_list(&parser);
+  ASSERT_THAT(parser.next, Not(IsNull()));
+  EXPECT_THAT(parser.next->next, Not(IsNull()));
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string uint64_t"),
+              IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 1 has kind identifier and string seed"),
+      IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string char"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 1 has kind qualifier and string *"),
+              IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 2 has kind identifier and string str"),
+      IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string uint64_t"),
+              IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 1 has kind identifier and string hash"),
+      IsTrue());
+  // Otherwise freed by pop_all().
+  free(parser.next->next);
+  free(parser.next);
+}
+
+TEST_F(ParserSuite, LoadStackCommaTerminatorFunctionSpaces) {
+  char user_input[MAXTOKENLEN];
+  const char *probe = "uint64_t hash( char *str ,  uint64_t seed ,);";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  // The first ',' is not included in the accounting.
+  // When parsing reaches " ,)" the call to has_any_name_chars() in
+  // process_secondary_params() triggers an immediate return.
+  EXPECT_THAT(load_stack(&parser, user_input, true),
+              Eq(strlen("uint64_t hash( char *str ,  uint64_t seed)") - 3));
   show_parser_list(&parser);
   ASSERT_THAT(parser.next, Not(IsNull()));
   EXPECT_THAT(parser.next->next, Not(IsNull()));
@@ -1849,13 +1890,50 @@ TEST_F(ParserSuite,
               IsTrue());
 }
 
-TEST_F(ParserSuite, ParseTwoStructMembersWithInstanceName) {
+TEST_F(ParserSuite, ParseStructTwoMembersWithInstanceName) {
   char inputstr[] = "struct node nodelist {int payload; struct node *next;};";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
   EXPECT_THAT(
-      StdoutMatches("nodelist is a(n) struct node and has members payload is a(n) int and next is a(n) pointer to struct node"),
+      StdoutMatches("nodelist is a(n) struct node which has member(s) payload is a(n) int and next is a(n) pointer to struct node"),
       IsTrue());
+  // clang-format on
+}
+
+TEST_F(ParserSuite, ParseStructTwoMembersTrailingInstanceName) {
+  char inputstr[] = "struct node {int payload; struct node *next;} nodelist;";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  // clang-format off
+  EXPECT_THAT(
+      StdoutMatches("nodelist is a(n) struct node which has member(s) payload is a(n) int and next is a(n) pointer to struct node"),
+      IsTrue());
+  // clang-format on
+}
+
+TEST_F(ParserSuite, ParseStructTwoMembersNoInstanceName) {
+  char inputstr[] = "struct node {int payload; struct node *next;};";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  // clang-format off
+  EXPECT_THAT(StdoutMatches("struct node has member(s) payload is a(n) int and next is a(n) pointer to struct node"),
+              IsTrue());
+  // clang-format on
+}
+
+TEST_F(ParserSuite, ParseStructTwoMembersNoInstanceNameSpaces) {
+  char inputstr[] = "struct node  { int payload; struct node *next; };";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  // clang-format off
+  EXPECT_THAT(StdoutMatches("struct node has member(s) payload is a(n) int and next is a(n) pointer to struct node"),
+              IsTrue());
+  // clang-format on
+}
+
+TEST_F(ParserSuite, ParseStructTwoMembersTrailingInstanceNameNoSpaces) {
+  char inputstr[] = "struct node {int payload;struct node *next;}nodelist;";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  // clang-format off
+  EXPECT_THAT(StdoutMatches("nodelist is a(n) struct node which has member(s) payload is a(n) int and next is a(n) pointer to struct node"),
+              IsTrue());
   // clang-format on
 }
 

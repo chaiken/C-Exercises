@@ -92,10 +92,7 @@ void limitations() {
   printf("\tc) includes only the qualifiers defined in ANSI C, not LIBC,\n");
   printf("\t   kernel extensions or compiler attributes;\n");
   printf("\te) does not support atomic types.\n");
-  printf(
-      "\tf) does not support structs without instance names which proceed the"
-      "member list.\n");
-  ;
+  printf("\tf) does not support pointers to pointers.\n");
   exit(-1);
 }
 
@@ -458,17 +455,30 @@ void elide_assignments(char **input) {
   }
 }
 
-bool overwrite_trailing_delim(char **output, const char *input,
-                              const char delim) {
+bool handle_trailing_delim(char **output, const char *input, const char delim) {
   const char *param_end = strchr(input, delim);
+  const char *param_start;
+  size_t param_len = 0;
+
   if (!param_end) {
     return false;
   }
-  size_t param_len = param_end - input;
+  /*
+   * There is a leading delimiter.   Overwriting it directly with NULL would
+   * result in an empty string.
+   */
+  if (input == param_end) {
+    param_start = input + 1;
+    param_len = strlen(input) - 1;
+  } else {
+    /*
+     * There is a trailing delimiter, so just overwrite it with NULL.
+     */
+    param_start = input;
+    param_len = param_end - input;
+  }
   /* Copy the entire input, as otherwise there is no trailing NULL. */
-  strncpy(*output, input, param_len + 2);
-  /* Overwrite the delimiter with a NULL. */
-  *(*output + param_len) = '\0';
+  strlcpy(*output, param_start, param_len + 1);
   return true;
 }
 
@@ -692,29 +702,37 @@ bool first_identifier_is_enumerator(const struct parser_props *parser,
 }
 
 /*
- * Handle the case of an enumeration instance name which follows the enumeration
- * constant list.
+ * Handle the case of an enumeration or struct instance name which
+ * follows the enumeration constant or struct member list.
  */
-void handle_trailing_enum_instance_name(struct parser_props *parser,
-                                        char *user_input, size_t *offset) {
+void handle_trailing_instance_name(struct parser_props *parser,
+                                   char *user_input, size_t *offset) {
   const char *endbracep = strchr(user_input, '}');
   struct token this_token;
+  if (!endbracep)
+    return;
   /*
-   * There can only be one enumeration instance name.
-   * If the first identifier on the stack is not an enumerator, it's an
-   * enumeration instance name which precedes the enumeration constant list.
+   * There can only be one instance name.  If the first identifier on
+   * the stack is not an enumeration constant, it's an enumeration
+   * instance name which precedes the enumeration constant list.
    */
-  if ((*offset < strlen(user_input)) &&
-      first_identifier_is_enumerator(parser, user_input, *offset)) {
-    this_token.kind = invalid;
-    strcpy(this_token.string, "");
-    /*
-     * Advance processing to the char after the brace which closes the
-     * enumerator list.
-     */
-    (*offset) += (endbracep - (user_input + *offset)) + 1;
-    (*offset) += gettoken(parser, user_input + *offset, &this_token);
-    push_stack(parser, &this_token);
+  if (*offset < strlen(user_input)) {
+    if ((parser->is_enum &&
+         first_identifier_is_enumerator(parser, user_input, *offset)) ||
+        (!parser->have_identifier && parser->has_struct_members)) {
+      this_token.kind = invalid;
+      strcpy(this_token.string, "");
+      /*
+       * Advance processing to the char after the brace which closes the
+       * enumerator list.
+       */
+      (*offset) += (endbracep - (user_input + *offset)) + 1;
+      (*offset) += gettoken(parser, user_input + *offset, &this_token);
+      if ((invalid == this_token.kind) || !strlen(this_token.string)) {
+        return;
+      }
+      push_stack(parser, &this_token);
+    }
   }
 }
 
@@ -758,9 +776,12 @@ bool process_secondary_params(struct parser_props *parser, char *user_input,
       /* Parsing is done. */
       break;
     }
-    /* There may be more than one function parameter yet to process. */
+    /*
+     * There may be more than one function parameter or struct member yet to
+     * process.
+     */
     if (strchr(progress_ptr, separator)) {
-      if (!overwrite_trailing_delim(&next_param, progress_ptr, separator)) {
+      if (!handle_trailing_delim(&next_param, progress_ptr, separator)) {
         fprintf(parser->err_stream, "Failed to process list %s %s\n",
                 err_string, next_param);
       }
@@ -780,9 +801,9 @@ bool process_secondary_params(struct parser_props *parser, char *user_input,
       /*
        * There is only one remaining parameter.
        * Pass progress_ptr rather than user_input since the params parser only
-       * processes what's inside the parentheses.
+       * processes what's inside the delimiters.
        */
-      if (!overwrite_trailing_delim(&next_param, progress_ptr, delimiter)) {
+      if (!handle_trailing_delim(&next_param, progress_ptr, delimiter)) {
         fprintf(parser->err_stream, "Failed to process last %s\n", err_string);
         return false;
       }
@@ -806,6 +827,7 @@ bool process_secondary_params(struct parser_props *parser, char *user_input,
    * dummy_parserp flag down.
    */
   dummy_parserp = NULL;
+  handle_trailing_instance_name(parser, user_input, offset);
   return true;
 }
 
@@ -939,7 +961,7 @@ bool process_enum_constants(struct parser_props *parser, char *user_input,
     (*offset)++;
     progress_ptr = user_input + *offset;
   } while (commapos && (commapos < endbracep) && (progress_ptr < endbracep));
-  handle_trailing_enum_instance_name(parser, user_input, offset);
+  handle_trailing_instance_name(parser, user_input, offset);
   return true;
 }
 
@@ -1119,11 +1141,14 @@ int pop_stack(struct parser_props *parser, bool no_enum_instance) {
       if (parser->has_struct_members) {
         struct parser_props *cursor = parser->next;
         size_t depth = 0;
+        if (parser->have_identifier) {
+          fprintf(parser->out_stream, "which ");
+        }
         while (cursor && cursor->stacklen) {
           if (depth) {
             fprintf(parser->out_stream, "and ");
           } else {
-            fprintf(parser->out_stream, "and has members ");
+            fprintf(parser->out_stream, "has member(s) ");
           }
           ret = pop_all(cursor);
           depth++;
@@ -1335,6 +1360,7 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
              * running later.
              */
             parser->has_enum_constants = true;
+            /* Move past '}'. */
             tokenoffset++;
             continue;
           }
@@ -1373,18 +1399,30 @@ void finish_token(struct parser_props *parser, const char *offset_decl,
                   struct token *this_token, const size_t ctr) {
   this_token->string[ctr + 1] = '\0';
   this_token->kind = get_kind(this_token->string);
+  if (parser->is_struct && !check_for_struct_members(parser, offset_decl)) {
+    reset_parser(parser);
+    return;
+  }
   switch (this_token->kind) {
   case identifier:
-    if ((!parser->have_type) ||
+    parser->have_identifier = true;
+    if (!parser->have_type ||
         (!check_for_array_dimensions(parser, offset_decl)) ||
         (!check_for_function_parameters(parser, offset_decl)) ||
-        (!check_for_struct_members(parser, offset_decl)) ||
         (!check_for_enum_constants(parser, offset_decl))) {
+      /*
+       * The current parser is a subsidiary one.  Failing here prevents
+       * processing of trailing struct instance names. Its parent parser may
+       * have a type and identifier already.  Rely on the subsequent check in
+       * input_parsing_successful() to catch incomplete declarations.
+       */
+      if (parser->prev) {
+        break;
+      }
       /* Indicate hard failure. */
       reset_parser(parser);
       return;
     }
-    parser->have_identifier = true;
     break;
   case type:
     parser->have_type = true;
@@ -1532,8 +1570,11 @@ size_t load_stack(struct parser_props *parser, char *user_input,
     break;
   } /* while offset <= strlen(user_input) */
   if (!parser->have_identifier) {
-    free_all_parsers(parser);
-    return 0;
+    /* As with enumerators, the instance name of a struct is optional. */
+    if (!parser->has_struct_members) {
+      free_all_parsers(parser);
+      return 0;
+    }
   }
   if (!handled_extended_parsing(parser, user_input, &offset, &this_token)) {
     reset_parser(parser);
@@ -1565,7 +1606,7 @@ bool input_parsing_successful(struct parser_props *parser, char inputstr[]) {
   }
   if ((!parser->have_type) ||
       (!parser->have_identifier &&
-       (!strlen(parser->enumerator_list) || !parser->has_struct_members))) {
+       (!strlen(parser->enumerator_list) && !parser->has_struct_members))) {
     fprintf(parser->err_stream,
             "Input lacks required identifier or type element.\n");
     free_all_parsers(parser);

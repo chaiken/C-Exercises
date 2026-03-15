@@ -531,18 +531,38 @@ bool truncate_input(char **input, const struct parser_props *parser) {
 void show_parser_list(const struct parser_props *parser) {
   struct parser_props *pnext = parser->next;
   if (!pnext) {
-    fprintf(stderr, "\nNo subsidiary parsers.\n");
+    fprintf(parser->err_stream, "\nNo subsidiary parsers.\n");
     return;
   }
   /* The list head is a stack allocation. */
-  fprintf(stderr, "HEAD: %p-->", parser);
+  fprintf(parser->err_stream, "HEAD: %p-->", parser);
   while (pnext) {
-    fprintf(stderr, "%p", pnext);
+    fprintf(parser->err_stream, "%p", pnext);
     pnext = pnext->next;
     if (pnext) {
-      fprintf(stderr, "-->");
+      fprintf(parser->err_stream, "-->");
     } else {
-      fprintf(stderr, "\n");
+      fprintf(parser->err_stream, "\n");
+      break;
+    }
+  }
+}
+
+void show_parser_reverse_list(const struct parser_props *parser) {
+  struct parser_props *pprev = parser->prev;
+  if (!pprev) {
+    fprintf(parser->err_stream, "\nNo previous parsers.\n");
+    return;
+  }
+  /* The list head is a stack allocation. */
+  fprintf(parser->err_stream, "HEAD: %p-->", parser);
+  while (pprev) {
+    fprintf(parser->err_stream, "%p", pprev);
+    pprev = pprev->prev;
+    if (pprev) {
+      fprintf(parser->err_stream, "-->");
+    } else {
+      fprintf(parser->err_stream, "\n");
       break;
     }
   }

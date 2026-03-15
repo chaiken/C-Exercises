@@ -4,6 +4,7 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
+#include <iostream>
 #include <string>
 
 #define TESTING
@@ -1048,6 +1049,55 @@ TEST_F(ParserSuite, Showstack) {
       StdoutMatches("Token number 1 has kind qualifier and string const"),
       IsTrue());
   showstack(&parser.stack[0], parser.stacklen, stdout);
+}
+
+TEST_F(ParserSuite, ShowParsers) {
+  // Create and check the parser list.
+  _cleanup_(freep) auto parser1 = make_parser(&parser);
+  ASSERT_THAT(parser1, Not(IsNull()));
+  _cleanup_(freep) auto parser2 = make_parser(parser1);
+  ASSERT_THAT(parser2, Not(IsNull()));
+  EXPECT_THAT(parser1->prev, Eq(&parser));
+  EXPECT_THAT(parser.next->next, Eq(parser2));
+  EXPECT_THAT(parser1->next, Eq(parser2));
+  EXPECT_THAT(parser2->prev, Eq(parser1));
+  EXPECT_THAT(parser2->prev->prev, Eq(&parser));
+
+  show_parser_list(&parser);
+
+  const std::string descender{"-->"};
+  const std::string head{"HEAD: "};
+  std::ostringstream oss0{};
+  oss0 << &parser;
+  std::ostringstream oss1{};
+  oss1 << parser1;
+  std::ostringstream oss2{};
+  oss2 << parser2;
+  EXPECT_THAT(StderrMatches(head) && StderrMatches(oss0.str() + descender),
+              IsTrue());
+  EXPECT_THAT(StderrMatches(descender + oss1.str()), IsTrue());
+  EXPECT_THAT(StderrMatches(descender + oss2.str()), IsTrue());
+}
+
+TEST_F(ParserSuite, ShowParsersReverse) {
+  // Create and check the parser list.
+  _cleanup_(freep) auto parser1 = make_parser(&parser);
+  _cleanup_(freep) auto parser2 = make_parser(parser1);
+
+  show_parser_reverse_list(parser2);
+
+  const std::string descender{"-->"};
+  const std::string head{"HEAD: "};
+  std::ostringstream oss0{};
+  oss0 << &parser;
+  std::ostringstream oss1{};
+  oss1 << parser1;
+  std::ostringstream oss2{};
+  oss2 << parser2;
+  EXPECT_THAT(StderrMatches(head) && StderrMatches(oss2.str() + descender),
+              IsTrue());
+  EXPECT_THAT(StderrMatches(descender + oss1.str()), IsTrue());
+  EXPECT_THAT(StderrMatches(descender + oss0.str()), IsTrue());
 }
 
 TEST_F(ParserSuite, LoadStackWorks) {

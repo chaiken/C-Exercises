@@ -35,6 +35,9 @@ helloc
 *.out
 *.app
 
+# GDB artifacts
+*gud*
+
 *~
 *cscope*
 *.txt

@@ -554,13 +554,13 @@ void show_parser_reverse_list(const struct parser_props *parser) {
     fprintf(parser->err_stream, "\nNo previous parsers.\n");
     return;
   }
-  /* The list head is a stack allocation. */
-  fprintf(parser->err_stream, "HEAD: %p-->", parser);
+  /* The list tail is a stack allocation. */
+  fprintf(parser->err_stream, "TAIL: %p<--", parser);
   while (pprev) {
     fprintf(parser->err_stream, "%p", pprev);
     pprev = pprev->prev;
     if (pprev) {
-      fprintf(parser->err_stream, "-->");
+      fprintf(parser->err_stream, "<--");
     } else {
       fprintf(parser->err_stream, "\n");
       break;

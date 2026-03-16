@@ -1053,9 +1053,9 @@ TEST_F(ParserSuite, Showstack) {
 
 TEST_F(ParserSuite, ShowParsers) {
   // Create and check the parser list.
-  _cleanup_(freep) auto parser1 = make_parser(&parser);
+  _cleanup_(freep) struct parser_props *parser1 = make_parser(&parser);
   ASSERT_THAT(parser1, Not(IsNull()));
-  _cleanup_(freep) auto parser2 = make_parser(parser1);
+  _cleanup_(freep) struct parser_props *parser2 = make_parser(parser1);
   ASSERT_THAT(parser2, Not(IsNull()));
   EXPECT_THAT(parser1->prev, Eq(&parser));
   EXPECT_THAT(parser.next->next, Eq(parser2));
@@ -1081,20 +1081,20 @@ TEST_F(ParserSuite, ShowParsers) {
 
 TEST_F(ParserSuite, ShowParsersReverse) {
   // Create and check the parser list.
-  _cleanup_(freep) auto parser1 = make_parser(&parser);
-  _cleanup_(freep) auto parser2 = make_parser(parser1);
+  _cleanup_(freep) struct parser_props *parser1 = make_parser(&parser);
+  _cleanup_(freep) struct parser_props *parser2 = make_parser(parser1);
 
   show_parser_reverse_list(parser2);
 
-  const std::string descender{"-->"};
-  const std::string head{"HEAD: "};
+  const std::string descender{"<--"};
+  const std::string tail{"TAIL: "};
   std::ostringstream oss0{};
   oss0 << &parser;
   std::ostringstream oss1{};
   oss1 << parser1;
   std::ostringstream oss2{};
   oss2 << parser2;
-  EXPECT_THAT(StderrMatches(head) && StderrMatches(oss2.str() + descender),
+  EXPECT_THAT(StderrMatches(tail) && StderrMatches(oss2.str() + descender),
               IsTrue());
   EXPECT_THAT(StderrMatches(descender + oss1.str()), IsTrue());
   EXPECT_THAT(StderrMatches(descender + oss0.str()), IsTrue());

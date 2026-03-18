@@ -1476,6 +1476,20 @@ TEST_F(ParserSuite, ParsePtrExpression) {
   EXPECT_THAT(StdoutMatches("x is a(n) pointer to int "), IsTrue());
 }
 
+TEST_F(ParserSuite, ParsePtrExpressionWithSpace) {
+  char inputstr[] = "int * x;";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  // The output has a trailng space in case there's output after the type.
+  EXPECT_THAT(StdoutMatches("x is a(n) pointer to int "), IsTrue());
+}
+
+TEST_F(ParserSuite, ParsePtrExpressionAlternate) {
+  char inputstr[] = "int* x;";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  // The output has a trailng space in case there's output after the type.
+  EXPECT_THAT(StdoutMatches("x is a(n) pointer to int "), IsTrue());
+}
+
 TEST_F(ParserSuite, ParseRestrictedPtrExpression) {
   char inputstr[] = "int * restrict x;";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());

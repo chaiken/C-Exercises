@@ -1471,6 +1471,131 @@ TEST_F(ParserSuite, LoadStackOneEnumeratorWithTrailingIdentifier) {
   EXPECT_THAT(parser.enumerator_list, StrEq("GAS"));
 }
 
+TEST_F(ParserSuite, LoadStackSimpleStruct) {
+  char user_input[MAXTOKENLEN];
+  const char *probe =
+      "struct node nodelist { int payload; struct node *next;};";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input, true);
+  // The -1 is needed because the middle ';' is overwritten in
+  // handle_trailing_delim() and not counted.  ";};" is omitted because of the
+  // has_any_name_chars() test in process_secondary_params().
+  EXPECT_THAT(
+      consumed,
+      Eq(strlen("struct node nodelist { int payload; struct node *next") - 1));
+  EXPECT_THAT(parser.has_struct_members, IsTrue());
+  EXPECT_THAT(parser.stacklen, Eq(2));
+  EXPECT_THAT(
+      StdoutMatches("Token number 0 has kind type and string struct node"),
+      IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 1 has kind identifier and string nodelist"),
+      IsTrue());
+
+  ASSERT_THAT(parser.next, Not(IsNull()));
+  EXPECT_THAT(parser.next->stacklen, Eq(2));
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string int"),
+              IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 1 has kind identifier and string payload"),
+      IsTrue());
+
+  ASSERT_THAT(parser.next->next, Not(IsNull()));
+  EXPECT_THAT(parser.next->next->stacklen, Eq(3));
+  EXPECT_THAT(
+      StdoutMatches("Token number 0 has kind type and string struct node"),
+      IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 1 has kind qualifier and string *"),
+              IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 2 has kind identifier and string next"),
+      IsTrue());
+  free_all_parsers(&parser);
+}
+
+TEST_F(ParserSuite, LoadStackStructTrailingInstanceName) {
+  char user_input[MAXTOKENLEN];
+  const char *probe =
+      "struct node { int payload; struct node *next;} nodelist;";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input, true);
+  // -1 because final ';' is not counted.
+  EXPECT_THAT(consumed, Eq(strlen(probe) - 1));
+  EXPECT_THAT(parser.has_struct_members, IsTrue());
+  EXPECT_THAT(parser.stacklen, Eq(2));
+  EXPECT_THAT(
+      StdoutMatches("Token number 0 has kind type and string struct node"),
+      IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 1 has kind identifier and string nodelist"),
+      IsTrue());
+
+  ASSERT_THAT(parser.next, Not(IsNull()));
+  EXPECT_THAT(parser.next->stacklen, Eq(2));
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string int"),
+              IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 1 has kind identifier and string payload"),
+      IsTrue());
+
+  ASSERT_THAT(parser.next->next, Not(IsNull()));
+  EXPECT_THAT(parser.next->next->stacklen, Eq(3));
+  EXPECT_THAT(
+      StdoutMatches("Token number 0 has kind type and string struct node"),
+      IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 1 has kind qualifier and string *"),
+              IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 2 has kind identifier and string next"),
+      IsTrue());
+  free_all_parsers(&parser);
+}
+
+TEST_F(ParserSuite, LoadStackStructNoInstanceName) {
+  char user_input[MAXTOKENLEN];
+  const char *probe = "struct node { int payload; struct node *next;};";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input, true);
+  // -1 because final ';' is not counted.
+  EXPECT_THAT(consumed, Eq(strlen(probe) - 1));
+  EXPECT_THAT(parser.has_struct_members, IsTrue());
+  EXPECT_THAT(parser.stacklen, Eq(1));
+  EXPECT_THAT(
+      StdoutMatches("Token number 0 has kind type and string struct node"),
+      IsTrue());
+
+  ASSERT_THAT(parser.next, Not(IsNull()));
+  EXPECT_THAT(parser.next->stacklen, Eq(2));
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string int"),
+              IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 1 has kind identifier and string payload"),
+      IsTrue());
+
+  ASSERT_THAT(parser.next->next, Not(IsNull()));
+  EXPECT_THAT(parser.next->next->stacklen, Eq(3));
+  EXPECT_THAT(
+      StdoutMatches("Token number 0 has kind type and string struct node"),
+      IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 1 has kind qualifier and string *"),
+              IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 2 has kind identifier and string next"),
+      IsTrue());
+  free_all_parsers(&parser);
+}
+
+TEST_F(ParserSuite, LoadStackStructNoInstanceNameMissingLeadingSpace) {
+  char user_input[MAXTOKENLEN];
+  const char *probe = "struct node{ int payload; struct node *next;};";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input, true);
+  // The -1 is needed because the middle ';' is overwritten in
+  // handle_trailing_delim() and not counted.
+  EXPECT_THAT(consumed, Eq(0));
+  EXPECT_THAT(parser.stacklen, Eq(0));
+}
+
 TEST_F(ParserSuite, LoadStackTypedef) {
   char user_input[MAXTOKENLEN];
   const char *probe = "typedef int mm_id_t;";
@@ -1921,6 +2046,9 @@ TEST_F(ParserSuite, ParseStructTwoMembersTrailingInstanceName) {
   EXPECT_THAT(
       StdoutMatches("nodelist is a(n) struct node which has member(s) payload is a(n) int and next is a(n) pointer to struct node"),
       IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("and nodelist is a(n)"),
+      IsFalse());
   // clang-format on
   EXPECT_THAT(StdoutMatches("and nodelist is a(n)"), IsFalse());
 }
@@ -1950,6 +2078,39 @@ TEST_F(ParserSuite, ParseStructTwoMembersTrailingInstanceNameNoSpaces) {
   EXPECT_THAT(StdoutMatches("nodelist is a(n) struct node which has member(s) payload is a(n) int and next is a(n) pointer to struct node"),
               IsTrue());
   // clang-format on
+}
+
+// It seems unnecessary that the parser can read this input, but since it does
+// so correctly, there's no need to make it fail.
+TEST_F(ParserSuite, ParseStructOneMemberMissingLeadingSpaceInstanceName) {
+  char inputstr[] = "struct node nodelist{int payload;struct node *next;};";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  // clang-format off
+  EXPECT_THAT(StdoutMatches("nodelist is a(n) struct node which has member(s) payload is a(n) int and next is a(n) pointer to struct node"),
+              IsTrue());
+  // clang-format on
+}
+
+TEST_F(ParserSuite, ParseStructOneMemberMissingLeadingSpaceNoInstanceName) {
+  char inputstr[] = "struct node{int payload;};";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+}
+
+TEST_F(ParserSuite,
+       ParseStructOneMemberMissingLeadingSpaceTrailingInstanceName) {
+  char inputstr[] = "struct node{int payload;}nodelist;";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+}
+
+TEST_F(ParserSuite, ParseStructOneMemberMissingSemicolonTrailingInstanceName) {
+  char inputstr[] = "struct node {int payload} nodelist;";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+}
+
+TEST_F(ParserSuite,
+       ParseStructOneMemberMissingSecondSemicolonTrailingInstanceName) {
+  char inputstr[] = "struct node {int payload; struct node *next} nodelist;";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
 }
 
 TEST_F(ParserSuite, ParseTypedef) {

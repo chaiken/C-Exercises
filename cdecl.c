@@ -613,6 +613,7 @@ bool handled_compound_type(const char *progress_ptr, struct token *this_token,
                            size_t *offset) {
   char compound_type_name[MAXTOKENLEN];
   char *name_end_ptr;
+  char *startbracep;
   size_t existing_token_len;
   size_t i;
   size_t j;
@@ -629,12 +630,22 @@ bool handled_compound_type(const char *progress_ptr, struct token *this_token,
    */
   name_end_ptr = strchr(compound_type_name, ' ');
   /*
-   * The declaration is something like "struct task_struct;", not "struct
-   * task_struct ts;" so no further action is needed.  Leave identifier for
-   * subsequent code to process.
+   * The declaration is something like "struct task_struct;", not
+   * "struct task_struct ts;" so no further action is needed.  Leave
+   * any trailing identifier for subsequent code to process.
    */
   if (!name_end_ptr) {
     return true;
+  }
+  /* Only enumerations and structs have compound type names. */
+  startbracep = strchr(compound_type_name, '{');
+  /*
+   * The space is inside the enumeration list or between struct members, and
+   * thus not part of the the compound type.  That can only occur with a
+   * malformed declaration, probably one which lacks a space.
+   */
+  if (startbracep && (name_end_ptr > startbracep)) {
+    return false;
   }
   existing_token_len = strlen(this_token->string);
   this_token->string[existing_token_len] = ' ';
@@ -803,7 +814,7 @@ bool process_secondary_params(struct parser_props *parser, char *user_input,
 #ifdef TESTING
       show_parser_list(parser);
 #endif
-    } else {
+    } else if (parser->has_function_params) {
       /*
        * There is only one remaining parameter.
        * Pass progress_ptr rather than user_input since the params parser only
@@ -825,6 +836,12 @@ bool process_secondary_params(struct parser_props *parser, char *user_input,
       show_parser_list(parser);
 #endif
       break;
+    } else {
+      /*
+       * While the trailing comma in a list of function parameters is optional,
+       * each struct member declaration must end with a semicolon.
+       */
+      return false;
     }
     tail_parser = params_parser;
   }

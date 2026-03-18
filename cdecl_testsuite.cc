@@ -1922,6 +1922,7 @@ TEST_F(ParserSuite, ParseStructTwoMembersTrailingInstanceName) {
       StdoutMatches("nodelist is a(n) struct node which has member(s) payload is a(n) int and next is a(n) pointer to struct node"),
       IsTrue());
   // clang-format on
+  EXPECT_THAT(StdoutMatches("and nodelist is a(n)"), IsFalse());
 }
 
 TEST_F(ParserSuite, ParseStructTwoMembersNoInstanceName) {

@@ -768,11 +768,18 @@ bool process_secondary_params(struct parser_props *parser, char *user_input,
   *offset += trim_leading_whitespace(progress_ptr, next_member) + 1;
   progress_ptr = user_input + *offset;
   while (strlen(progress_ptr)) {
-    if (has_any_name_chars(progress_ptr)) {
+    /*
+     * has_any_chars() triggers a break if the input consists only of separators
+     * and delimiters. The second check prevents a trailing instance name from
+     * being stacked in the tail parser. Instead,
+     * handle_trailing_instance_name() should stack it in the head parser so
+     * that it can be popped at the start of output.
+     */
+    if ((has_any_name_chars(progress_ptr)) && ('}' != *progress_ptr)) {
       // Freed in pop_stack().
       params_parser = make_parser(tail_parser);
     } else {
-      /* Parsing is done. */
+      /* Parsing of function parameters or struct members is done. */
       break;
     }
     /*

@@ -92,7 +92,6 @@ void limitations() {
   printf("\tc) includes only the qualifiers defined in ANSI C, not LIBC,\n");
   printf("\t   kernel extensions or compiler attributes;\n");
   printf("\te) does not support atomic types.\n");
-  printf("\tf) does not support pointers to pointers.\n");
   exit(-1);
 }
 

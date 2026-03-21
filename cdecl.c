@@ -750,7 +750,9 @@ void handle_trailing_instance_name(struct parser_props *parser,
 /*
  * Spawn a new parser for each function parameter or struct member and
  * link it into a list whose head is the top-level parser.  Note that
- * the function or struct name is on the original parser's stack.
+ * the function or struct name is on the original parser's stack. enumerations
+ * do not call this function, since the enumeration constants are simple strings
+ * which are copied directly to the output.
  */
 bool process_secondary_params(struct parser_props *parser, char *user_input,
                               size_t *offset) {
@@ -930,24 +932,28 @@ bool process_enum_constants(struct parser_props *parser, char *user_input,
   char *progress_ptr = user_input + *offset;
   const char *startbracep = strchr(progress_ptr, '{');
   const char *endbracep = strchr(progress_ptr, '}');
+  _cleanup_(freep) char *first_non_blank = (char *)malloc(MAXTOKENLEN);
   char *commapos;
   size_t list_capacity;
-  int brace_offset = 0;
 
   if (!startbracep) {
     parser->has_enum_constants = false;
     return true;
   }
-  if (endbracep && (startbracep > endbracep)) {
+  *offset += trim_leading_whitespace(progress_ptr, first_non_blank);
+  /*
+   * trim_leading_whitespace() should have advanced parsing to '{'.  If not,
+   * there is unanticipated input before the enumeration constants, so return an
+   * error. Most likely the error will occur if there is no space between an
+   * enumeration instance name and '{'.
+   * Another possible erroneous condition is that the parser is at '{', but has
+   * already passed '}'.
+   */
+  if ((startbracep != (user_input + *offset)) ||
+      (endbracep && (startbracep > endbracep))) {
     parser->has_enum_constants = false;
     return false;
   }
-  /*
-   * Rather than skipping over the '{' here, do so in gettoken() since braces
-   * are not limited to enumeration constants.
-   */
-  brace_offset = startbracep - (user_input + *offset);
-  *offset += brace_offset;
   progress_ptr = user_input + *offset;
   do {
     if (',' == *progress_ptr) {

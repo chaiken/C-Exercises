@@ -1596,6 +1596,15 @@ TEST_F(ParserSuite, LoadStackStructNoInstanceNameMissingLeadingSpace) {
   EXPECT_THAT(parser.stacklen, Eq(0));
 }
 
+TEST_F(ParserSuite, LoadStackEnumInstanceNameMissingLeadingSpace) {
+  char user_input[MAXTOKENLEN];
+  const char *probe = "enum State state{GAS};";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input, true);
+  EXPECT_THAT(consumed, Eq(0));
+  EXPECT_THAT(parser.stacklen, Eq(0));
+}
+
 TEST_F(ParserSuite, LoadStackTypedef) {
   char user_input[MAXTOKENLEN];
   const char *probe = "typedef int mm_id_t;";
@@ -1909,6 +1918,21 @@ TEST_F(ParserSuite, ParseEnumNoIdentifierTwoEnumerators) {
               IsTrue());
 }
 
+TEST_F(ParserSuite, ParseOneEnumeratorMissingLeadingSpaceInstanceName) {
+  char inputstr[] = "enum State state{GAS};";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+}
+
+TEST_F(ParserSuite, ParseOneEnumeratorMissingLeadingSpaceNoInstanceName) {
+  char inputstr[] = "enum State{GAS=1, LIQUID};";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+}
+
+TEST_F(ParserSuite, ParseOneEnumeratorMissingLeadingSpaceTrailingInstanceName) {
+  char inputstr[] = "enum State{GAS=1, LIQUID} state;";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+}
+
 TEST_F(ParserSuite, ParseEnumWithIdentifierBadFormat) {
   char inputstr[] = "enum State state { GAS ,};";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
@@ -2046,9 +2070,6 @@ TEST_F(ParserSuite, ParseStructTwoMembersTrailingInstanceName) {
   EXPECT_THAT(
       StdoutMatches("nodelist is a(n) struct node which has member(s) payload is a(n) int and next is a(n) pointer to struct node"),
       IsTrue());
-  EXPECT_THAT(
-      StdoutMatches("and nodelist is a(n)"),
-      IsFalse());
   // clang-format on
   EXPECT_THAT(StdoutMatches("and nodelist is a(n)"), IsFalse());
 }

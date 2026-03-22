@@ -2080,6 +2080,15 @@ TEST_F(ParserSuite, ParseStructTwoMembersTrailingInstanceNameNoSpaces) {
   // clang-format on
 }
 
+TEST_F(ParserSuite, ParseStructComplexMembers) {
+  char inputstr[] = "struct message {enum priority prio; uint8_t bytes[8];};";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  // clang-format off
+  EXPECT_THAT(StdoutMatches("struct message has member(s) prio is a(n) enum priority and bytes is a(n) array of 8 uint8_t"),
+              IsTrue());
+  // clang-format on
+}
+
 // It seems unnecessary that the parser can read this input, but since it does
 // so correctly, there's no need to make it fail.
 TEST_F(ParserSuite, ParseStructOneMemberMissingLeadingSpaceInstanceName) {

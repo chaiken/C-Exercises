@@ -247,6 +247,51 @@ bool check_for_array_dimensions(struct parser_props *parser,
   return false;
 }
 
+/*
+ * Return true if parenthes pairs match up, which means not just the count of
+ * openers and closers matches, but also that curly braces cannot indicate a
+ * scope change between them, and that any square brackets opened between them
+ * must be closed.  Set the pair_count variable on success.
+ */
+bool parens_match(const char *offset_decl, size_t *pair_count) {
+  size_t opener_count = 0;
+  size_t closer_count = 0;
+  size_t unmatched_opening_square_brackets = 0;
+
+  for (size_t ctr = 0; ctr < strlen(offset_decl); ctr++) {
+    char c = *(offset_decl + ctr);
+    /* The parser is exiting the current scope. Parens-matching is judged on a
+     * per-scope basis. */
+    if ('{' == c) {
+      return true;
+    }
+    if ('[' == c) {
+      unmatched_opening_square_brackets++;
+    }
+    if (']' == c) {
+      unmatched_opening_square_brackets--;
+    }
+    if ('(' == c) {
+      opener_count++;
+    }
+    if (')' == c) {
+      closer_count++;
+      if ((closer_count <= opener_count) &&
+          (0 == unmatched_opening_square_brackets)) {
+        (*pair_count)++;
+      } else {
+        *pair_count = 0;
+        return false;
+      }
+    }
+  }
+  if (opener_count != closer_count) {
+    *pair_count = 0;
+    return false;
+  }
+  return true;
+}
+
 /* A true return value means no errors. */
 bool check_for_function_parameters(struct parser_props *parser,
                                    const char *offset_decl) {

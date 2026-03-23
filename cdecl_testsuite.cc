@@ -616,6 +616,62 @@ TEST(ElideAssignments, ThreeEnumConstantsWihIdentifierSpaceBeforeComma) {
   EXPECT_THAT(input, StrEq("enum State state {GAS,LIQUID,SOLID};"));
 }
 
+TEST(ParensMatch, SimpleCase) {
+  const char *probe = "int (*ap)[2] = &a;";
+  size_t pair_count = 0;
+  EXPECT_THAT(parens_match(probe, &pair_count), IsTrue());
+  EXPECT_THAT(pair_count, Eq(1));
+}
+
+TEST(ParensMatch, NoOpener) {
+  const char *probe = "int *ap)[2] = &a;";
+  size_t pair_count = 0;
+  EXPECT_THAT(parens_match(probe, &pair_count), IsFalse());
+  EXPECT_THAT(pair_count, Eq(0));
+}
+
+TEST(ParensMatch, NoCloser) {
+  const char *probe = "int (*ap[2] = &a;";
+  size_t pair_count = 0;
+  EXPECT_THAT(parens_match(probe, &pair_count), IsFalse());
+  EXPECT_THAT(pair_count, Eq(0));
+}
+
+TEST(ParensMatch, CountMatchesWrongOrder) {
+  const char *probe = "int )*ap([2] = &a;";
+  size_t pair_count = 0;
+  EXPECT_THAT(parens_match(probe, &pair_count), IsFalse());
+  EXPECT_THAT(pair_count, Eq(0));
+}
+
+TEST(ParensMatch, Nested) {
+  const char *probe = "(int ((*ap)[2])) = &a;";
+  size_t pair_count = 0;
+  EXPECT_THAT(parens_match(probe, &pair_count), IsTrue());
+  EXPECT_THAT(pair_count, Eq(3));
+}
+
+TEST(ParensMatch, NestedWrongOrder) {
+  const char *probe = "int ()*ap)[2] = &a;";
+  size_t pair_count = 0;
+  EXPECT_THAT(parens_match(probe, &pair_count), IsFalse());
+  EXPECT_THAT(pair_count, Eq(0));
+}
+
+TEST(ParensMatch, NewScopeBrace) {
+  const char *probe = "struct nodelist (*node)[2] { int (*payload)[2]; };";
+  size_t pair_count = 0;
+  EXPECT_THAT(parens_match(probe, &pair_count), IsTrue());
+  EXPECT_THAT(pair_count, Eq(1));
+}
+
+TEST(ParensMatch, NewScopeArray) {
+  const char *probe = "struct nodelist (*node[2)];";
+  size_t pair_count = 0;
+  EXPECT_THAT(parens_match(probe, &pair_count), IsFalse());
+  EXPECT_THAT(pair_count, Eq(0));
+}
+
 bool reset_stream_is_ok(FILE *stream) {
   if (fflush(stream) || fseek(stream, 0, SEEK_SET)) {
     return false;

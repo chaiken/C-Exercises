@@ -72,13 +72,17 @@ void reset_parser(struct parser_props *parser);
 struct parser_props *make_parser(struct parser_props *const parser);
 void free_all_parsers(struct parser_props *parser);
 
-/* functions which characterize input */
+/*
+ * Functions which characterize input.  A returned false value indicates an
+ * error.  Functions with two parameters modify the non-const one.
+ */
 bool is_all_blanks(const char *input);
 bool has_alnum_chars(const char *input);
 bool is_numeric(const char *input);
 static bool is_type_char(const char c);
 static bool is_name_char(const char c);
 static bool has_any_name_chars(const char *s);
+bool parens_match(const char *offset_decl, size_t *pair_count);
 bool check_for_array_dimensions(struct parser_props *parser,
                                 const char *offset_decl);
 bool check_for_function_parameters(struct parser_props *parser,

@@ -182,6 +182,8 @@ TEST(StringManipulateSuite, GetKindTypes) {
   EXPECT_THAT(get_kind("uint32_t"), Eq(type));
   EXPECT_THAT(get_kind("int64_t"), Eq(type));
   EXPECT_THAT(get_kind("uint64_t"), Eq(type));
+  EXPECT_THAT(get_kind("size_t"), Eq(type));
+  EXPECT_THAT(get_kind("ssize_t"), Eq(type));
 }
 
 TEST(StringManipulateSuite, GetArrayLength) {
@@ -1721,8 +1723,7 @@ TEST_F(ParserSuite, ParsePtrArray) {
   char inputstr[] = "int *ap[2] = &a;";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // Website says "pointer to array of int""
-  EXPECT_THAT(StdoutMatches("ap is a(n) array of 2 pointer to int"),
-              IsTrue());
+  EXPECT_THAT(StdoutMatches("ap is a(n) array of 2 pointer to int"), IsTrue());
 }
 
 TEST_F(ParserSuite, ParseSimpleArray) {
@@ -2104,10 +2105,10 @@ TEST_F(ParserSuite, ParseStructTwoMembersNoInstanceNameSpaces) {
 }
 
 TEST_F(ParserSuite, ParseStructTwoMembersTrailingInstanceNameNoSpaces) {
-  char inputstr[] = "struct node {int payload;struct node *next;}nodelist;";
+  char inputstr[] = "struct node {ssize_t payload;struct node *next;}nodelist;";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
-  EXPECT_THAT(StdoutMatches("nodelist is a(n) struct node which has member(s) payload is a(n) int and next is a(n) pointer to struct node"),
+  EXPECT_THAT(StdoutMatches("nodelist is a(n) struct node which has member(s) payload is a(n) ssize_t and next is a(n) pointer to struct node"),
               IsTrue());
   // clang-format on
 }
@@ -2155,9 +2156,9 @@ TEST_F(ParserSuite,
 }
 
 TEST_F(ParserSuite, ParseTypedef) {
-  char inputstr[] = "typedef int mm_id_t;";
+  char inputstr[] = "typedef size_t mm_id_t;";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(StdoutMatches("mm_id_t is a(n) alias for int"), IsTrue());
+  EXPECT_THAT(StdoutMatches("mm_id_t is a(n) alias for size_t"), IsTrue());
 }
 
 TEST_F(ParserSuite, ParseTypedefArray) {

@@ -12,7 +12,8 @@ const char typechars[] = {'1', '2', '3', '4', '6', '8', 'a', 'b',
 const char *types[] = {"char",     "short",   "int",      "float",    "double",
                        "long",     "struct",  "enum",     "union",    "void",
                        "int8_t",   "uint8_t", "int8_t",   "uint16_t", "int16_t",
-                       "uint32_t", "int32_t", "uint64_t", "int64_t"};
+                       "uint32_t", "int32_t", "uint64_t", "int64_t",  "size_t",
+                       "ssize_t"};
 const char *qualifiers[] = {"const",  "volatile", "static",  "*",
                             "extern", "unsigned", "restrict"};
 enum token_class {

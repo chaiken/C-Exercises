@@ -1707,18 +1707,29 @@ TEST_F(ParserSuite, ParseConstPtr) {
   EXPECT_THAT(StdoutMatches("x is a(n) const pointer to int "), IsTrue());
 }
 
+// From https://en.cppreference.com/w/c/language/pointer.html
+TEST_F(ParserSuite, ParseConstPtrPtr) {
+  char inputstr[] = "int *const *npp = &np;";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  // Website says "non-const pointer to const pointer to non-const int""
+  EXPECT_THAT(StdoutMatches("npp is a(n) pointer to const pointer to int"),
+              IsTrue());
+}
+
+// From https://en.cppreference.com/w/c/language/pointer.html
+TEST_F(ParserSuite, ParsePtrArray) {
+  char inputstr[] = "int *ap[2] = &a;";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  // Website says "pointer to array of int""
+  EXPECT_THAT(StdoutMatches("ap is a(n) array of 2 pointer to int"),
+              IsTrue());
+}
+
 TEST_F(ParserSuite, ParseSimpleArray) {
   char inputstr[] = "const double x[]];";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(parser.array_lengths, Eq(0));
   EXPECT_THAT(StdoutMatches("x is a(n) array of const double "), IsTrue());
-}
-
-TEST_F(ParserSuite, ParsePtrArray) {
-  char inputstr[] = "double* x[]];";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(parser.array_lengths, Eq(0));
-  EXPECT_THAT(StdoutMatches("x is a(n) array of pointer to double "), IsTrue());
 }
 
 TEST_F(ParserSuite, ParseArrayWithLength) {

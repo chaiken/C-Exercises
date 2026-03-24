@@ -39,26 +39,35 @@ struct token {
  * a terminating ';' or '='.
  */
 struct parser_props {
+  /* These latching bools keep track of which elements the parser has
+   * encountered.  The output stage makes use of them.
+   */
   bool have_identifier;
   bool have_type;
   bool have_qualifier;
   bool last_dimension_unspecified;
+  /* These bools describe the high-level identity of the parsed object. */
   bool is_function;
   bool is_enum;
   bool is_struct;
   bool is_pointer;
+  bool is_function_ptr;
   bool is_typedef;
+  /* Enumeration, function and struct objects contain subsidiary objects. */
   bool has_enum_constants;
-  size_t cursor;
+  bool has_function_params;
+  bool has_struct_members;
   char enumerator_list[MAXTOKENLEN];
   size_t array_dimensions;
   size_t array_lengths;
-  bool has_function_params;
-  bool has_struct_members;
+  /* These parameters describe the internal parser state. */
+  size_t cursor;
   size_t stacklen;
   struct token stack[MAXTOKENS];
   struct parser_props *prev;
   struct parser_props *next;
+  struct parser_props *parent;
+  /* The I/O streams are settable for the convenience of the tests. */
   FILE *out_stream;
   FILE *err_stream;
 };
@@ -75,7 +84,8 @@ void free_all_parsers(struct parser_props *parser);
 
 /*
  * Functions which characterize input.  A returned false value indicates an
- * error.  Functions with two parameters modify the non-const one.
+ * error.  Functions with two parameters modify the non-const one. None of the
+ * functions advances the parser cursor.
  */
 bool is_all_blanks(const char *input);
 bool has_alnum_chars(const char *input);
@@ -92,6 +102,8 @@ bool check_for_struct_members(struct parser_props *parser,
                               const char *offset_decl);
 bool check_for_enum_constants(struct parser_props *parser,
                               const char *offset_decl);
+bool check_for_function_ptr(struct parser_props *parser,
+                            const char *offset_decl);
 
 /* functions which modify input */
 size_t trim_leading_whitespace(const char *input, char *trimmed);

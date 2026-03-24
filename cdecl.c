@@ -113,6 +113,7 @@ void reset_parser(struct parser_props *parser) {
   parser->is_enum = false;
   parser->is_struct = false;
   parser->is_pointer = false;
+  parser->is_function_ptr = false;
   parser->is_typedef = false;
   parser->has_enum_constants = false;
   parser->cursor = 0;
@@ -125,6 +126,7 @@ void reset_parser(struct parser_props *parser) {
   parser->stack[0].kind = invalid;
   parser->prev = NULL;
   parser->next = NULL;
+  parser->parent = NULL;
 }
 
 struct parser_props *make_parser(struct parser_props *const parser) {
@@ -141,6 +143,18 @@ struct parser_props *make_parser(struct parser_props *const parser) {
   new_parser->err_stream = parser->err_stream;
   parser->next = new_parser;
   new_parser->prev = parser;
+  /* Record in the child parser context that the parent is a function pointer.
+   */
+  if (parser->is_function_ptr) {
+    new_parser->parent = parser;
+  } else if (parser->parent) {
+    /*
+     * The function whose pointer is declared may take multiple parameters,
+     * each with its own parser.  Each one of the parameter-parsers needs to
+     * know that its parent is a function pointer.
+     */
+    new_parser->parent = parser->parent;
+  }
   return new_parser;
 }
 
@@ -294,12 +308,43 @@ bool parens_match(const char *offset_decl, size_t *pair_count) {
 }
 
 /* A true return value means no errors. */
-bool check_for_function_parameters(struct parser_props *parser,
-                                   const char *offset_decl) {
-  if ('(' != *offset_decl) {
+bool check_for_function_ptr(struct parser_props *parser,
+                            const char *offset_decl) {
+  size_t pair_count = 0;
+  /* If the previous parser has encountered a struct or function, then
+   * delimiters will appear unbalanced here.  Skip a false-positive check here.
+   */
+  if (parser->prev &&
+      (!(parser->prev->is_struct || parser->prev->is_function))) {
     return true;
   }
-  const char *params_end = strstr(offset_decl, ")");
+  if (!parens_match(offset_decl, &pair_count)) {
+    fprintf(parser->err_stream, "Unmatched parentheses: %s\n", offset_decl);
+    return false;
+  }
+  if ((2 == pair_count) && (strstr(offset_decl, "(*"))) {
+    parser->is_function_ptr = true;
+  }
+  return true;
+}
+
+/* A true return value means no errors. */
+bool check_for_function_parameters(struct parser_props *parser,
+                                   const char *offset_decl) {
+  char trimmed[MAXTOKENLEN];
+  size_t trimnum = 0;
+  if ((parser->is_function_ptr) && (')' == *offset_decl)) {
+    /* +1 to go past ')' after function name. */
+    trimnum = trim_leading_whitespace(offset_decl + 1, &trimmed[0]);
+    /* Go past '(' at start of function parameters. */
+    trimnum++;
+  } else {
+    trimnum = trim_leading_whitespace(offset_decl, &trimmed[0]);
+  }
+  if ('(' != *(offset_decl + trimnum)) {
+    return true;
+  }
+  const char *params_end = strstr(offset_decl + trimnum, ")");
   if (!params_end) {
     reset_parser(parser);
     fprintf(parser->err_stream, "Malformed function declaration.\n");
@@ -307,10 +352,10 @@ bool check_for_function_parameters(struct parser_props *parser,
   }
   parser->is_function = true;
   /* No function parameters since types are at least 3 chars long. */
-  if (3 > (params_end - offset_decl)) {
+  if (3 > (params_end - (offset_decl + trimnum))) {
     return true;
   }
-  if (is_all_blanks(offset_decl)) {
+  if (is_all_blanks(offset_decl + trimnum)) {
     return true;
   }
   /*
@@ -834,13 +879,23 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
   const char *err_string =
       parser->has_function_params ? "function parameter" : "struct member";
   const char separator = parser->has_function_params ? ',' : ';';
-  const char delimiter = parser->has_function_params ? ')' : '}';
+  const char start_delim = parser->has_function_params ? '(' : '{';
+  const char end_delim = parser->has_function_params ? ')' : '}';
   if (!parser->has_function_params && !parser->has_struct_members) {
     return true;
   }
-  /* +1 to go past leading delimiter after first removing whitespace. */
+  /* Go past the ')' that follows the name of the function pointer. */
+  if (parser->is_function_ptr && (end_delim == *progress_ptr)) {
+    parser->cursor++;
+  }
   parser->cursor += trim_leading_whitespace(progress_ptr, next_member) + 1;
   progress_ptr = user_input + parser->cursor;
+  /* Finally advance the parser into the function parameters or struct members.
+   */
+  if (start_delim == *progress_ptr) {
+    parser->cursor++;
+    progress_ptr = user_input + parser->cursor;
+  }
   while (strlen(progress_ptr)) {
     /*
      * has_any_chars() triggers a break if the input consists only of separators
@@ -884,7 +939,7 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
        * Pass progress_ptr rather than user_input since the params parser only
        * processes what's inside the delimiters.
        */
-      if (!tokenize_secondary_params(&next_param, progress_ptr, delimiter)) {
+      if (!tokenize_secondary_params(&next_param, progress_ptr, end_delim)) {
         fprintf(parser->err_stream, "Failed to process last %s\n", err_string);
         return false;
       }
@@ -914,6 +969,13 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
    * dummy_parserp flag down.
    */
   dummy_parserp = NULL;
+  /*
+   * If the subsidiary parser was processing the arguments of a function
+   * pointer, it is now done.  If, for example, the function pointer
+   * is a struct member, the next struct member may or may not also be a
+   * function pointer.
+   */
+  tail_parser->parent = NULL;
   handle_trailing_instance_name(parser, user_input);
   return true;
 }
@@ -1191,7 +1253,11 @@ int pop_stack(struct parser_props *parser, bool no_enum_instance) {
    * object to which the pointer points.
    */
   if (!strcmp(parser->stack[stacktop].string, "*")) {
-    fprintf(parser->out_stream, "pointer to ");
+    if (parser->is_function_ptr) {
+      fprintf(parser->out_stream, "pointer to a function which returns ");
+    } else {
+      fprintf(parser->out_stream, "pointer to ");
+    }
   } else {
     switch (parser->stack[stacktop].kind) {
     case whitespace:
@@ -1214,7 +1280,7 @@ int pop_stack(struct parser_props *parser, bool no_enum_instance) {
           if (depth) {
             fprintf(parser->out_stream, "and ");
           } else {
-            fprintf(parser->out_stream, "and takes param ");
+            fprintf(parser->out_stream, "and takes param(s) ");
           }
           ret = pop_all(cursor);
           depth++;
@@ -1269,7 +1335,7 @@ int pop_stack(struct parser_props *parser, bool no_enum_instance) {
       }
       if (parser->array_dimensions) {
         fprintf(parser->out_stream, "array of ");
-      } else if (parser->is_function) {
+      } else if ((parser->is_function) && (!parser->is_function_ptr)) {
         fprintf(parser->out_stream, "function which returns ");
       } else if ((parser->has_enum_constants) &&
                  strlen(parser->enumerator_list) &&
@@ -1408,7 +1474,6 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
     fprintf(stderr, "\nToken too long %s.\n", declstring);
     return 0;
   }
-
   /* Move past leading whitespace. */
   const size_t trimnum = trim_leading_whitespace(declstring, trimmed);
   tokenoffset = trimnum;
@@ -1416,14 +1481,16 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
   while ('-' == *(declstring + tokenoffset)) {
     tokenoffset++;
   }
-
   /* Process array length, if any. We should already have an identifier. */
   if (parser->array_dimensions) {
     tokenoffset +=
         process_array_length(parser, declstring + tokenoffset, this_token);
     return tokenoffset;
   }
-
+  /* Move past '(' enclosing the function pointer name to '*'. */
+  if (parser->is_function_ptr && ('(' == *(declstring + tokenoffset))) {
+    tokenoffset++;
+  }
   /* The token is a single character. */
   if ('*' == *(declstring + tokenoffset)) {
     strlcpy(this_token->string, "*", 2);
@@ -1431,7 +1498,6 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
     finish_token(parser, declstring + tokenoffset, this_token, ctr);
     return tokenoffset;
   }
-
   /* The token has multiple characters, so copy them all. */
   for (int i = 0; i < (int)tokenlen; i++) {
     char nextchar = *(declstring + tokenoffset);
@@ -1530,6 +1596,18 @@ void finish_token(struct parser_props *parser, const char *offset_decl,
     if (!strcmp("struct", this_token->string)) {
       parser->is_struct = true;
     }
+    /*
+     * The identifier which follows will be inside parens, so gettoken() will
+     * fail unless the parsing context is adjusted first. Therefore the
+     * function_ptr must be detected here.  Avoid a duplicate check if the
+     * parser has already identified a function or function pointer.
+     */
+    if (!(parser->is_function || parser->is_function_ptr)) {
+      if (!check_for_function_ptr(parser, offset_decl)) {
+        reset_parser(parser);
+        return;
+      }
+    }
     break;
   case length:
     if ((!parser->have_identifier) || (!parser->array_dimensions)) {
@@ -1607,7 +1685,8 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
      * Finding the identifier terminates initial stack loading since it comes
      * last, as long as there are no function arguments or array delimiters.
      */
-    while (this_token.kind != identifier) {
+    while ((this_token.kind != identifier) &&
+           strlen(parser->cursor + user_input)) {
       parser->cursor +=
           gettoken(parser, user_input + parser->cursor, &this_token);
       if ((!parser->cursor) || (invalid == this_token.kind)) {
@@ -1647,8 +1726,13 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
     break;
   } /* while parser->cursor <= strlen(user_input) */
   if (!parser->have_identifier) {
-    /* As with enumerators, the instance name of a struct is optional. */
-    if (!parser->has_struct_members) {
+    /*
+     * As with enumerators, the instance name of a struct is optional.
+     * While a function pointer itself must be named, the funtion
+     * parameters need only have types.
+     */
+    if (!(parser->has_struct_members ||
+          (parser->parent && parser->parent->is_function_ptr))) {
       free_all_parsers(parser);
       return 0;
     }

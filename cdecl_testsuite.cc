@@ -833,19 +833,19 @@ TEST_F(ParserSuite, ProcessFunctionParamsOneParam) {
   char user_input[MAXTOKENLEN];
   const char *query = "double sqrt(double val)";
   // The following characters were processed by the first parser.
-  size_t offset = strlen("double sqrt");
+  parser.cursor = strlen("double sqrt");
 
   parser.has_function_params = true;
   strlcpy(user_input, query, strlen(query) + 1);
 
-  process_secondary_params(&parser, user_input, &offset);
+  process_secondary_params(&parser, user_input);
 
   // When process_secondary_params() runs, the first parser has already handled
   // all the text before the opening parentheses.
   EXPECT_THAT(parser.stacklen, Eq(0));
-  EXPECT_THAT(offset, Eq(strlen("double sqrt(double val)")));
+  EXPECT_THAT(parser.cursor, Eq(strlen("double sqrt(double val)")));
   // The whole string has been consumed.
-  EXPECT_THAT(user_input + offset, StrEq(""));
+  EXPECT_THAT(user_input + parser.cursor, StrEq(""));
   ASSERT_THAT(parser.next, Not(IsNull()));
   EXPECT_THAT(parser.next->stacklen, Eq(2));
   EXPECT_THAT(parser.next->stack[0].kind, Eq(type));
@@ -860,12 +860,12 @@ TEST_F(ParserSuite, ProcessFunctionParamsOneParamBadDelim) {
   char user_input[MAXTOKENLEN];
   const char *query = "double sqrt(double val";
   // The following characters were processed by the first parser.
-  size_t offset = strlen("double sqrt");
+  parser.cursor = strlen("double sqrt");
 
   parser.has_function_params = true;
   strlcpy(user_input, query, strlen(query) + 1);
 
-  process_secondary_params(&parser, user_input, &offset);
+  process_secondary_params(&parser, user_input);
   ASSERT_THAT(parser.next, IsNull());
   EXPECT_THAT(StderrMatches("Failed to process last function parameter"),
               IsTrue());
@@ -875,12 +875,12 @@ TEST_F(ParserSuite, ProcessFunctionParamsTwoParams) {
   char user_input[MAXTOKENLEN];
   const char *query = "uint64_t hash(char *key, uint64_t seed)";
   // The following characters were processed by the first parser.
-  size_t offset = strlen("uint64_t hash");
+  parser.cursor = strlen("uint64_t hash");
 
   parser.has_function_params = true;
   strlcpy(user_input, query, strlen(query) + 1);
 
-  process_secondary_params(&parser, user_input, &offset);
+  process_secondary_params(&parser, user_input);
   ASSERT_THAT(parser.next, Not(IsNull()));
 
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string char"),
@@ -908,12 +908,12 @@ TEST_F(ParserSuite, ProcessFunctionParamsStrayComma) {
   char user_input[MAXTOKENLEN];
   const char *query = "double sqrt(double val,)";
   // The following characters were processed by the first parser.
-  size_t offset = strlen("double sqrt");
+  parser.cursor = strlen("double sqrt");
 
   parser.has_function_params = true;
   strlcpy(user_input, query, strlen(query) + 1);
 
-  EXPECT_THAT(process_secondary_params(&parser, user_input, &offset), IsTrue());
+  EXPECT_THAT(process_secondary_params(&parser, user_input), IsTrue());
   ASSERT_THAT(parser.next, Not(IsNull()));
   free_all_parsers(&parser);
 }
@@ -922,12 +922,12 @@ TEST_F(ParserSuite, ProcessFunctionParamsStrayMiddleComma) {
   char user_input[MAXTOKENLEN];
   const char *query = "uint64_t hash(char *key, , uint64_t seed)";
   // The following characters were processed by the first parser.
-  size_t offset = strlen("uint64_t hash");
+  parser.cursor = strlen("uint64_t hash");
 
   parser.has_function_params = true;
   strlcpy(user_input, query, strlen(query) + 1);
 
-  process_secondary_params(&parser, user_input, &offset);
+  process_secondary_params(&parser, user_input);
   ASSERT_THAT(parser.next, IsNull());
   EXPECT_THAT(StderrMatches("Failed to load list function parameter"),
               IsTrue());
@@ -937,12 +937,12 @@ TEST_F(ParserSuite, ProcessFunctionParamsLeadingWhitespace) {
   char user_input[MAXTOKENLEN];
   const char *query = "uint64_t hash(   char *key, uint64_t seed)";
   // The following characters were processed by the first parser.
-  size_t offset = strlen("uint64_t hash");
+  parser.cursor = strlen("uint64_t hash");
 
   parser.has_function_params = true;
   strlcpy(user_input, query, strlen(query) + 1);
 
-  process_secondary_params(&parser, user_input, &offset);
+  process_secondary_params(&parser, user_input);
   ASSERT_THAT(parser.next, Not(IsNull()));
 
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string char"),
@@ -970,19 +970,19 @@ TEST_F(ParserSuite, ProcessStructMembersOneMemberWithInstanceName) {
   char user_input[MAXTOKENLEN];
   const char *query = "struct node nodelist {int payload;}";
   // The following characters were processed by the first parser.
-  size_t offset = strlen("struct node nodelist");
+  parser.cursor = strlen("struct node nodelist");
 
   parser.is_struct = true;
   parser.has_struct_members = true;
   strlcpy(user_input, query, strlen(query) + 1);
 
-  process_secondary_params(&parser, user_input, &offset);
+  process_secondary_params(&parser, user_input);
 
   // When process_secondary_params() runs, the first parser has already handled
   // all the text before the opening parentheses.
   EXPECT_THAT(parser.stacklen, Eq(0));
-  EXPECT_THAT(offset, Eq(strlen("struct node nodelist {int payload};")));
-  EXPECT_THAT(user_input + offset, StrEq(""));
+  EXPECT_THAT(parser.cursor, Eq(strlen("struct node nodelist {int payload};")));
+  EXPECT_THAT(user_input + parser.cursor, StrEq(""));
   EXPECT_THAT(parser.is_function, IsFalse());
   EXPECT_THAT(parser.is_enum, IsFalse());
   ASSERT_THAT(parser.next, Not(IsNull()));
@@ -1345,8 +1345,8 @@ TEST_F(ParserSuite, LoadStackTwoDimArrayOneLength) {
   const char *probe = "double val[1][];";
   strlcpy(user_input, probe, strlen(probe) + 1);
   // Only the first '[' is consumed.  "[]" terminates processing.
-  // As noted in process_array_dimension(), "return without incrementing
-  // offset."
+  // As noted in process_array_dimension(), "return without advancing
+  // the cursor."
   EXPECT_THAT(load_stack(&parser, user_input, true),
               Eq(strlen(probe) - strlen("][];")));
   EXPECT_THAT(parser.array_dimensions, Eq(2));

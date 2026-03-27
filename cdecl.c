@@ -115,6 +115,7 @@ void reset_parser(struct parser_props *parser) {
   parser->is_pointer = false;
   parser->is_typedef = false;
   parser->has_enum_constants = false;
+  parser->cursor = 0;
   parser->enumerator_list[0] = '\0';
   parser->array_dimensions = 0;
   parser->array_lengths = 0;
@@ -739,7 +740,7 @@ bool all_identifiers_are_enum_constants(const struct parser_props *parser) {
 }
 
 bool first_identifier_is_enumerator(const struct parser_props *parser,
-                                    const char *user_input, size_t offset) {
+                                    const char *user_input) {
   const char *startbracep = strstr(user_input, "{");
   if ((!parser->is_enum) || (!parser->has_enum_constants)) {
     return false;
@@ -750,10 +751,10 @@ bool first_identifier_is_enumerator(const struct parser_props *parser,
    * The parser already started processing enum_constants, so there is no enum
    * instance name.
    */
-  if ((user_input + offset) > startbracep) {
+  if ((user_input + parser->cursor) > startbracep) {
     return true;
   }
-  /* Should not be reaached? */
+  /* Should not be reached? */
   return false;
 }
 
@@ -762,7 +763,7 @@ bool first_identifier_is_enumerator(const struct parser_props *parser,
  * follows the enumeration constant or struct member list.
  */
 void handle_trailing_instance_name(struct parser_props *parser,
-                                   char *user_input, size_t *offset) {
+                                   char *user_input) {
   const char *endbracep = strchr(user_input, '}');
   struct token this_token;
   if (!endbracep)
@@ -772,9 +773,9 @@ void handle_trailing_instance_name(struct parser_props *parser,
    * the stack is not an enumeration constant, it's an enumeration
    * instance name which precedes the enumeration constant list.
    */
-  if (*offset < strlen(user_input)) {
+  if (parser->cursor < strlen(user_input)) {
     if ((parser->is_enum &&
-         first_identifier_is_enumerator(parser, user_input, *offset)) ||
+         first_identifier_is_enumerator(parser, user_input)) ||
         (!parser->have_identifier && parser->has_struct_members)) {
       this_token.kind = invalid;
       strcpy(this_token.string, "");
@@ -782,8 +783,9 @@ void handle_trailing_instance_name(struct parser_props *parser,
        * Advance processing to the char after the brace which closes the
        * enumerator list.
        */
-      (*offset) += (endbracep - (user_input + *offset)) + 1;
-      (*offset) += gettoken(parser, user_input + *offset, &this_token);
+      parser->cursor += (endbracep - (user_input + parser->cursor)) + 1;
+      parser->cursor +=
+          gettoken(parser, user_input + parser->cursor, &this_token);
       if ((invalid == this_token.kind) || !strlen(this_token.string)) {
         return;
       }
@@ -799,12 +801,11 @@ void handle_trailing_instance_name(struct parser_props *parser,
  * do not call this function, since the enumeration constants are simple strings
  * which are copied directly to the output.
  */
-bool process_secondary_params(struct parser_props *parser, char *user_input,
-                              size_t *offset) {
+bool process_secondary_params(struct parser_props *parser, char *user_input) {
   struct parser_props *params_parser;
   struct parser_props *tail_parser = parser;
   size_t increm = 0;
-  char *progress_ptr = user_input + *offset;
+  char *progress_ptr = user_input + parser->cursor;
   _cleanup_(freep) char *next_param = (char *)malloc(MAXTOKENLEN);
   /*
    * Create a pointer which the code doesn't otherwise need as a peg
@@ -824,8 +825,8 @@ bool process_secondary_params(struct parser_props *parser, char *user_input,
     return true;
   }
   /* +1 to go past leading delimiter after first removing whitespace. */
-  *offset += trim_leading_whitespace(progress_ptr, next_member) + 1;
-  progress_ptr = user_input + *offset;
+  parser->cursor += trim_leading_whitespace(progress_ptr, next_member) + 1;
+  progress_ptr = user_input + parser->cursor;
   while (strlen(progress_ptr)) {
     /*
      * has_any_chars() triggers a break if the input consists only of separators
@@ -856,8 +857,9 @@ bool process_secondary_params(struct parser_props *parser, char *user_input,
                 next_param);
         return false;
       }
-      *offset += increm;
-      /* +1 to go past separator. The delimiter is not included in offset. */
+      parser->cursor += increm;
+      /* +1 to go past separator. The delimiter is not included in the cursor
+       * count. */
       progress_ptr += increm + 1;
 #ifdef TESTING
       show_parser_list(parser);
@@ -879,7 +881,7 @@ bool process_secondary_params(struct parser_props *parser, char *user_input,
         return false;
       }
       /* 1 is for ')'. */
-      *offset += increm + 1;
+      parser->cursor += increm + 1;
 #ifdef TESTING
       show_parser_list(parser);
 #endif
@@ -898,7 +900,7 @@ bool process_secondary_params(struct parser_props *parser, char *user_input,
    * dummy_parserp flag down.
    */
   dummy_parserp = NULL;
-  handle_trailing_instance_name(parser, user_input, offset);
+  handle_trailing_instance_name(parser, user_input);
   return true;
 }
 
@@ -923,16 +925,16 @@ size_t process_array_length(struct parser_props *parser,
 }
 
 void process_array_dimensions(struct parser_props *parser, char *user_input,
-                              size_t *offset, struct token *this_token) {
+                              struct token *this_token) {
   char *next_dim;
   char *progress_ptr;
 
   do {
     /* Skip '['. */
-    (*offset)++;
-    progress_ptr = user_input + *offset;
+    parser->cursor++;
+    progress_ptr = user_input + parser->cursor;
     /* We've encountered "[]", which always terminates C array-length
-     * declarations. Return without incrementing offset.
+     * declarations. Return without advancing the cursor.
      */
     if (']' == *progress_ptr) {
       /*
@@ -946,11 +948,11 @@ void process_array_dimensions(struct parser_props *parser, char *user_input,
       }
       break;
     }
-    (*offset) += gettoken(parser, progress_ptr, this_token);
+    parser->cursor += gettoken(parser, progress_ptr, this_token);
     if ((length == this_token->kind) && (strlen(this_token->string))) {
       push_stack(parser, this_token);
     }
-    next_dim = strstr(user_input + *offset, "[");
+    next_dim = strstr(user_input + parser->cursor, "[");
     if (next_dim) {
       if (2 >= strlen(next_dim)) {
         /* No array length; return without incrementing offset. */
@@ -958,7 +960,7 @@ void process_array_dimensions(struct parser_props *parser, char *user_input,
         break;
       }
     }
-  } while ((NULL != next_dim) && (*offset <= strlen(user_input)));
+  } while ((NULL != next_dim) && (parser->cursor <= strlen(user_input)));
   if (parser->array_dimensions == parser->array_lengths) {
     parser->last_dimension_unspecified = false;
   }
@@ -971,10 +973,9 @@ void process_array_dimensions(struct parser_props *parser, char *user_input,
  * any enumeration constants to the enumerator_list, check for a trailing
  * instance name, and return true.
  */
-bool process_enum_constants(struct parser_props *parser, char *user_input,
-                            size_t *offset) {
+bool process_enum_constants(struct parser_props *parser, char *user_input) {
   struct token this_token;
-  char *progress_ptr = user_input + *offset;
+  char *progress_ptr = user_input + parser->cursor;
   const char *startbracep = strchr(progress_ptr, '{');
   const char *endbracep = strchr(progress_ptr, '}');
   _cleanup_(freep) char *first_non_blank = (char *)malloc(MAXTOKENLEN);
@@ -985,7 +986,7 @@ bool process_enum_constants(struct parser_props *parser, char *user_input,
     parser->has_enum_constants = false;
     return true;
   }
-  *offset += trim_leading_whitespace(progress_ptr, first_non_blank);
+  parser->cursor += trim_leading_whitespace(progress_ptr, first_non_blank);
   /*
    * trim_leading_whitespace() should have advanced parsing to '{'.  If not,
    * there is unanticipated input before the enumeration constants, so return an
@@ -994,12 +995,12 @@ bool process_enum_constants(struct parser_props *parser, char *user_input,
    * Another possible erroneous condition is that the parser is at '{', but has
    * already passed '}'.
    */
-  if ((startbracep != (user_input + *offset)) ||
+  if ((startbracep != (user_input + parser->cursor)) ||
       (endbracep && (startbracep > endbracep))) {
     parser->has_enum_constants = false;
     return false;
   }
-  progress_ptr = user_input + *offset;
+  progress_ptr = user_input + parser->cursor;
   do {
     if (',' == *progress_ptr) {
       progress_ptr++;
@@ -1013,7 +1014,7 @@ bool process_enum_constants(struct parser_props *parser, char *user_input,
       }
       break;
     }
-    (*offset) += gettoken(parser, progress_ptr, &this_token);
+    parser->cursor += gettoken(parser, progress_ptr, &this_token);
     /*
      * The classifier should assess the enumeration constants as identifiers,
      * but the type is not used.  Strictly speaking, the code should fail if
@@ -1033,10 +1034,10 @@ bool process_enum_constants(struct parser_props *parser, char *user_input,
     strlcat(parser->enumerator_list, this_token.string, list_capacity);
     commapos = strchr(progress_ptr, ',');
     /* Go past comma or end brace. */
-    (*offset)++;
-    progress_ptr = user_input + *offset;
+    parser->cursor++;
+    progress_ptr = user_input + parser->cursor;
   } while (commapos && (commapos < endbracep) && (progress_ptr < endbracep));
-  handle_trailing_instance_name(parser, user_input, offset);
+  handle_trailing_instance_name(parser, user_input);
   return true;
 }
 
@@ -1046,17 +1047,17 @@ bool process_enum_constants(struct parser_props *parser, char *user_input,
  * each handled by a new parser.  For structs, "{}" is illegal.
  */
 bool handled_extended_parsing(struct parser_props *parser, char *user_input,
-                              size_t *offset, struct token *this_token) {
+                              struct token *this_token) {
   if (parser->array_dimensions) {
-    process_array_dimensions(parser, user_input, offset, this_token);
+    process_array_dimensions(parser, user_input, this_token);
   } else if (parser->has_function_params || parser->has_struct_members) {
     /* Move past the already-processed characters and '('. */
-    if (!process_secondary_params(parser, user_input, offset)) {
+    if (!process_secondary_params(parser, user_input)) {
       reset_parser(parser);
       return false;
     }
   } else if (parser->has_enum_constants) {
-    if (!process_enum_constants(parser, user_input, offset)) {
+    if (!process_enum_constants(parser, user_input)) {
       reset_parser(parser);
       return false;
     }
@@ -1586,7 +1587,6 @@ size_t load_stack(struct parser_props *parser, char *user_input,
    * offset >= strlen(this_token->string) since leading whitespace in
    * user_input will be skipped.
    */
-  size_t offset = 0;
   if (needs_truncation) {
     if (!truncate_input(&user_input, parser)) {
       free_all_parsers(parser);
@@ -1595,22 +1595,22 @@ size_t load_stack(struct parser_props *parser, char *user_input,
   }
   this_token.kind = invalid;
   strcpy(this_token.string, "");
-  while (offset <= strlen(user_input)) {
+  while (parser->cursor <= strlen(user_input)) {
     /*
      * Finding the identifier terminates initial stack loading since it comes
      * last, as long as there are no function arguments or array delimiters.
      */
     while (this_token.kind != identifier) {
-      progress_ptr = user_input + offset;
-      offset += gettoken(parser, progress_ptr, &this_token);
-      if ((!offset) || (invalid == this_token.kind)) {
+      progress_ptr = user_input + parser->cursor;
+      parser->cursor += gettoken(parser, progress_ptr, &this_token);
+      if ((!parser->cursor) || (invalid == this_token.kind)) {
         /* Reached end of input, or hit an error. */
         break;
       }
       size_t trailing = trim_trailing_whitespace(user_input, trimmed);
       if (trailing) {
         strlcpy(user_input, trimmed, MAXTOKENLEN);
-        offset += trailing;
+        parser->cursor += trailing;
       }
       /* Don't place "typedef" on the stack. */
       if (!strcmp("typedef", this_token.string)) {
@@ -1619,7 +1619,7 @@ size_t load_stack(struct parser_props *parser, char *user_input,
       if ((type == this_token.kind) && (!strcmp("union", this_token.string) ||
                                         !strcmp("struct", this_token.string) ||
                                         !strcmp("enum", this_token.string))) {
-        if (!handled_compound_type(user_input, &this_token, &offset)) {
+        if (!handled_compound_type(user_input, &this_token, &parser->cursor)) {
           free_all_parsers(parser);
           return 0;
         }
@@ -1630,14 +1630,14 @@ size_t load_stack(struct parser_props *parser, char *user_input,
        * parser->have_identifier true so that pop_stack() doesn't fail.
        */
       if ((identifier == this_token.kind) &&
-          (first_identifier_is_enumerator(parser, user_input, offset))) {
+          (first_identifier_is_enumerator(parser, user_input))) {
         /*
          * Put the characters in the token and '{' back on the stack for
          * process_enum_constants().  This clumsy approach means that the parser
          * state upon entry to process_enum_constants() does  not depend on
          * whether or not the enum has an instance name.
          */
-        offset -= strlen(this_token.string) + 1;
+        parser->cursor -= strlen(this_token.string) + 1;
         break;
       }
       push_stack(parser, &this_token);
@@ -1651,7 +1651,7 @@ size_t load_stack(struct parser_props *parser, char *user_input,
       return 0;
     }
   }
-  if (!handled_extended_parsing(parser, user_input, &offset, &this_token)) {
+  if (!handled_extended_parsing(parser, user_input, &this_token)) {
     reset_parser(parser);
     return 0;
   }
@@ -1659,7 +1659,7 @@ size_t load_stack(struct parser_props *parser, char *user_input,
 #ifdef TESTING
   showstack(parser->stack, parser->stacklen, parser->out_stream);
 #endif
-  return offset; /* Only used by tests. */
+  return parser->cursor; /* Only used by tests. */
 }
 
 /********** functions to process user input **********/

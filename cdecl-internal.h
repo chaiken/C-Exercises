@@ -49,6 +49,7 @@ struct parser_props {
   bool is_pointer;
   bool is_typedef;
   bool has_enum_constants;
+  size_t cursor;
   char enumerator_list[MAXTOKENLEN];
   size_t array_dimensions;
   size_t array_lengths;
@@ -110,20 +111,18 @@ bool handled_compound_type(const char *progress_ptr, struct token *this_token,
                            size_t *offset);
 bool all_identifiers_are_enum_constants(const struct parser_props *parser);
 bool first_identifier_is_enumerator(const struct parser_props *parser,
-                                    const char *user_input, size_t offset);
+                                    const char *user_input);
 void handle_trailing_instance_name(struct parser_props *parser,
-                                   char *user_input, size_t *offset);
-bool process_secondary_params(struct parser_props *parser, char *user_input,
-                              size_t *offset);
+                                   char *user_input);
+bool process_secondary_params(struct parser_props *parser, char *user_input);
 size_t process_array_length(struct parser_props *parser,
                             const char *offset_string,
                             struct token *this_token);
 void process_array_dimensions(struct parser_props *parser, char *user_input,
-                              size_t *offset, struct token *this_token);
-bool process_enum_constants(struct parser_props *parser, char *user_input,
-                            size_t *offset);
+                              struct token *this_token);
+bool process_enum_constants(struct parser_props *parser, char *user_input);
 bool handled_extended_parsing(struct parser_props *parser, char *user_input,
-                              size_t *offset, struct token *this_token);
+                              struct token *this_token);
 
 /* output functions */
 void reverse_lengths(struct parser_props *parser);

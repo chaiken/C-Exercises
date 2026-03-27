@@ -1475,17 +1475,14 @@ void finish_token(struct parser_props *parser, const char *offset_decl,
                   struct token *this_token, const size_t ctr) {
   this_token->string[ctr + 1] = '\0';
   this_token->kind = get_kind(this_token->string);
-  if (parser->is_struct && !check_for_struct_members(parser, offset_decl)) {
-    reset_parser(parser);
-    return;
-  }
   switch (this_token->kind) {
   case identifier:
     parser->have_identifier = true;
     if (!parser->have_type ||
-        (!check_for_array_dimensions(parser, offset_decl)) ||
-        (!check_for_function_parameters(parser, offset_decl)) ||
-        (!check_for_enum_constants(parser, offset_decl))) {
+        !check_for_array_dimensions(parser, offset_decl) ||
+        !check_for_function_parameters(parser, offset_decl) ||
+        (parser->is_struct && !check_for_struct_members(parser, offset_decl)) ||
+        (parser->is_enum && !check_for_enum_constants(parser, offset_decl))) {
       /*
        * The current parser is a subsidiary one.  Failing here prevents
        * processing of trailing struct instance names. Its parent parser may

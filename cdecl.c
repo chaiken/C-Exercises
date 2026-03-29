@@ -851,16 +851,16 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
         fprintf(parser->err_stream, "Failed to process list %s %s\n",
                 err_string, next_param);
       }
-      increm = load_stack(params_parser, next_param, false);
+      increm = load_stack(params_parser, next_param);
       if (!increm) {
         fprintf(parser->err_stream, "Failed to load list %s %s\n", err_string,
                 next_param);
         return false;
       }
-      parser->cursor += increm;
       /* +1 to go past separator. The delimiter is not included in the cursor
        * count. */
-      progress_ptr += increm + 1;
+      parser->cursor += increm + 1;
+      progress_ptr = user_input + parser->cursor;
 #ifdef TESTING
       show_parser_list(parser);
 #endif
@@ -874,7 +874,7 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
         fprintf(parser->err_stream, "Failed to process last %s\n", err_string);
         return false;
       }
-      increm = load_stack(params_parser, next_param, false);
+      increm = load_stack(params_parser, next_param);
       if (!increm) {
         fprintf(parser->err_stream, "Failed to load last %s %s\n", err_string,
                 next_param);
@@ -1573,23 +1573,8 @@ void push_stack(struct parser_props *parser, struct token *this_token) {
   return;
 }
 
-/* Only the tests make use of the return value. */
-size_t load_stack(struct parser_props *parser, char *user_input,
-                  bool needs_truncation) {
+size_t load_stack(struct parser_props *parser, char *user_input) {
   struct token this_token;
-  char trimmed[MAXTOKENLEN];
-  char *progress_ptr = user_input;
-  /*
-   * offset is the number of characters consumed by gettoken().
-   * offset >= strlen(this_token->string) since leading whitespace in
-   * user_input will be skipped.
-   */
-  if (needs_truncation) {
-    if (!truncate_input(&user_input, parser)) {
-      free_all_parsers(parser);
-      return 0;
-    }
-  }
   this_token.kind = invalid;
   strcpy(this_token.string, "");
   while (parser->cursor <= strlen(user_input)) {
@@ -1598,16 +1583,11 @@ size_t load_stack(struct parser_props *parser, char *user_input,
      * last, as long as there are no function arguments or array delimiters.
      */
     while (this_token.kind != identifier) {
-      progress_ptr = user_input + parser->cursor;
-      parser->cursor += gettoken(parser, progress_ptr, &this_token);
+      parser->cursor +=
+          gettoken(parser, user_input + parser->cursor, &this_token);
       if ((!parser->cursor) || (invalid == this_token.kind)) {
         /* Reached end of input, or hit an error. */
         break;
-      }
-      size_t trailing = trim_trailing_whitespace(user_input, trimmed);
-      if (trailing) {
-        strlcpy(user_input, trimmed, MAXTOKENLEN);
-        parser->cursor += trailing;
       }
       /* Don't place "typedef" on the stack. */
       if (!strcmp("typedef", this_token.string)) {
@@ -1669,8 +1649,22 @@ size_t load_stack(struct parser_props *parser, char *user_input,
 bool input_parsing_successful(struct parser_props *parser, char inputstr[]) {
   /* Allocate and call strlcpy() in case the input is too long. */
   _cleanup_(freep) char *user_input = (char *)malloc(MAXTOKENLEN);
+  _cleanup_(freep) char *trimmed = (char *)malloc(MAXTOKENLEN);
+
   strlcpy(user_input, inputstr, MAXTOKENLEN);
-  load_stack(parser, user_input, true);
+  if (!has_any_name_chars(user_input)) {
+    fprintf(parser->err_stream, "Input lacks required elements: %s\n",
+            user_input);
+    return false;
+  }
+  parser->cursor = trim_trailing_whitespace(user_input, trimmed);
+  if (strlen(trimmed)) {
+    strlcpy(user_input, trimmed, MAXTOKENLEN);
+  }
+  if (!truncate_input(&user_input, parser)) {
+    return false;
+  }
+  load_stack(parser, user_input);
   if (0 == parser->stacklen) {
     fprintf(parser->err_stream, "Unable to parse garbled input.\n");
     free_all_parsers(parser);

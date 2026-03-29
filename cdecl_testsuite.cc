@@ -1156,12 +1156,10 @@ TEST_F(ParserSuite, ShowParsersReverse) {
 
 TEST_F(ParserSuite, LoadStackWorks) {
   char user_input[MAXTOKENLEN];
-  const char *probe = "const int* x;";
+  const char *probe = "const int* x";
   strlcpy(user_input, probe, strlen(probe) + 1);
-  std::size_t consumed = load_stack(&parser, user_input, true);
-  // consumed = strlen()-1 since the trailing ';' is elided before gettoken()
-  // processing begins.
-  EXPECT_THAT(consumed, Eq(strlen(probe) - 1));
+  std::size_t consumed = load_stack(&parser, user_input);
+  EXPECT_THAT(consumed, Eq(strlen(probe)));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string int"),
               IsTrue());
   EXPECT_THAT(
@@ -1176,10 +1174,10 @@ TEST_F(ParserSuite, LoadStackWorks) {
 
 TEST_F(ParserSuite, LoadStackEqualsTerminator) {
   char user_input[MAXTOKENLEN];
-  const char *probe = "static double val = 2;";
+  const char *probe = "static double val = 2";
   strlcpy(user_input, probe, strlen(probe) + 1);
-  std::size_t consumed = load_stack(&parser, user_input, true);
-  EXPECT_THAT(consumed, Eq(strlen(probe) - strlen(" = 2;")));
+  std::size_t consumed = load_stack(&parser, user_input);
+  EXPECT_THAT(consumed, Eq(strlen(probe) - strlen(" = 2")));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string double"),
               IsTrue());
   EXPECT_THAT(
@@ -1193,9 +1191,9 @@ TEST_F(ParserSuite, LoadStackEqualsTerminator) {
 
 TEST_F(ParserSuite, SimpleFunction) {
   char user_input[MAXTOKENLEN];
-  const char *probe = "double sqrt();";
+  const char *probe = "double sqrt()";
   strlcpy(user_input, probe, strlen(probe) + 1);
-  std::size_t consumed = load_stack(&parser, user_input, true);
+  std::size_t consumed = load_stack(&parser, user_input);
   EXPECT_THAT(consumed, Eq(strlen("double sqrt")));
   // When there are no function parameters, there is no second parser.
   EXPECT_THAT(parser.next, IsNull());
@@ -1205,18 +1203,18 @@ TEST_F(ParserSuite, SimpleFunction) {
 
 TEST_F(ParserSuite, SimpleFunctionBadDelims) {
   char user_input[MAXTOKENLEN];
-  const char *probe = "double sqrt(;";
+  const char *probe = "double sqrt(";
   strlcpy(user_input, probe, strlen(probe) + 1);
-  std::size_t consumed = load_stack(&parser, user_input, true);
+  std::size_t consumed = load_stack(&parser, user_input);
   EXPECT_THAT(consumed, Eq(0));
   EXPECT_THAT(StderrMatches("Malformed function declaration."), IsTrue());
 }
 
 TEST_F(ParserSuite, LoadStackParensTerminatorOneFunctionParam) {
   char user_input[MAXTOKENLEN];
-  const char *probe = "uint64_t hash(char *str);";
+  const char *probe = "uint64_t hash(char *str)";
   strlcpy(user_input, probe, strlen(probe) + 1);
-  EXPECT_THAT(load_stack(&parser, user_input, true),
+  EXPECT_THAT(load_stack(&parser, user_input),
               Eq(strlen("uint64_t hash(char *str)")));
   EXPECT_THAT(parser.is_function, IsTrue());
   EXPECT_THAT(parser.has_function_params, IsTrue());
@@ -1239,12 +1237,9 @@ TEST_F(ParserSuite, LoadStackParensTerminatorOneFunctionParam) {
 
 TEST_F(ParserSuite, LoadStackCommaTerminatorFunction) {
   char user_input[MAXTOKENLEN];
-  const char *probe = "uint64_t hash(char *str, uint64_t seed);";
+  const char *probe = "uint64_t hash(char *str, uint64_t seed)";
   strlcpy(user_input, probe, strlen(probe) + 1);
-  // The ',' is not included in the accounting because handle_trailing_delim()
-  // overwrites it with NULL.
-  EXPECT_THAT(load_stack(&parser, user_input, true),
-              Eq(strlen("uint64_t hash(char *str, uint64_t seed)") - 1));
+  EXPECT_THAT(load_stack(&parser, user_input), Eq(strlen(probe)));
   show_parser_list(&parser);
   ASSERT_THAT(parser.next, Not(IsNull()));
   EXPECT_THAT(parser.next->next, Not(IsNull()));
@@ -1272,13 +1267,12 @@ TEST_F(ParserSuite, LoadStackCommaTerminatorFunction) {
 
 TEST_F(ParserSuite, LoadStackCommaTerminatorFunctionSpaces) {
   char user_input[MAXTOKENLEN];
-  const char *probe = "uint64_t hash( char *str ,  uint64_t seed ,);";
+  const char *probe = "uint64_t hash( char *str ,  uint64_t seed ,)";
   strlcpy(user_input, probe, strlen(probe) + 1);
   // The first ',' is not included in the accounting.
   // When parsing reaches " ,)" the call to has_any_name_chars() in
   // process_secondary_params() triggers an immediate return.
-  EXPECT_THAT(load_stack(&parser, user_input, true),
-              Eq(strlen("uint64_t hash( char *str ,  uint64_t seed)") - 3));
+  EXPECT_THAT(load_stack(&parser, user_input), Eq(strlen(probe) - 3));
   show_parser_list(&parser);
   ASSERT_THAT(parser.next, Not(IsNull()));
   EXPECT_THAT(parser.next->next, Not(IsNull()));
@@ -1306,11 +1300,11 @@ TEST_F(ParserSuite, LoadStackCommaTerminatorFunctionSpaces) {
 
 TEST_F(ParserSuite, LoadStackArrayNoLength) {
   char user_input[MAXTOKENLEN];
-  const char *probe = "double val[];";
+  const char *probe = "double val[]";
   strlcpy(user_input, probe, strlen(probe) + 1);
-  std::size_t consumed = load_stack(&parser, user_input, true);
-  //  First '[' is consumed; "];" is not. */
-  EXPECT_THAT(consumed, Eq(strlen(probe) - strlen("];")));
+  std::size_t consumed = load_stack(&parser, user_input);
+  //  First '[' is consumed; "]" is not. */
+  EXPECT_THAT(consumed, Eq(strlen(probe) - 1));
   EXPECT_THAT(parser.array_dimensions, Eq(1));
   EXPECT_THAT(parser.array_lengths, Eq(0));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string double"),
@@ -1323,11 +1317,11 @@ TEST_F(ParserSuite, LoadStackArrayNoLength) {
 
 TEST_F(ParserSuite, LoadStackArrayLength) {
   char user_input[MAXTOKENLEN];
-  const char *probe = "double val[111];";
+  const char *probe = "double val[111]";
   strlcpy(user_input, probe, strlen(probe) + 1);
-  std::size_t consumed = load_stack(&parser, user_input, true);
-  // In load_stack(), "];" is not consumed. */
-  EXPECT_THAT(consumed, Eq(strlen(probe) - strlen("];")));
+  std::size_t consumed = load_stack(&parser, user_input);
+  // In load_stack(), "]" is not consumed. */
+  EXPECT_THAT(consumed, Eq(strlen(probe) - 1));
   EXPECT_THAT(parser.array_dimensions, Eq(1));
   EXPECT_THAT(parser.array_lengths, Eq(1));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string double"),
@@ -1342,13 +1336,13 @@ TEST_F(ParserSuite, LoadStackArrayLength) {
 
 TEST_F(ParserSuite, LoadStackTwoDimArrayOneLength) {
   char user_input[MAXTOKENLEN];
-  const char *probe = "double val[1][];";
+  const char *probe = "double val[1][]";
   strlcpy(user_input, probe, strlen(probe) + 1);
   // Only the first '[' is consumed.  "[]" terminates processing.
   // As noted in process_array_dimension(), "return without advancing
   // the cursor."
-  EXPECT_THAT(load_stack(&parser, user_input, true),
-              Eq(strlen(probe) - strlen("][];")));
+  EXPECT_THAT(load_stack(&parser, user_input),
+              Eq(strlen(probe) - strlen("][]")));
   EXPECT_THAT(parser.array_dimensions, Eq(2));
   EXPECT_THAT(parser.array_lengths, Eq(1));
   showstack(&parser.stack[0], parser.stacklen, stdout);
@@ -1356,10 +1350,9 @@ TEST_F(ParserSuite, LoadStackTwoDimArrayOneLength) {
 
 TEST_F(ParserSuite, LoadStackTwoDimArrayTwoLengths) {
   char user_input[MAXTOKENLEN];
-  const char *probe = "double val[8][4];";
+  const char *probe = "double val[8][4]";
   strlcpy(user_input, probe, strlen(probe) + 1);
-  EXPECT_THAT(load_stack(&parser, user_input, true),
-              Eq(strlen(probe) - strlen("];")));
+  EXPECT_THAT(load_stack(&parser, user_input), Eq(strlen(probe) - 1));
   EXPECT_THAT(parser.array_dimensions, Eq(2));
   EXPECT_THAT(parser.array_lengths, Eq(2));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string double"),
@@ -1376,10 +1369,9 @@ TEST_F(ParserSuite, LoadStackTwoDimArrayTwoLengths) {
 
 TEST_F(ParserSuite, LoadStackThreeDimArrayTwoLengths) {
   char user_input[MAXTOKENLEN];
-  const char *probe = "double val[8][4];";
+  const char *probe = "double val[8][4]";
   strlcpy(user_input, probe, strlen(probe) + 1);
-  EXPECT_THAT(load_stack(&parser, user_input, true),
-              Eq(strlen(probe) - strlen("];")));
+  EXPECT_THAT(load_stack(&parser, user_input), Eq(strlen(probe) - 1));
   EXPECT_THAT(parser.array_dimensions, Eq(2));
   EXPECT_THAT(parser.array_lengths, Eq(2));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string double"),
@@ -1396,10 +1388,9 @@ TEST_F(ParserSuite, LoadStackThreeDimArrayTwoLengths) {
 
 TEST_F(ParserSuite, LoadStackThreeDimArrayThreeLengths) {
   char user_input[MAXTOKENLEN];
-  const char *probe = "double val[8][4];";
+  const char *probe = "double val[8][4]";
   strlcpy(user_input, probe, strlen(probe) + 1);
-  EXPECT_THAT(load_stack(&parser, user_input, true),
-              Eq(strlen(probe) - strlen("];")));
+  EXPECT_THAT(load_stack(&parser, user_input), Eq(strlen(probe) - 1));
   EXPECT_THAT(parser.array_dimensions, Eq(2));
   EXPECT_THAT(parser.array_lengths, Eq(2));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string double"),
@@ -1416,37 +1407,18 @@ TEST_F(ParserSuite, LoadStackThreeDimArrayThreeLengths) {
 
 TEST_F(ParserSuite, LoadStackBadArray) {
   char user_input[MAXTOKENLEN];
-  const char *probe = "double val[42;";
+  const char *probe = "double val[42";
   strlcpy(user_input, probe, strlen(probe) + 1);
-  std::size_t consumed = load_stack(&parser, user_input, true);
+  std::size_t consumed = load_stack(&parser, user_input);
   EXPECT_THAT(consumed, Eq(0));
-}
-
-TEST_F(ParserSuite, NothingToLoad) {
-  char user_input[MAXTOKENLEN];
-  const char *probe = "=;";
-  strlcpy(user_input, probe, strlen(probe) + 1);
-  std::size_t consumed = load_stack(&parser, user_input, true);
-  EXPECT_THAT(consumed, Eq(0));
-  EXPECT_THAT(StderrMatches("Zero-length input string."), IsTrue());
-}
-
-TEST_F(ParserSuite, LotsOfWhitespace) {
-  char user_input[MAXTOKENLEN];
-  const char *probe = "     ;";
-  strlcpy(user_input, probe, strlen(probe) + 1);
-  std::size_t consumed = load_stack(&parser, user_input, true);
-  EXPECT_THAT(parser.next, IsNull());
-  EXPECT_THAT(consumed, Eq(0));
-  EXPECT_THAT(StderrMatches("Zero-length input string."), IsTrue());
 }
 
 TEST_F(ParserSuite, LegalEnumForwardDeclaration) {
   char user_input[MAXTOKENLEN];
-  const char *probe = "enum State state;";
+  const char *probe = "enum State state";
   strlcpy(user_input, probe, strlen(probe) + 1);
-  std::size_t consumed = load_stack(&parser, user_input, true);
-  EXPECT_THAT(consumed, Eq(strlen("enum State state")));
+  std::size_t consumed = load_stack(&parser, user_input);
+  EXPECT_THAT(consumed, Eq(strlen(probe)));
   EXPECT_THAT(parser.is_enum, IsTrue());
   EXPECT_THAT(
       StdoutMatches("Token number 0 has kind type and string enum State"),
@@ -1458,10 +1430,10 @@ TEST_F(ParserSuite, LegalEnumForwardDeclaration) {
 
 TEST_F(ParserSuite, TypedefEnumForwardDeclaration) {
   char user_input[MAXTOKENLEN];
-  const char *probe = "typedef enum State state;";
+  const char *probe = "typedef enum State state";
   strlcpy(user_input, probe, strlen(probe) + 1);
-  std::size_t consumed = load_stack(&parser, user_input, true);
-  EXPECT_THAT(consumed, Eq(strlen("typedef enum State state")));
+  std::size_t consumed = load_stack(&parser, user_input);
+  EXPECT_THAT(consumed, Eq(strlen(probe)));
   EXPECT_THAT(parser.is_enum, IsTrue());
   EXPECT_THAT(
       StdoutMatches("Token number 0 has kind type and string enum State"),
@@ -1472,9 +1444,9 @@ TEST_F(ParserSuite, TypedefEnumForwardDeclaration) {
 }
 TEST_F(ParserSuite, IllegalEnumForwardDeclaration) {
   char user_input[MAXTOKENLEN];
-  const char *probe = "enum State;";
+  const char *probe = "enum State";
   strlcpy(user_input, probe, strlen(probe) + 1);
-  std::size_t consumed = load_stack(&parser, user_input, true);
+  std::size_t consumed = load_stack(&parser, user_input);
   EXPECT_THAT(consumed, Eq(0));
   EXPECT_THAT(StderrMatches("Enums cannot be forward-declared."), IsTrue());
   EXPECT_THAT(parser.is_enum, IsFalse());
@@ -1482,11 +1454,10 @@ TEST_F(ParserSuite, IllegalEnumForwardDeclaration) {
 
 TEST_F(ParserSuite, LoadStackOneEnumeratorNoIdentifier) {
   char user_input[MAXTOKENLEN];
-  const char *probe = "enum State {GAS};";
+  const char *probe = "enum State {GAS}";
   strlcpy(user_input, probe, strlen(probe) + 1);
-  std::size_t consumed = load_stack(&parser, user_input, true);
-  // -1 because ';' is not counted.
-  EXPECT_THAT(consumed, Eq(strlen(probe) - 1));
+  std::size_t consumed = load_stack(&parser, user_input);
+  EXPECT_THAT(consumed, Eq(strlen(probe)));
   EXPECT_THAT(parser.is_enum, IsTrue());
   EXPECT_THAT(parser.stacklen, Eq(1));
   EXPECT_THAT(
@@ -1497,10 +1468,10 @@ TEST_F(ParserSuite, LoadStackOneEnumeratorNoIdentifier) {
 
 TEST_F(ParserSuite, LoadStackOneEnumeratorWithIdentifier) {
   char user_input[MAXTOKENLEN];
-  const char *probe = "enum State state {GAS};";
+  const char *probe = "enum State state {GAS}";
   strlcpy(user_input, probe, strlen(probe) + 1);
-  std::size_t consumed = load_stack(&parser, user_input, true);
-  EXPECT_THAT(consumed, Eq(strlen(probe) - 1));
+  std::size_t consumed = load_stack(&parser, user_input);
+  EXPECT_THAT(consumed, Eq(strlen(probe)));
   EXPECT_THAT(parser.is_enum, IsTrue());
   EXPECT_THAT(parser.stacklen, Eq(2));
   EXPECT_THAT(
@@ -1514,10 +1485,10 @@ TEST_F(ParserSuite, LoadStackOneEnumeratorWithIdentifier) {
 
 TEST_F(ParserSuite, LoadStackOneEnumeratorWithTrailingIdentifier) {
   char user_input[MAXTOKENLEN];
-  const char *probe = "enum State {GAS} state;";
+  const char *probe = "enum State {GAS} state";
   strlcpy(user_input, probe, strlen(probe) + 1);
-  std::size_t consumed = load_stack(&parser, user_input, true);
-  EXPECT_THAT(consumed, Eq(strlen(probe) - 1));
+  std::size_t consumed = load_stack(&parser, user_input);
+  EXPECT_THAT(consumed, Eq(strlen(probe)));
   EXPECT_THAT(parser.is_enum, IsTrue());
   EXPECT_THAT(parser.stacklen, Eq(2));
   EXPECT_THAT(
@@ -1531,16 +1502,11 @@ TEST_F(ParserSuite, LoadStackOneEnumeratorWithTrailingIdentifier) {
 
 TEST_F(ParserSuite, LoadStackSimpleStruct) {
   char user_input[MAXTOKENLEN];
-  const char *probe =
-      "struct node nodelist { int payload; struct node *next;};";
+  const char *probe = "struct node nodelist { int payload; struct node *next;}";
   strlcpy(user_input, probe, strlen(probe) + 1);
-  std::size_t consumed = load_stack(&parser, user_input, true);
-  // The -1 is needed because the middle ';' is overwritten in
-  // handle_trailing_delim() and not counted.  ";};" is omitted because of the
-  // has_any_name_chars() test in process_secondary_params().
-  EXPECT_THAT(
-      consumed,
-      Eq(strlen("struct node nodelist { int payload; struct node *next") - 1));
+  std::size_t consumed = load_stack(&parser, user_input);
+  // -1 because the code returns when '}' is reached.
+  EXPECT_THAT(consumed, Eq(strlen(probe) - 1));
   EXPECT_THAT(parser.has_struct_members, IsTrue());
   EXPECT_THAT(parser.stacklen, Eq(2));
   EXPECT_THAT(
@@ -1573,12 +1539,11 @@ TEST_F(ParserSuite, LoadStackSimpleStruct) {
 
 TEST_F(ParserSuite, LoadStackStructTrailingInstanceName) {
   char user_input[MAXTOKENLEN];
-  const char *probe =
-      "struct node { int payload; struct node *next;} nodelist;";
+  const char *probe = "struct node { int payload; struct node *next;} nodelist";
   strlcpy(user_input, probe, strlen(probe) + 1);
-  std::size_t consumed = load_stack(&parser, user_input, true);
+  std::size_t consumed = load_stack(&parser, user_input);
   // -1 because final ';' is not counted.
-  EXPECT_THAT(consumed, Eq(strlen(probe) - 1));
+  EXPECT_THAT(consumed, Eq(strlen(probe)));
   EXPECT_THAT(parser.has_struct_members, IsTrue());
   EXPECT_THAT(parser.stacklen, Eq(2));
   EXPECT_THAT(
@@ -1611,11 +1576,11 @@ TEST_F(ParserSuite, LoadStackStructTrailingInstanceName) {
 
 TEST_F(ParserSuite, LoadStackStructNoInstanceName) {
   char user_input[MAXTOKENLEN];
-  const char *probe = "struct node { int payload; struct node *next;};";
+  const char *probe = "struct node { int payload; struct node *next;}";
   strlcpy(user_input, probe, strlen(probe) + 1);
-  std::size_t consumed = load_stack(&parser, user_input, true);
-  // -1 because final ';' is not counted.
-  EXPECT_THAT(consumed, Eq(strlen(probe) - 1));
+  std::size_t consumed = load_stack(&parser, user_input);
+  // -1 because '}' is not counted.
+  EXPECT_THAT(consumed, Eq(strlen(probe)));
   EXPECT_THAT(parser.has_struct_members, IsTrue());
   EXPECT_THAT(parser.stacklen, Eq(1));
   EXPECT_THAT(
@@ -1645,30 +1610,29 @@ TEST_F(ParserSuite, LoadStackStructNoInstanceName) {
 
 TEST_F(ParserSuite, LoadStackStructNoInstanceNameMissingLeadingSpace) {
   char user_input[MAXTOKENLEN];
-  const char *probe = "struct node{ int payload; struct node *next;};";
+  const char *probe = "struct node{ int payload; struct node *next;}";
   strlcpy(user_input, probe, strlen(probe) + 1);
-  std::size_t consumed = load_stack(&parser, user_input, true);
-  // The -1 is needed because the middle ';' is overwritten in
-  // handle_trailing_delim() and not counted.
+  std::size_t consumed = load_stack(&parser, user_input);
+  // The -1 is needed because '}' is not counted.
   EXPECT_THAT(consumed, Eq(0));
   EXPECT_THAT(parser.stacklen, Eq(0));
 }
 
 TEST_F(ParserSuite, LoadStackEnumInstanceNameMissingLeadingSpace) {
   char user_input[MAXTOKENLEN];
-  const char *probe = "enum State state{GAS};";
+  const char *probe = "enum State state{GAS}";
   strlcpy(user_input, probe, strlen(probe) + 1);
-  std::size_t consumed = load_stack(&parser, user_input, true);
+  std::size_t consumed = load_stack(&parser, user_input);
   EXPECT_THAT(consumed, Eq(0));
   EXPECT_THAT(parser.stacklen, Eq(0));
 }
 
 TEST_F(ParserSuite, LoadStackTypedef) {
   char user_input[MAXTOKENLEN];
-  const char *probe = "typedef int mm_id_t;";
+  const char *probe = "typedef int mm_id_t";
   strlcpy(user_input, probe, strlen(probe) + 1);
-  std::size_t consumed = load_stack(&parser, user_input, true);
-  EXPECT_THAT(consumed, Eq(strlen(probe) - 1));
+  std::size_t consumed = load_stack(&parser, user_input);
+  EXPECT_THAT(consumed, Eq(strlen(probe)));
   EXPECT_THAT(parser.is_typedef, IsTrue());
   EXPECT_THAT(parser.stacklen, Eq(2));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string int"),
@@ -1680,12 +1644,10 @@ TEST_F(ParserSuite, LoadStackTypedef) {
 
 TEST_F(ParserSuite, LoadStackReorder) {
   char user_input[MAXTOKENLEN];
-  const char *probe = "const int x;";
+  const char *probe = "const int x";
   strlcpy(user_input, probe, strlen(probe) + 1);
-  std::size_t consumed = load_stack(&parser, user_input, true);
-  // consumed = strlen()-1 since the trailing ';' is elided before gettoken()
-  // processing begins.
-  EXPECT_THAT(consumed, Eq(strlen(probe) - 1));
+  std::size_t consumed = load_stack(&parser, user_input);
+  EXPECT_THAT(consumed, Eq(strlen(probe)));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string int"),
               IsTrue());
   EXPECT_THAT(
@@ -1705,35 +1667,30 @@ TEST_F(ParserSuite, ParseSimpleExpression) {
 TEST_F(ParserSuite, ParsePtrExpression) {
   char inputstr[] = "int *x;";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  // The output has a trailng space in case there's output after the type.
   EXPECT_THAT(StdoutMatches("x is a(n) pointer to int "), IsTrue());
 }
 
 TEST_F(ParserSuite, ParsePtrExpressionWithSpace) {
   char inputstr[] = "int * x;";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  // The output has a trailng space in case there's output after the type.
   EXPECT_THAT(StdoutMatches("x is a(n) pointer to int "), IsTrue());
 }
 
 TEST_F(ParserSuite, ParsePtrExpressionAlternate) {
   char inputstr[] = "int* x;";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  // The output has a trailng space in case there's output after the type.
   EXPECT_THAT(StdoutMatches("x is a(n) pointer to int "), IsTrue());
 }
 
 TEST_F(ParserSuite, ParsePtrPtrExpression) {
   char inputstr[] = "int **x;";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  // The output has a trailng space in case there's output after the type.
   EXPECT_THAT(StdoutMatches("x is a(n) pointer to pointer to int "), IsTrue());
 }
 
 TEST_F(ParserSuite, ParsePtrPtrExpressionSpace) {
   char inputstr[] = "int * *x;";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  // The output has a trailng space in case there's output after the type.
   EXPECT_THAT(StdoutMatches("x is a(n) pointer to pointer to int "), IsTrue());
 }
 
@@ -1742,7 +1699,6 @@ TEST_F(ParserSuite, ParseRestrictedPtrExpression) {
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(parser.is_pointer, IsTrue());
   EXPECT_THAT(parser.have_identifier, IsTrue());
-  // The output has a trailng space in case there's output after the type.
   EXPECT_THAT(StdoutMatches("x is a(n) restrict pointer to int "), IsTrue());
 }
 
@@ -1755,7 +1711,6 @@ TEST_F(ParserSuite, ParseRestrictedPtrWithQualifierExpression) {
 TEST_F(ParserSuite, ParseQualfiedExpression) {
   char inputstr[] = "const int x;";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  // The output has a trailng space in case there's output after the type.
   EXPECT_THAT(StdoutMatches("x is a(n) const int "), IsTrue());
 }
 
@@ -1800,7 +1755,6 @@ TEST_F(ParserSuite, ParseArrayWithLength) {
 TEST_F(ParserSuite, ParseArrayWithTwoDimsOneLength) {
   char inputstr[] = "char val[9][];";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  // pop_stack() decrements array_lengths.
   EXPECT_THAT(parser.array_lengths, Eq(0));
   EXPECT_THAT(StdoutMatches("val is a(n) array of 9x? char"), IsTrue());
 }
@@ -1808,7 +1762,6 @@ TEST_F(ParserSuite, ParseArrayWithTwoDimsOneLength) {
 TEST_F(ParserSuite, ParseArrayWithTwoLengths) {
   char inputstr[] = "char val[9][11];";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  // pop_stack() decrements array_lengths.
   EXPECT_THAT(parser.array_lengths, Eq(0));
   EXPECT_THAT(StdoutMatches("val is a(n) array of 9x11 char"), IsTrue());
 }
@@ -1816,7 +1769,6 @@ TEST_F(ParserSuite, ParseArrayWithTwoLengths) {
 TEST_F(ParserSuite, ParseArrayWithThreeDimTwoLengths) {
   char inputstr[] = "char val[9][11][];";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  // pop_stack() decrements array_lengths.
   EXPECT_THAT(parser.array_lengths, Eq(0));
   EXPECT_THAT(StdoutMatches("val is a(n) array of 9x11x? char"), IsTrue());
 }
@@ -1824,7 +1776,7 @@ TEST_F(ParserSuite, ParseArrayWithThreeDimTwoLengths) {
 TEST_F(ParserSuite, ParseArrayWithThreeLengths) {
   char inputstr[] = "char val[9][11][6];";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  // pop_stack() decrements array_lengths.
+
   EXPECT_THAT(parser.array_lengths, Eq(0));
   EXPECT_THAT(StdoutMatches("val is a(n) array of 9x11x6 char"), IsTrue());
 }
@@ -2209,6 +2161,18 @@ TEST_F(ParserSuite,
        ParseStructOneMemberMissingSecondSemicolonTrailingInstanceName) {
   char inputstr[] = "struct node {int payload; struct node *next} nodelist;";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+}
+
+TEST_F(ParserSuite, NothingToLoad) {
+  char inputstr[] = "=;";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  EXPECT_THAT(StderrMatches("Input lacks required elements:"), IsTrue());
+}
+
+TEST_F(ParserSuite, LotsOfWhitespace) {
+  char inputstr[] = "     ";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  EXPECT_THAT(StderrMatches("Input lacks required elements:"), IsTrue());
 }
 
 TEST_F(ParserSuite, ParseTypedef) {

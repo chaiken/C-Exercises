@@ -139,8 +139,7 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
 void finish_token(struct parser_props *parser, const char *offset_decl,
                   struct token *this_token, const size_t ctr);
 void push_stack(struct parser_props *parser, struct token *this_token);
-size_t load_stack(struct parser_props *parser, char *user_input,
-                  bool needs_truncation);
+size_t load_stack(struct parser_props *parser, char *user_input);
 
 /* functions to process user input */
 bool input_parsing_successful(struct parser_props *parser, char inputstr[]);

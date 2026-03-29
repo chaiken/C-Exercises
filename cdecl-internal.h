@@ -107,8 +107,8 @@ void showstack(const struct token *stack, const size_t stacklen,
 
 /* parser helper functions */
 bool have_stacked_compound_type(const struct parser_props *parser);
-bool handled_compound_type(const char *progress_ptr, struct token *this_token,
-                           size_t *offset);
+bool handled_compound_type(struct parser_props *parser,
+                           const char *progress_ptr, struct token *this_token);
 bool all_identifiers_are_enum_constants(const struct parser_props *parser);
 bool first_identifier_is_enumerator(const struct parser_props *parser,
                                     const char *user_input);

@@ -656,8 +656,8 @@ bool have_stacked_compound_type(const struct parser_props *parser) {
  * "enum", so progress_ptr+offset should point past one of them.  The
  * return value indicates success or failure.
  */
-bool handled_compound_type(const char *progress_ptr, struct token *this_token,
-                           size_t *offset) {
+bool handled_compound_type(struct parser_props *parser,
+                           const char *progress_ptr, struct token *this_token) {
   char compound_type_name[MAXTOKENLEN];
   char *name_end_ptr;
   char *startbracep;
@@ -669,8 +669,8 @@ bool handled_compound_type(const char *progress_ptr, struct token *this_token,
    * Starting with "struct page *pp", compound type name is "page" since "pp" is
    * the identifier, not handled by this function.
    */
-  *offset +=
-      trim_leading_whitespace(progress_ptr + *offset, &compound_type_name[0]);
+  parser->cursor += trim_leading_whitespace(progress_ptr + parser->cursor,
+                                            &compound_type_name[0]);
   /*
    * Since there's no leading whitespace, the next blank terminates the compound
    * identifier.
@@ -716,7 +716,7 @@ bool handled_compound_type(const char *progress_ptr, struct token *this_token,
    * The 1 accounts for the space.  The characters left in progress_ptr should
    *  be an identifier which names the instance, if any, of the compound type.
    */
-  *offset += j + 1;
+  parser->cursor += j + 1;
   return true;
 }
 
@@ -1616,7 +1616,7 @@ size_t load_stack(struct parser_props *parser, char *user_input,
       if ((type == this_token.kind) && (!strcmp("union", this_token.string) ||
                                         !strcmp("struct", this_token.string) ||
                                         !strcmp("enum", this_token.string))) {
-        if (!handled_compound_type(user_input, &this_token, &parser->cursor)) {
+        if (!handled_compound_type(parser, user_input, &this_token)) {
           free_all_parsers(parser);
           return 0;
         }

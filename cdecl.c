@@ -501,7 +501,19 @@ void elide_assignments(char **input) {
   }
 }
 
-bool handle_trailing_delim(char **output, const char *input, const char delim) {
+/*
+ * process_secondary_params() relies on tokenize_secondary_params() to
+ * extract individual tokens from function parameters or struct
+ * members.  It functions similarly to truncate_input() for the main
+ * parser.  If the input begins with the specified delimiter
+ * character, go past it without advancing the parser cursor.
+ * Otherwise, overwrite the first delimiter character with a NULL. In
+ * either case, copy the resulting string to the output.  If the text
+ * chunk is the last in input, the effect is to drop the remaining
+ * non-name characters.
+ */
+bool tokenize_secondary_params(char **output, const char *input,
+                               const char delim) {
   const char *param_end = strchr(input, delim);
   const char *param_start;
   size_t param_len = 0;
@@ -629,6 +641,8 @@ void showstack(const struct token *stack, const size_t stacklen,
 
   size_t tokennum = 0, ctr;
 
+  if (!stack)
+    return;
   fprintf(out_stream, "Stack is:\n");
   for (ctr = 0; ctr < stacklen; ctr++) {
     fprintf(out_stream, "Token number %lu has kind %s and string %s\n",
@@ -847,7 +861,7 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
      * process.
      */
     if (strchr(progress_ptr, separator)) {
-      if (!handle_trailing_delim(&next_param, progress_ptr, separator)) {
+      if (!tokenize_secondary_params(&next_param, progress_ptr, separator)) {
         fprintf(parser->err_stream, "Failed to process list %s %s\n",
                 err_string, next_param);
       }
@@ -870,7 +884,7 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
        * Pass progress_ptr rather than user_input since the params parser only
        * processes what's inside the delimiters.
        */
-      if (!handle_trailing_delim(&next_param, progress_ptr, delimiter)) {
+      if (!tokenize_secondary_params(&next_param, progress_ptr, delimiter)) {
         fprintf(parser->err_stream, "Failed to process last %s\n", err_string);
         return false;
       }
@@ -1043,8 +1057,8 @@ bool process_enum_constants(struct parser_props *parser, char *user_input) {
 
 /* Deal with arrays, functions and enumeration constants. */
 /* Either function parameter list is "()" and there are no new characters
- * processed, or there are new function parameters,
- * each handled by a new parser.  For structs, "{}" is illegal.
+ * processed, or there are function parameters, each handled by a new parser.
+ * For structs, "{}" is illegal.
  */
 bool handled_extended_parsing(struct parser_props *parser, char *user_input,
                               struct token *this_token) {
@@ -1477,6 +1491,12 @@ void finish_token(struct parser_props *parser, const char *offset_decl,
   this_token->kind = get_kind(this_token->string);
   switch (this_token->kind) {
   case identifier:
+    /* Indicate hard failure. */
+    if ((parser->have_identifier) && (!parser->has_enum_constants)) {
+      this_token->kind = invalid;
+      reset_parser(parser);
+      return;
+    }
     parser->have_identifier = true;
     if (!parser->have_type ||
         !check_for_array_dimensions(parser, offset_decl) ||
@@ -1492,12 +1512,17 @@ void finish_token(struct parser_props *parser, const char *offset_decl,
       if (parser->prev) {
         break;
       }
-      /* Indicate hard failure. */
       reset_parser(parser);
       return;
     }
     break;
   case type:
+    /* Indicate hard failure. */
+    if (parser->have_type) {
+      this_token->kind = invalid;
+      reset_parser(parser);
+      return;
+    }
     parser->have_type = true;
     if (!strcmp("enum", this_token->string)) {
       parser->is_enum = true;
@@ -1620,7 +1645,7 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
       push_stack(parser, &this_token);
     } /* while !parser->have_identifier */
     break;
-  } /* while offset <= strlen(user_input) */
+  } /* while parser->cursor <= strlen(user_input) */
   if (!parser->have_identifier) {
     /* As with enumerators, the instance name of a struct is optional. */
     if (!parser->has_struct_members) {
@@ -1632,11 +1657,20 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
     reset_parser(parser);
     return 0;
   }
+  /* There is unclassifiable junk at the end of the expression. */
+  if ((parser->cursor < strlen(user_input)) &&
+      (has_any_name_chars(user_input + parser->cursor))) {
+    fprintf(parser->err_stream, "Expression ends with erroneous output: %s\n",
+            user_input + parser->cursor);
+    free_all_parsers(parser);
+    reset_parser(parser);
+    return 0;
+  }
   reorder_stacks(parser);
 #ifdef TESTING
   showstack(parser->stack, parser->stacklen, parser->out_stream);
 #endif
-  return parser->cursor; /* Only used by tests. */
+  return parser->cursor;
 }
 
 /********** functions to process user input **********/
@@ -1657,12 +1691,12 @@ bool input_parsing_successful(struct parser_props *parser, char inputstr[]) {
             user_input);
     return false;
   }
+  if (!truncate_input(&user_input, parser)) {
+    return false;
+  }
   parser->cursor = trim_trailing_whitespace(user_input, trimmed);
   if (strlen(trimmed)) {
     strlcpy(user_input, trimmed, MAXTOKENLEN);
-  }
-  if (!truncate_input(&user_input, parser)) {
-    return false;
   }
   load_stack(parser, user_input);
   if (0 == parser->stacklen) {

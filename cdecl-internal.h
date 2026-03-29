@@ -97,7 +97,8 @@ bool check_for_enum_constants(struct parser_props *parser,
 size_t trim_leading_whitespace(const char *input, char *trimmed);
 size_t trim_trailing_whitespace(const char *input, char *trimmed);
 void elide_assignments(char **input);
-bool handle_trailing_delim(char **output, const char *input, const char delim);
+bool tokenize_secondary_params(char **output, const char *input,
+                               const char delim);
 bool truncate_input(char **input, const struct parser_props *parser);
 
 /* debugging functions */

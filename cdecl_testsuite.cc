@@ -125,6 +125,7 @@ TEST(StringManipulateSuite, TrimmedLeadingWhitepace) {
   char *trimmed = (char *)malloc(MAXTOKENLEN);
   EXPECT_THAT(trim_leading_whitespace("a", trimmed), Eq(0));
   EXPECT_THAT(trim_leading_whitespace("c    ", trimmed), Eq(0));
+  EXPECT_THAT(std::string(trimmed), StrEq(""));
   EXPECT_THAT(trim_leading_whitespace(" ", trimmed), Eq(1));
   EXPECT_THAT(trim_leading_whitespace("\0", trimmed), Eq(0));
   EXPECT_THAT(trim_leading_whitespace(" b", trimmed), Eq(1));
@@ -443,26 +444,26 @@ TEST_F(TokenizerSuite, Push2ndElement) {
 TEST(HandleTrailingDelimSuite, InputOk) {
   _cleanup_(freep) char *output = (char *)malloc(MAXTOKENLEN);
   const char *input = "double val)";
-  EXPECT_THAT(handle_trailing_delim(&output, input, ')'), IsTrue());
+  EXPECT_THAT(tokenize_secondary_params(&output, input, ')'), IsTrue());
   EXPECT_THAT(output, StrEq("double val"));
 }
 
 TEST(HandleTrailingDelimSuite, MissingDelim) {
   _cleanup_(freep) char *output = (char *)malloc(MAXTOKENLEN);
   const char *input = "double val";
-  EXPECT_THAT(handle_trailing_delim(&output, input, ')'), IsFalse());
+  EXPECT_THAT(tokenize_secondary_params(&output, input, ')'), IsFalse());
 }
 
 TEST(HandleTrailingDelimSuite, OnlyDelim) {
   _cleanup_(freep) char *output = (char *)malloc(MAXTOKENLEN);
   const char *input = ")";
-  EXPECT_THAT(handle_trailing_delim(&output, input, ')'), IsTrue());
+  EXPECT_THAT(tokenize_secondary_params(&output, input, ')'), IsTrue());
 }
 
 TEST(HandleTrailingDelimSuite, DelimWithSpaces) {
   _cleanup_(freep) char *output = (char *)malloc(MAXTOKENLEN);
   const char *input = "struct node *next; } ";
-  EXPECT_THAT(handle_trailing_delim(&output, input, '}'), IsTrue());
+  EXPECT_THAT(tokenize_secondary_params(&output, input, '}'), IsTrue());
 }
 
 /* finish_token() observes "enum " and sets parser.is_enum = true. */
@@ -829,6 +830,24 @@ TEST_F(ParserSuite, Truncation) {
   free(token);
 }
 
+TEST_F(ParserSuite, LoadStackSimpleExcessidentifier) {
+  char user_input[MAXTOKENLEN];
+  const char *probe = "double hash payload";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input);
+  EXPECT_THAT(consumed, Eq(0));
+  EXPECT_THAT(parser.stacklen, Eq(0));
+}
+
+TEST_F(ParserSuite, LoadStackSimpleExcessType) {
+  char user_input[MAXTOKENLEN];
+  const char *probe = "double int hash";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input);
+  EXPECT_THAT(consumed, Eq(0));
+  EXPECT_THAT(parser.stacklen, Eq(0));
+}
+
 TEST_F(ParserSuite, ProcessFunctionParamsOneParam) {
   char user_input[MAXTOKENLEN];
   const char *query = "double sqrt(double val)";
@@ -869,6 +888,26 @@ TEST_F(ParserSuite, ProcessFunctionParamsOneParamBadDelim) {
   ASSERT_THAT(parser.next, IsNull());
   EXPECT_THAT(StderrMatches("Failed to process last function parameter"),
               IsTrue());
+}
+
+TEST_F(ParserSuite, LoadStackFunctionExcessidentifier) {
+  char user_input[MAXTOKENLEN];
+  const char *probe = "double hash(int payload foo)";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input);
+  EXPECT_THAT(consumed, Eq(0));
+  EXPECT_THAT(parser.stacklen, Eq(0));
+}
+
+TEST_F(ParserSuite, LoadStackFunctionExcessType) {
+  char user_input[MAXTOKENLEN];
+  const char *probe = "double hash(int enum foo)";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input);
+  parser.err_stream = stderr;
+  showstack(&parser.stack[0], parser.stacklen, stdout);
+  EXPECT_THAT(consumed, Eq(0));
+  EXPECT_THAT(parser.stacklen, Eq(0));
 }
 
 TEST_F(ParserSuite, ProcessFunctionParamsTwoParams) {
@@ -1174,10 +1213,12 @@ TEST_F(ParserSuite, LoadStackWorks) {
 
 TEST_F(ParserSuite, LoadStackEqualsTerminator) {
   char user_input[MAXTOKENLEN];
-  const char *probe = "static double val = 2";
+  const char *probe = "static double val       = 2";
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input);
-  EXPECT_THAT(consumed, Eq(strlen(probe) - strlen(" = 2")));
+  // trim_trailing_whitespace removes the space before '=', but trailing chars
+  // aren't part of the accounting, which only tracks parser progress.'
+  EXPECT_THAT(consumed, Eq(strlen("static double val")));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string double"),
               IsTrue());
   EXPECT_THAT(
@@ -1267,12 +1308,14 @@ TEST_F(ParserSuite, LoadStackCommaTerminatorFunction) {
 
 TEST_F(ParserSuite, LoadStackCommaTerminatorFunctionSpaces) {
   char user_input[MAXTOKENLEN];
-  const char *probe = "uint64_t hash( char *str ,  uint64_t seed ,)";
+  const char *probe =
+      "uint64_t hash( char *str,  uint64_t seed, size_t len,, )";
   strlcpy(user_input, probe, strlen(probe) + 1);
-  // The first ',' is not included in the accounting.
-  // When parsing reaches " ,)" the call to has_any_name_chars() in
-  // process_secondary_params() triggers an immediate return.
-  EXPECT_THAT(load_stack(&parser, user_input), Eq(strlen(probe) - 3));
+
+  // tokenize_secondary_params() in process_secondary_params() overwrites the
+  // first comma with NULL, dropping the rest of the string.
+  EXPECT_THAT(load_stack(&parser, user_input),
+              Eq(strlen(probe) - strlen(", )")));
   show_parser_list(&parser);
   ASSERT_THAT(parser.next, Not(IsNull()));
   EXPECT_THAT(parser.next->next, Not(IsNull()));
@@ -1294,8 +1337,7 @@ TEST_F(ParserSuite, LoadStackCommaTerminatorFunctionSpaces) {
       StdoutMatches("Token number 1 has kind identifier and string hash"),
       IsTrue());
   // Otherwise freed by pop_all().
-  free(parser.next->next);
-  free(parser.next);
+  free_all_parsers(&parser);
 }
 
 TEST_F(ParserSuite, LoadStackArrayNoLength) {
@@ -1613,7 +1655,26 @@ TEST_F(ParserSuite, LoadStackStructNoInstanceNameMissingLeadingSpace) {
   const char *probe = "struct node{ int payload; struct node *next;}";
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input);
-  // The -1 is needed because '}' is not counted.
+  EXPECT_THAT(consumed, Eq(0));
+  EXPECT_THAT(parser.stacklen, Eq(0));
+}
+
+TEST_F(ParserSuite, LoadStackStructExcessidentifier) {
+  char user_input[MAXTOKENLEN];
+  const char *probe = "struct node { int payload foo; struct node *next;}";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input);
+  EXPECT_THAT(consumed, Eq(0));
+  EXPECT_THAT(parser.stacklen, Eq(0));
+}
+
+TEST_F(ParserSuite, LoadStackStructExcessType) {
+  char user_input[MAXTOKENLEN];
+  const char *probe = "struct node { int enum payload; struct node *next;}";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input);
+  parser.err_stream = stderr;
+  showstack(&parser.stack[0], parser.stacklen, stdout);
   EXPECT_THAT(consumed, Eq(0));
   EXPECT_THAT(parser.stacklen, Eq(0));
 }
@@ -1623,6 +1684,8 @@ TEST_F(ParserSuite, LoadStackEnumInstanceNameMissingLeadingSpace) {
   const char *probe = "enum State state{GAS}";
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input);
+  parser.err_stream = stderr;
+  showstack(&parser.stack[0], parser.stacklen, stdout);
   EXPECT_THAT(consumed, Eq(0));
   EXPECT_THAT(parser.stacklen, Eq(0));
 }

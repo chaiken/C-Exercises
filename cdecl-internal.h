@@ -13,7 +13,7 @@ const char *types[] = {"char",     "short",   "int",      "float",    "double",
                        "long",     "struct",  "enum",     "union",    "void",
                        "int8_t",   "uint8_t", "int8_t",   "uint16_t", "int16_t",
                        "uint32_t", "int32_t", "uint64_t", "int64_t",  "size_t",
-                       "ssize_t"};
+                       "ssize_t",  "bool"};
 const char *qualifiers[] = {"const",  "volatile", "static",  "*",
                             "extern", "unsigned", "restrict"};
 enum token_class {

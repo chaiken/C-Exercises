@@ -185,6 +185,7 @@ TEST(StringManipulateSuite, GetKindTypes) {
   EXPECT_THAT(get_kind("uint64_t"), Eq(type));
   EXPECT_THAT(get_kind("size_t"), Eq(type));
   EXPECT_THAT(get_kind("ssize_t"), Eq(type));
+  EXPECT_THAT(get_kind("bool"), Eq(type));
 }
 
 TEST(StringManipulateSuite, GetArrayLength) {

@@ -85,7 +85,7 @@ cdecl: cdecl.c
 cdecl-valgrind: cdecl.c
 	/bin/rm -f ./cdecl_valgrind
 	$(CCC) $(CBASICFLAGS) $(LDBASICFLAGS) -o cdecl-valgrind cdecl.c
-	valgrind ./cdecl-valgrind
+	valgrind ./cdecl-valgrind "struct node {int payload; struct node *next;} nodelist;"
 
 cdecl-preprocess:
 	$(CCC) $(CBASICFLAGS) -E --save-temps cdecl.c

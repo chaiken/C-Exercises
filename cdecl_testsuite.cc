@@ -1708,10 +1708,11 @@ TEST_F(ParserSuite, LoadStackTypedef) {
 
 TEST_F(ParserSuite, LoadStackFunctionPtrOneParamWithIdentifier) {
   char user_input[MAXTOKENLEN];
-  const char *probe = "int (*open) (struct inode *blk)";
+  const char *probe = "int (*open) (struct inode *blk);";
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input);
-  EXPECT_THAT(consumed, Eq(strlen(probe)));
+  // -1 due to semicolon.
+  EXPECT_THAT(consumed, Eq(strlen(probe) - 1));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string int"),
               IsTrue());
   EXPECT_THAT(StdoutMatches("Token number 1 has kind qualifier and string *"),
@@ -1732,10 +1733,10 @@ TEST_F(ParserSuite, LoadStackFunctionPtrOneParamWithIdentifier) {
 
 TEST_F(ParserSuite, LoadStackFunctionPtrOneParamNoIdentifier) {
   char user_input[MAXTOKENLEN];
-  const char *probe = "int (*open) (struct inode *)";
+  const char *probe = "int (*open) (struct inode *);";
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input);
-  EXPECT_THAT(consumed, Eq(strlen(probe)));
+  EXPECT_THAT(consumed, Eq(strlen(probe) - 1));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string int"),
               IsTrue());
   EXPECT_THAT(StdoutMatches("Token number 1 has kind qualifier and string *"),
@@ -1753,10 +1754,10 @@ TEST_F(ParserSuite, LoadStackFunctionPtrOneParamNoIdentifier) {
 
 TEST_F(ParserSuite, LoadStackFunctionPtrTwoParamsWithIdentifiers) {
   char user_input[MAXTOKENLEN];
-  const char *probe = "int (*open) (struct inode *blk, struct file *dir)";
+  const char *probe = "int (*open) (struct inode *blk, struct file *dir);";
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input);
-  EXPECT_THAT(consumed, Eq(strlen(probe)));
+  EXPECT_THAT(consumed, Eq(strlen(probe) - 1));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string int"),
               IsTrue());
   EXPECT_THAT(StdoutMatches("Token number 1 has kind qualifier and string *"),
@@ -1785,10 +1786,10 @@ TEST_F(ParserSuite, LoadStackFunctionPtrTwoParamsWithIdentifiers) {
 
 TEST_F(ParserSuite, LoadStackFunctionPtrTwoParamsNoIdentifiers) {
   char user_input[MAXTOKENLEN];
-  const char *probe = "int (*open) (struct inode *, struct file *)";
+  const char *probe = "int (*open) (struct inode *, struct file *);";
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input);
-  EXPECT_THAT(consumed, Eq(strlen(probe)));
+  EXPECT_THAT(consumed, Eq(strlen(probe) - 1));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string int"),
               IsTrue());
   EXPECT_THAT(StdoutMatches("Token number 1 has kind qualifier and string *"),
@@ -2040,6 +2041,52 @@ TEST_F(ParserSuite, ParseFunctionPtrWithTwoParamsNoIdentifiers) {
   // clang-format on
 }
 
+TEST_F(ParserSuite, ParseFunctionPtrWithTwoParamsNoIdentifiersVariantSpaces) {
+  char inputstr[] = "int (*open)( struct inode *, struct file *);";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  // clang-format off
+  EXPECT_THAT(StdoutMatches("open is a(n) pointer to a function which returns int and takes param(s) pointer to struct inode and pointer to struct file"),
+              IsTrue());
+  // clang-format on
+}
+
+TEST_F(ParserSuite, ParseFunctionPtrInStructNoParams) {
+  char inputstr[] = "struct file { int (*open)(); };";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  // clang-format off
+  EXPECT_THAT(StdoutMatches("struct file has member(s) open is a(n) pointer to a function which returns int"),
+              IsTrue());
+  // clang-format on
+}
+
+TEST_F(ParserSuite, ParseFunctionPtrInStructOneParamWithIdentifier) {
+  char inputstr[] = "struct file { int (*open)(struct inode *blk); };";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  // clang-format off
+  EXPECT_THAT(StdoutMatches("struct file has member(s) open is a(n) pointer to a function which returns int"),
+              IsTrue());
+  // clang-format on
+}
+
+TEST_F(ParserSuite, ParseFunctionPtrInStructOneParamNoIdentifier) {
+  char inputstr[] = "struct file { int (*open)(struct inode *); };";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  // clang-format off
+  EXPECT_THAT(StdoutMatches("struct file has member(s) open is a(n) pointer to a function which returns int"),
+              IsTrue());
+  // clang-format on
+}
+
+TEST_F(ParserSuite, ParseFunctionPtrInStructTwoParamsNoIdentifiers) {
+  char inputstr[] =
+      "struct file { int (*open)(struct inode *, struct file *); };";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  // clang-format off
+  EXPECT_THAT(StdoutMatches("struct file has member(s) open is a(n) pointer to a function which returns int and takes param(s) pointer to struct inode and pointer to struct file"),
+              IsTrue());
+  // clang-format on
+}
+
 TEST_F(ParserSuite, ParseUnionSimpleDeclaration) {
   char inputstr[] = "union msi_domain_cookie;";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
@@ -2273,6 +2320,17 @@ TEST_F(ParserSuite, ParseStructTwoMembersWithInstanceName) {
   // clang-format off
   EXPECT_THAT(
       StdoutMatches("nodelist is a(n) struct node which has member(s) payload is a(n) int and next is a(n) pointer to struct node"),
+      IsTrue());
+  // clang-format on
+}
+
+TEST_F(ParserSuite, ParseStructTwoMembersWithEnumName) {
+  char inputstr[] =
+      "struct node nodelist {enum State state; struct node *next;};";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  // clang-format off
+  EXPECT_THAT(
+      StdoutMatches("nodelist is a(n) struct node which has member(s) state is a(n) enum State and next is a(n) pointer to struct node"),
       IsTrue());
   // clang-format on
 }

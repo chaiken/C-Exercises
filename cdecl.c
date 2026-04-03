@@ -160,7 +160,8 @@ struct parser_props *make_parser(struct parser_props *const parser) {
 
 /* The list head is a stack allocation. */
 void free_all_parsers(struct parser_props *parser) {
-  if (!parser) return;
+  if (!parser)
+    return;
   while (parser->next) {
     struct parser_props *save = parser->next->next;
 #ifdef DEBUG
@@ -1287,12 +1288,17 @@ int pop_stack(struct parser_props *parser, bool no_enum_instance) {
           }
           ret = pop_all(cursor);
           depth++;
-          struct parser_props *save = cursor->next;
+          struct parser_props *save_next = cursor->next;
+          struct parser_props *save_prev = cursor->prev;
 #ifdef DEBUG
           fprintf(stderr, "pop_stack(): freeing %p at %d\n", cursor, __LINE__);
 #endif
           free(cursor);
-          cursor = save;
+          save_prev->next = save_next;
+          if (save_next) {
+            save_next->prev = save_prev;
+          }
+          cursor = save_next;
           if (ret)
             return ret;
         }
@@ -1311,12 +1317,17 @@ int pop_stack(struct parser_props *parser, bool no_enum_instance) {
           }
           ret = pop_all(cursor);
           depth++;
-          struct parser_props *save = cursor->next;
+          struct parser_props *save_next = cursor->next;
+          struct parser_props *save_prev = cursor->prev;
 #ifdef DEBUG
           fprintf(stderr, "pop_stack(): freeing %p at %d\n", cursor, __LINE__);
 #endif
           free(cursor);
-          cursor = save;
+          save_prev->next = save_next;
+          if (save_next) {
+            save_next->prev = save_prev;
+          }
+          cursor = save_next;
           if (ret)
             return ret;
         }

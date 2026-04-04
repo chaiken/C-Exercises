@@ -7,6 +7,7 @@
 #include <iostream>
 #include <string>
 
+#define DEBUG
 #define TESTING
 
 #include "cdecl.c"

@@ -132,7 +132,7 @@ void reset_parser(struct parser_props *parser) {
 struct parser_props *make_parser(struct parser_props *const parser) {
   struct parser_props *new_parser =
       (struct parser_props *)malloc(sizeof(struct parser_props));
-#ifdef TESTING
+#ifdef DEBUG
   fprintf(stderr, "Allocated %p\n", new_parser);
 #endif
   if (!new_parser) {
@@ -162,7 +162,7 @@ struct parser_props *make_parser(struct parser_props *const parser) {
 void free_all_parsers(struct parser_props *parser) {
   while (parser->next) {
     struct parser_props *save = parser->next->next;
-#ifdef TESTING
+#ifdef DEBUG
     fprintf(stderr, "free_all_parsers(): freeing %p\n", parser->next);
 #endif
     free(parser->next);
@@ -930,7 +930,7 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
        * count. */
       parser->cursor += increm + 1;
       progress_ptr = user_input + parser->cursor;
-#ifdef TESTING
+#ifdef DEBUG
       show_parser_list(parser, __LINE__);
 #endif
     } else if (parser->has_function_params) {
@@ -951,7 +951,7 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
       }
       /* 1 is for ')'. */
       parser->cursor += increm + 1;
-#ifdef TESTING
+#ifdef DEBUG
       show_parser_list(parser, __LINE__);
 #endif
       break;
@@ -1285,7 +1285,7 @@ int pop_stack(struct parser_props *parser, bool no_enum_instance) {
           ret = pop_all(cursor);
           depth++;
           struct parser_props *save = cursor->next;
-#ifdef TESTING
+#ifdef DEBUG
           fprintf(stderr, "pop_stack(): freeing %p at %d\n", cursor, __LINE__);
 #endif
           free(cursor);
@@ -1309,7 +1309,7 @@ int pop_stack(struct parser_props *parser, bool no_enum_instance) {
           ret = pop_all(cursor);
           depth++;
           struct parser_props *save = cursor->next;
-#ifdef TESTING
+#ifdef DEBUG
           fprintf(stderr, "pop_stack(): freeing %p at %d\n", cursor, __LINE__);
 #endif
           free(cursor);
@@ -1752,7 +1752,7 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
     return 0;
   }
   reorder_stacks(parser);
-#ifdef TESTING
+#ifdef DEBUG
   showstack(parser->stack, parser->stacklen, parser->out_stream, __LINE__);
 #endif
   return parser->cursor;
@@ -1797,7 +1797,7 @@ bool input_parsing_successful(struct parser_props *parser, char inputstr[]) {
     free_all_parsers(parser);
     return false;
   }
-#ifdef TESTING
+#ifdef DEBUG
   showstack(parser->stack, parser->stacklen, parser->out_stream, __LINE__);
 #endif
   if (pop_all(parser)) {

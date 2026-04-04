@@ -82,6 +82,9 @@ matrix-determinant_test: matrix-determinant_testsuite.o matrix-determinant.c
 cdecl: cdecl.c
 	$(CCC) $(CFLAGS) $(LDFLAGS) -o cdecl cdecl.c
 
+cdecl-debug: cdecl.c
+	$(CCC) $(CFLAGS) -DDEBUG $(LDFLAGS) -o cdecl-debug cdecl.c
+
 cdecl-valgrind: cdecl.c
 	/bin/rm -f ./cdecl_valgrind
 	$(CCC) $(CBASICFLAGS) $(LDBASICFLAGS) -o cdecl-valgrind cdecl.c
@@ -102,5 +105,5 @@ cdecl-clangtidy: cdecl.c
 
 
 clean:
-	/bin/rm -rf *.o *~ *.d *test *-valgrind palindrome palindrome_test helloc matrix-determinant cdecl cdecl_test kernel-doubly-linked-macros
+	/bin/rm -rf *.o *~ *.d *test *-valgrind palindrome palindrome_test helloc matrix-determinant cdecl cdecl_test cdecl-debug kernel-doubly-linked-macros
 

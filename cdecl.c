@@ -641,14 +641,14 @@ bool truncate_input(char **input, const struct parser_props *parser) {
 
 /********** debugging functions **********/
 
-void show_parser_list(const struct parser_props *parser) {
+void show_parser_list(const struct parser_props *parser, const int lineno) {
   struct parser_props *pnext = parser->next;
   if (!pnext) {
     fprintf(parser->err_stream, "\nNo subsidiary parsers.\n");
     return;
   }
   /* The list head is a stack allocation. */
-  fprintf(parser->err_stream, "HEAD: %p-->", parser);
+  fprintf(parser->err_stream, "HEAD at %d: %p-->", lineno, parser);
   while (pnext) {
     fprintf(parser->err_stream, "%p", pnext);
     pnext = pnext->next;
@@ -682,13 +682,13 @@ void show_parser_reverse_list(const struct parser_props *parser) {
 }
 
 void showstack(const struct token *stack, const size_t stacklen,
-               FILE *out_stream) {
+               FILE *out_stream, const int lineno) {
 
   size_t tokennum = 0, ctr;
 
   if (!stack)
     return;
-  fprintf(out_stream, "Stack is:\n");
+  fprintf(out_stream, "Stack at %d is:\n", lineno);
   for (ctr = 0; ctr < stacklen; ctr++) {
     fprintf(out_stream, "Token number %lu has kind %s and string %s\n",
             tokennum, kind_names[stack[ctr].kind], stack[ctr].string);
@@ -931,7 +931,7 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
       parser->cursor += increm + 1;
       progress_ptr = user_input + parser->cursor;
 #ifdef TESTING
-      show_parser_list(parser);
+      show_parser_list(parser, __LINE__);
 #endif
     } else if (parser->has_function_params) {
       /*
@@ -952,7 +952,7 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
       /* 1 is for ')'. */
       parser->cursor += increm + 1;
 #ifdef TESTING
-      show_parser_list(parser);
+      show_parser_list(parser, __LINE__);
 #endif
       break;
     } else {
@@ -1286,7 +1286,7 @@ int pop_stack(struct parser_props *parser, bool no_enum_instance) {
           depth++;
           struct parser_props *save = cursor->next;
 #ifdef TESTING
-          fprintf(stderr, "pop_stack(): freeing %p\n", cursor);
+          fprintf(stderr, "pop_stack(): freeing %p at %d\n", cursor, __LINE__);
 #endif
           free(cursor);
           cursor = save;
@@ -1310,7 +1310,7 @@ int pop_stack(struct parser_props *parser, bool no_enum_instance) {
           depth++;
           struct parser_props *save = cursor->next;
 #ifdef TESTING
-          fprintf(stderr, "pop_stack(): freeing %p\n", cursor);
+          fprintf(stderr, "pop_stack(): freeing %p at %d\n", cursor, __LINE__);
 #endif
           free(cursor);
           cursor = save;
@@ -1375,6 +1375,7 @@ int pop_stack(struct parser_props *parser, bool no_enum_instance) {
               parser->stack[stacktop].string, parser->stack[stacktop].kind);
       return -EINVAL;
     }
+    fflush(parser->out_stream);
   }
   memset(parser->stack[stacktop].string, '\0', MAXTOKENLEN);
   parser->stack[stacktop].kind = invalid;
@@ -1752,7 +1753,7 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
   }
   reorder_stacks(parser);
 #ifdef TESTING
-  showstack(parser->stack, parser->stacklen, parser->out_stream);
+  showstack(parser->stack, parser->stacklen, parser->out_stream, __LINE__);
 #endif
   return parser->cursor;
 }
@@ -1797,7 +1798,7 @@ bool input_parsing_successful(struct parser_props *parser, char inputstr[]) {
     return false;
   }
 #ifdef TESTING
-  showstack(parser->stack, parser->stacklen, parser->out_stream);
+  showstack(parser->stack, parser->stacklen, parser->out_stream, __LINE__);
 #endif
   if (pop_all(parser)) {
     free_all_parsers(parser);

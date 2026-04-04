@@ -114,9 +114,9 @@ bool tokenize_secondary_params(char **output, const char *input,
 bool truncate_input(char **input, const struct parser_props *parser);
 
 /* debugging functions */
-void show_parser_list(const struct parser_props *parser);
+void show_parser_list(const struct parser_props *parser, const int lineno);
 void showstack(const struct token *stack, const size_t stacklen,
-               FILE *out_stream);
+               FILE *out_stream, const int lineno);
 
 /* parser helper functions */
 bool have_stacked_compound_type(const struct parser_props *parser);

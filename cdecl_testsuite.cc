@@ -906,7 +906,7 @@ TEST_F(ParserSuite, LoadStackFunctionExcessType) {
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input);
   parser.err_stream = stderr;
-  showstack(&parser.stack[0], parser.stacklen, stdout);
+  showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
   EXPECT_THAT(consumed, Eq(0));
   EXPECT_THAT(parser.stacklen, Eq(0));
 }
@@ -1135,14 +1135,14 @@ TEST_F(ParserSuite, Showstack) {
   push_stack(&parser, &token0);
   struct token token1{qualifier, "const"};
   push_stack(&parser, &token1);
-  showstack(&parser.stack[0], parser.stacklen, parser.out_stream);
-  EXPECT_THAT(StdoutMatches("Stack is:"), IsTrue());
+  showstack(&parser.stack[0], parser.stacklen, parser.out_stream, __LINE__);
+  EXPECT_THAT(StdoutMatches("Stack at"), IsTrue());
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string int"),
               IsTrue());
   EXPECT_THAT(
       StdoutMatches("Token number 1 has kind qualifier and string const"),
       IsTrue());
-  showstack(&parser.stack[0], parser.stacklen, stdout);
+  showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
 }
 
 TEST_F(ParserSuite, ShowParsers) {
@@ -1157,10 +1157,10 @@ TEST_F(ParserSuite, ShowParsers) {
   EXPECT_THAT(parser2->prev, Eq(parser1));
   EXPECT_THAT(parser2->prev->prev, Eq(&parser));
 
-  show_parser_list(&parser);
+  show_parser_list(&parser, __LINE__);
 
   const std::string descender{"-->"};
-  const std::string head{"HEAD: "};
+  const std::string head{"HEAD at"};
   std::ostringstream oss0{};
   oss0 << &parser;
   std::ostringstream oss1{};
@@ -1209,7 +1209,7 @@ TEST_F(ParserSuite, LoadStackWorks) {
               IsTrue());
   EXPECT_THAT(StdoutMatches("Token number 3 has kind identifier and string x"),
               IsTrue());
-  showstack(&parser.stack[0], parser.stacklen, stdout);
+  showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
 }
 
 TEST_F(ParserSuite, LoadStackEqualsTerminator) {
@@ -1227,7 +1227,7 @@ TEST_F(ParserSuite, LoadStackEqualsTerminator) {
   EXPECT_THAT(
       StdoutMatches("Token number 2 has kind identifier and string val"),
       IsTrue());
-  showstack(&parser.stack[0], parser.stacklen, stdout);
+  showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
 }
 
 TEST_F(ParserSuite, SimpleFunction) {
@@ -1281,7 +1281,7 @@ TEST_F(ParserSuite, LoadStackCommaTerminatorFunction) {
   const char *probe = "uint64_t hash(char *str, uint64_t seed)";
   strlcpy(user_input, probe, strlen(probe) + 1);
   EXPECT_THAT(load_stack(&parser, user_input), Eq(strlen(probe)));
-  show_parser_list(&parser);
+  show_parser_list(&parser, __LINE__);
   ASSERT_THAT(parser.next, Not(IsNull()));
   EXPECT_THAT(parser.next->next, Not(IsNull()));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string uint64_t"),
@@ -1316,7 +1316,7 @@ TEST_F(ParserSuite, LoadStackCommaTerminatorFunctionSpaces) {
   // first comma with NULL, dropping the rest of the string.
   EXPECT_THAT(load_stack(&parser, user_input),
               Eq(strlen(probe) - strlen(", )")));
-  show_parser_list(&parser);
+  show_parser_list(&parser, __LINE__);
   ASSERT_THAT(parser.next, Not(IsNull()));
   EXPECT_THAT(parser.next->next, Not(IsNull()));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string uint64_t"),
@@ -1354,7 +1354,7 @@ TEST_F(ParserSuite, LoadStackArrayNoLength) {
   EXPECT_THAT(
       StdoutMatches("Token number 1 has kind identifier and string val"),
       IsTrue());
-  showstack(&parser.stack[0], parser.stacklen, stdout);
+  showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
 }
 
 TEST_F(ParserSuite, LoadStackArrayLength) {
@@ -1373,7 +1373,7 @@ TEST_F(ParserSuite, LoadStackArrayLength) {
   EXPECT_THAT(
       StdoutMatches("Token number 2 has kind identifier and string val"),
       IsTrue());
-  showstack(&parser.stack[0], parser.stacklen, stdout);
+  showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
 }
 
 TEST_F(ParserSuite, LoadStackTwoDimArrayOneLength) {
@@ -1387,7 +1387,7 @@ TEST_F(ParserSuite, LoadStackTwoDimArrayOneLength) {
               Eq(strlen(probe) - strlen("][]")));
   EXPECT_THAT(parser.array_dimensions, Eq(2));
   EXPECT_THAT(parser.array_lengths, Eq(1));
-  showstack(&parser.stack[0], parser.stacklen, stdout);
+  showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
 }
 
 TEST_F(ParserSuite, LoadStackTwoDimArrayTwoLengths) {
@@ -1406,7 +1406,7 @@ TEST_F(ParserSuite, LoadStackTwoDimArrayTwoLengths) {
   EXPECT_THAT(
       StdoutMatches("Token number 3 has kind identifier and string val"),
       IsTrue());
-  showstack(&parser.stack[0], parser.stacklen, stdout);
+  showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
 }
 
 TEST_F(ParserSuite, LoadStackThreeDimArrayTwoLengths) {
@@ -1425,7 +1425,7 @@ TEST_F(ParserSuite, LoadStackThreeDimArrayTwoLengths) {
   EXPECT_THAT(
       StdoutMatches("Token number 3 has kind identifier and string val"),
       IsTrue());
-  showstack(&parser.stack[0], parser.stacklen, stdout);
+  showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
 }
 
 TEST_F(ParserSuite, LoadStackThreeDimArrayThreeLengths) {
@@ -1444,7 +1444,7 @@ TEST_F(ParserSuite, LoadStackThreeDimArrayThreeLengths) {
   EXPECT_THAT(
       StdoutMatches("Token number 3 has kind identifier and string val"),
       IsTrue());
-  showstack(&parser.stack[0], parser.stacklen, stdout);
+  showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
 }
 
 TEST_F(ParserSuite, LoadStackBadArray) {
@@ -1674,7 +1674,7 @@ TEST_F(ParserSuite, LoadStackStructExcessType) {
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input);
   parser.err_stream = stderr;
-  showstack(&parser.stack[0], parser.stacklen, stdout);
+  showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
   EXPECT_THAT(consumed, Eq(0));
   EXPECT_THAT(parser.stacklen, Eq(0));
 }
@@ -1685,7 +1685,7 @@ TEST_F(ParserSuite, LoadStackEnumInstanceNameMissingLeadingSpace) {
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input);
   parser.err_stream = stderr;
-  showstack(&parser.stack[0], parser.stacklen, stdout);
+  showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
   EXPECT_THAT(consumed, Eq(0));
   EXPECT_THAT(parser.stacklen, Eq(0));
 }

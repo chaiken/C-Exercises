@@ -160,6 +160,7 @@ struct parser_props *make_parser(struct parser_props *const parser) {
 
 /* The list head is a stack allocation. */
 void free_all_parsers(struct parser_props *parser) {
+  if (!parser) return;
   while (parser->next) {
     struct parser_props *save = parser->next->next;
 #ifdef DEBUG
@@ -659,6 +660,7 @@ void show_parser_list(const struct parser_props *parser, const int lineno) {
       break;
     }
   }
+  fflush(parser->err_stream);
 }
 
 void show_parser_reverse_list(const struct parser_props *parser) {
@@ -679,6 +681,7 @@ void show_parser_reverse_list(const struct parser_props *parser) {
       break;
     }
   }
+  fflush(parser->err_stream);
 }
 
 void showstack(const struct token *stack, const size_t stacklen,
@@ -694,7 +697,7 @@ void showstack(const struct token *stack, const size_t stacklen,
             tokennum, kind_names[stack[ctr].kind], stack[ctr].string);
     tokennum++;
   }
-
+  fflush(out_stream);
   return;
 }
 

@@ -88,11 +88,11 @@ void limitations() {
          MAXTOKENLEN);
   printf("Known deficiencies:\n\ta) doesn't handle multi-line union "
          "declarations;\n");
-  printf("\tb) doesn't handle function-pointer struct members;\n");
-  printf("\tc) doesn't handle multiple comma-separated declarations;\n");
-  printf("\td) includes only the qualifiers defined in ANSI C, not LIBC,\n");
+  printf("\tb) doesn't handle multiple comma-separated declarations;\n");
+  printf("\tc) includes only the qualifiers defined in ANSI C, not LIBC,\n");
   printf("\t   kernel extensions or compiler attributes;\n");
-  printf("\te) does not support atomic types;\n");
+  printf("\td) does not support atomic types;\n");
+  printf("\te) does not support C23 additions.\n");
   exit(-1);
 }
 
@@ -259,6 +259,16 @@ static bool has_any_name_chars(const char *s) {
     }
   }
   return false;
+}
+
+bool has_any_name_chars_before(const char *s, const char delimiter) {
+  const char *delimp = strchr(s, delimiter);
+  char delimited[MAXTOKENLEN];
+  if (!delimp)
+    return false;
+  memset(&delimited, '\0', MAXTOKENLEN);
+  strlcpy(delimited, s, (delimp - s) + 1);
+  return has_any_name_chars(delimited);
 }
 
 /* A true return value means no errors. */
@@ -913,6 +923,18 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
      * that it can be popped at the start of output.
      */
     if ((has_any_name_chars(progress_ptr)) && ('}' != *progress_ptr)) {
+      /* When processing a struct with a function pointer member with no
+       * parameters, advance past "();". Special handling is needed because
+       * has_any_name_chars() will consider subsequent struct members.
+       */
+      if (strchr(progress_ptr, separator) &&
+          (!has_any_name_chars_before(progress_ptr, separator))) {
+        while (separator != *(user_input + parser->cursor)) {
+          parser->cursor++;
+        }
+        parser->cursor++;
+        progress_ptr = user_input + parser->cursor;
+      }
       // Freed in pop_stack().
       params_parser = make_parser(tail_parser);
     } else {

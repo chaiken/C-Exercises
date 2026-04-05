@@ -959,6 +959,9 @@ TEST_F(ParserSuite, ProcessFunctionParamsStrayComma) {
   free_all_parsers(&parser);
 }
 
+// Parsing succeeds as a side effect of the code added to
+// process_secondary_params() in order to deal with function pointers as struct
+// members.
 TEST_F(ParserSuite, ProcessFunctionParamsStrayMiddleComma) {
   char user_input[MAXTOKENLEN];
   const char *query = "uint64_t hash(char *key, , uint64_t seed)";
@@ -968,9 +971,10 @@ TEST_F(ParserSuite, ProcessFunctionParamsStrayMiddleComma) {
   parser.has_function_params = true;
   strlcpy(user_input, query, strlen(query) + 1);
 
-  process_secondary_params(&parser, user_input);
-  EXPECT_THAT(parser.next, IsNull());
-  EXPECT_THAT(StderrMatches("Failed to load list function parameter"), IsTrue());
+  EXPECT_THAT(process_secondary_params(&parser, user_input), IsTrue());
+  ASSERT_THAT(parser.next, Not(IsNull()));
+  EXPECT_THAT(parser.next->next, Not(IsNull()));
+  free_all_parsers(&parser);
 }
 
 TEST_F(ParserSuite, ProcessFunctionParamsLeadingWhitespace) {
@@ -1821,6 +1825,76 @@ TEST_F(ParserSuite, LoadStackFunctionPtrTwoParamsNoIdentifiers) {
   free_all_parsers(&parser);
 }
 
+TEST_F(ParserSuite, LoadStackTwoFunctionPtrsInStructNoFunctionParams) {
+  char user_input[MAXTOKENLEN];
+  const char *probe =
+      "struct file_operations {int (*open)(); ssize_t (*read)(); };";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input);
+  EXPECT_THAT(consumed, Eq(strlen(probe) - 1));
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string int"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 1 has kind qualifier and string *"),
+              IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 2 has kind identifier and string open"),
+      IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string ssize_t"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 1 has kind qualifier and string *"),
+              IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 2 has kind identifier and string read"),
+      IsTrue());
+  EXPECT_THAT(
+      StdoutMatches(
+          "Token number 0 has kind type and string struct file_operations"),
+      IsTrue());
+  ASSERT_THAT(parser.next, Not(IsNull()));
+  ASSERT_THAT(parser.next->next, Not(IsNull()));
+  // Assure that there are no unexpected parsers producing garbage on the
+  // output.
+  EXPECT_THAT(parser.next->next->next, IsNull());
+  free_all_parsers(&parser);
+}
+
+TEST_F(ParserSuite, LoadStackTwoFunctionPtrsInStructTrailingFunctionParam) {
+  char user_input[MAXTOKENLEN];
+  const char *probe =
+      "struct f {int (*open)(); ssize_t (*read)(struct inode *); };";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input);
+  EXPECT_THAT(consumed, Eq(strlen(probe) - 1));
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string int"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 1 has kind qualifier and string *"),
+              IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 2 has kind identifier and string open"),
+      IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 0 has kind type and string struct inode"),
+      IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 1 has kind qualifier and string *"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string ssize_t"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 1 has kind qualifier and string *"),
+              IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 2 has kind identifier and string read"),
+      IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string struct f"),
+              IsTrue());
+  ASSERT_THAT(parser.next, Not(IsNull()));
+  ASSERT_THAT(parser.next->next, Not(IsNull()));
+  EXPECT_THAT(parser.next->next->next, Not(IsNull()));
+  // Assure that there are no unexpected parsers producing garbage on the
+  // output.
+  EXPECT_THAT(parser.next->next->next->next, IsNull());
+  free_all_parsers(&parser);
+}
+
 TEST_F(ParserSuite, LoadStackReorder) {
   char user_input[MAXTOKENLEN];
   const char *probe = "const int x";
@@ -2070,6 +2144,33 @@ TEST_F(ParserSuite, ParseFunctionPtrInStructNoParams) {
   // clang-format on
 }
 
+TEST_F(ParserSuite, ParseFunctionPtrInStructTwoMembersNoParamsPtrFirst) {
+  char inputstr[] = "struct file { int (*open)(); int payload; };";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  // clang-format off
+  EXPECT_THAT(StdoutMatches("struct file has member(s) open is a(n) pointer to a function which returns int"),
+              IsTrue());
+  // clang-format on
+}
+
+TEST_F(ParserSuite, ParseFunctionPtrInStructTwoMembersNoParamsPtrLast) {
+  char inputstr[] = "struct file { int payload; int (*open)(); };";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  // clang-format off
+  EXPECT_THAT(StdoutMatches("struct file has member(s) payload is a(n) int and open is a(n) pointer to a function which returns int"),
+              IsTrue());
+  // clang-format on
+}
+
+TEST_F(ParserSuite, ParseFunctionPtrTwoInStructNoParams) {
+  char inputstr[] = "struct file { int (*open)(); int (*read)(); };";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  // clang-format off
+  EXPECT_THAT(StdoutMatches("struct file has member(s) open is a(n) pointer to a function which returns int and read is a(n) pointer to a function which returns int"),
+              IsTrue());
+  // clang-format on
+}
+
 TEST_F(ParserSuite, ParseFunctionPtrInStructOneParamWithIdentifier) {
   char inputstr[] = "struct file { int (*open)(struct inode *blk); };";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
@@ -2094,6 +2195,16 @@ TEST_F(ParserSuite, ParseFunctionPtrInStructTwoParamsNoIdentifiers) {
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
   EXPECT_THAT(StdoutMatches("struct file has member(s) open is a(n) pointer to a function which returns int and takes param(s) pointer to struct inode and pointer to struct file"),
+              IsTrue());
+  // clang-format on
+}
+
+TEST_F(ParserSuite, ParseFunctionPtrsInStructTrailingFunctionParam) {
+  char inputstr[] =
+      "struct f {int (*open)(); ssize_t (*read)(struct inode *); };";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  // clang-format off
+  EXPECT_THAT(StdoutMatches("struct f has member(s) open is a(n) pointer to a function which returns int and read is a(n) pointer to a function which returns ssize_t and takes param(s) pointer to struct inode "),
               IsTrue());
   // clang-format on
 }

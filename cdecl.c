@@ -313,13 +313,6 @@ bool parens_match(const char *offset_decl, size_t *pair_count) {
 bool check_for_function_ptr(struct parser_props *parser,
                             const char *offset_decl) {
   size_t pair_count = 0;
-  /* If the previous parser has encountered a struct or function, then
-   * delimiters will appear unbalanced here.  Skip a false-positive check here.
-   */
-  if (parser->prev &&
-      (!(parser->prev->is_struct || parser->prev->is_function))) {
-    return true;
-  }
   if (!parens_match(offset_decl, &pair_count)) {
     fprintf(parser->err_stream, "Unmatched parentheses: %s\n", offset_decl);
     return false;

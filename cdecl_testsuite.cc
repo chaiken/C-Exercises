@@ -969,9 +969,8 @@ TEST_F(ParserSuite, ProcessFunctionParamsStrayMiddleComma) {
   strlcpy(user_input, query, strlen(query) + 1);
 
   process_secondary_params(&parser, user_input);
-  ASSERT_THAT(parser.next, IsNull());
-  EXPECT_THAT(StderrMatches("Failed to load list function parameter"),
-              IsTrue());
+  EXPECT_THAT(parser.next, IsNull());
+  EXPECT_THAT(StderrMatches("Failed to load list function parameter"), IsTrue());
 }
 
 TEST_F(ParserSuite, ProcessFunctionParamsLeadingWhitespace) {
@@ -1193,6 +1192,18 @@ TEST_F(ParserSuite, ShowParsersReverse) {
               IsTrue());
   EXPECT_THAT(StderrMatches(descender + oss1.str()), IsTrue());
   EXPECT_THAT(StderrMatches(descender + oss0.str()), IsTrue());
+}
+
+TEST_F(ParserSuite, GetHeadParser) {
+  struct parser_props *parser0 = make_parser(&parser);
+  struct parser_props *parser1 = make_parser(parser0);
+  struct parser_props *head = get_head_parser(parser1);
+  std::ostringstream oss0{};
+  oss0 << head;
+  std::ostringstream oss1{};
+  oss1 << &parser;
+  ASSERT_THAT(oss0.str(), StrEq(oss1.str()));
+  free_all_parsers(head);
 }
 
 TEST_F(ParserSuite, LoadStackWorks) {

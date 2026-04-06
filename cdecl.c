@@ -129,6 +129,17 @@ void reset_parser(struct parser_props *parser) {
   parser->parent = NULL;
 }
 
+struct parser_props *get_head_parser(struct parser_props *parser) {
+  struct parser_props *cursor;
+  if (!parser)
+    return NULL;
+  cursor = parser;
+  while (cursor->prev) {
+    cursor = cursor->prev;
+  }
+  return cursor;
+}
+
 struct parser_props *make_parser(struct parser_props *const parser) {
   struct parser_props *new_parser =
       (struct parser_props *)malloc(sizeof(struct parser_props));
@@ -916,6 +927,7 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
       if (!tokenize_secondary_params(&next_param, progress_ptr, separator)) {
         fprintf(parser->err_stream, "Failed to process list %s %s\n",
                 err_string, next_param);
+        return false;
       }
       increm = load_stack(params_parser, next_param);
       if (!increm) {
@@ -1754,8 +1766,9 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
       (has_any_name_chars(user_input + parser->cursor))) {
     fprintf(parser->err_stream, "Expression ends with erroneous output: %s\n",
             user_input + parser->cursor);
-    free_all_parsers(parser);
-    reset_parser(parser);
+    struct parser_props *head = get_head_parser(parser);
+    free_all_parsers(head);
+    reset_parser(head);
     return 0;
   }
   reorder_stacks(parser);

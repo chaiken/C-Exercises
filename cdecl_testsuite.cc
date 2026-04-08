@@ -97,8 +97,9 @@ TEST_F(ProcessInputSuite, EmptyStdin1) {
 }
 
 TEST_F(ProcessInputSuite, TooLongStdin) {
-  std::string too_long("01234567890ABCDEFGHIJKMLNOPQRSTUVWYZabcedfghijklmonopqr"
-                       "tsuvwyz0123456789;\n");
+  // clang-format off
+  std::string too_long("01234567890ABCDEFGHIJKMLNOPQRSTUVWYZabcedfghijklmonopqrtsuvwyz0123456789tsuvwyz0123456789tsuvwyz0123456789tsuvwyz0123456789;\n");
+  // clang-format on
   WriteStdin(too_long.c_str());
   EXPECT_THAT(process_stdin(&inputstr[0], fake_stdin), Eq(0));
 }
@@ -1234,8 +1235,21 @@ TEST_F(ParserSuite, GetHeadParser) {
   oss0 << head;
   std::ostringstream oss1{};
   oss1 << &parser;
-  ASSERT_THAT(oss0.str(), StrEq(oss1.str()));
+  EXPECT_THAT(oss0.str(), StrEq(oss1.str()));
   free_all_parsers(head);
+}
+
+TEST_F(ParserSuite, GetTailParser) {
+  struct parser_props *parser0 = make_parser(&parser);
+  struct parser_props *parser1 = make_parser(parser0);
+  struct parser_props *parser2 = make_parser(parser1);
+  struct parser_props *tail = get_tail_parser(&parser);
+  std::ostringstream oss0{};
+  oss0 << tail;
+  std::ostringstream oss1{};
+  oss1 << parser2;
+  EXPECT_THAT(oss0.str(), StrEq(oss1.str()));
+  free_all_parsers(&parser);
 }
 
 TEST_F(ParserSuite, LoadStackWorks) {
@@ -2233,6 +2247,16 @@ TEST_F(ParserSuite, ParseFunctionPtrsInStructTrailingFunctionParam) {
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
   EXPECT_THAT(StdoutMatches("struct f has member(s) open is a(n) pointer to a function which returns int and read is a(n) pointer to a function which returns ssize_t and takes param(s) pointer to struct inode "),
+              IsTrue());
+  // clang-format on
+}
+
+TEST_F(ParserSuite, ParseFunctionPtrsInStructTwoFunctionParamsWithIdentifiers) {
+  // clang-format off
+  char inputstr[] = "struct fops {int (*open)(struct file *f); ssize_t "
+                    "(*read)(struct inode *i); };";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("struct fops has member(s) open is a(n) pointer to a function which returns int and takes param(s) f is a(n) pointer to struct file and read is a(n) pointer to a function which returns ssize_t and takes param(s) i is a(n) pointer to struct inode"),
               IsTrue());
   // clang-format on
 }

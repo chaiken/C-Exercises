@@ -140,6 +140,17 @@ struct parser_props *get_head_parser(struct parser_props *parser) {
   return cursor;
 }
 
+struct parser_props *get_tail_parser(struct parser_props *parser) {
+  struct parser_props *cursor;
+  if (!parser)
+    return NULL;
+  cursor = parser;
+  while (cursor->next) {
+    cursor = cursor->next;
+  }
+  return cursor;
+}
+
 struct parser_props *make_parser(struct parser_props *const parser) {
   struct parser_props *new_parser =
       (struct parser_props *)malloc(sizeof(struct parser_props));
@@ -881,7 +892,7 @@ void handle_trailing_instance_name(struct parser_props *parser,
  */
 bool process_secondary_params(struct parser_props *parser, char *user_input) {
   struct parser_props *params_parser;
-  struct parser_props *tail_parser = parser;
+  struct parser_props *tail_parser = get_tail_parser(parser);
   size_t increm = 0;
   char *progress_ptr = user_input + parser->cursor;
   _cleanup_(freep) char *next_param = (char *)malloc(MAXTOKENLEN);
@@ -994,7 +1005,7 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
        */
       return false;
     }
-    tail_parser = params_parser;
+    tail_parser = get_tail_parser(parser);
   }
   /*
    * Prevent the error handler from running by, essentially, putting the

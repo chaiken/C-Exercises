@@ -79,13 +79,13 @@ matrix-determinant-valgrind: matrix-determinant.c
 matrix-determinant_test: matrix-determinant_testsuite.o matrix-determinant.c
 	$(CPPCC) $(CFLAGS) $(LDFLAGS)  -o matrix-determinant_test matrix-determinant_testsuite.o $(GTESTLIBS)
 
-cdecl: cdecl.c
+cdecl: cdecl.c cdecl-internal.h
 	$(CCC) $(CFLAGS) $(LDFLAGS) -o cdecl cdecl.c
 
-cdecl-debug: cdecl.c
+cdecl-debug: cdecl.c cdecl-internal.h
 	$(CCC) $(CFLAGS) -DDEBUG $(LDFLAGS) -o cdecl-debug cdecl.c
 
-cdecl-valgrind: cdecl.c
+cdecl-valgrind: cdecl.c cdecl-internal.h
 	/bin/rm -f ./cdecl_valgrind
 	$(CCC) $(CBASICFLAGS) $(LDBASICFLAGS) -o cdecl-valgrind cdecl.c
 	valgrind ./cdecl-valgrind "struct node {int payload; struct node *next;} nodelist;"

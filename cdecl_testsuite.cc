@@ -2261,6 +2261,15 @@ TEST_F(ParserSuite, ParseFunctionPtrsInStructTwoFunctionParamsWithIdentifiers) {
   // clang-format on
 }
 
+TEST_F(ParserSuite, ParseFunctionPtrsInFunctionWithFunctionParam) {
+  // clang-format off
+  char inputstr[] = "double hash(bool encrypt(const uint64_t key), uint64_t key);";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("hash is a(n) function which returns double and takes param(s) encrypt is a(n) function which returns bool and takes param(s) key is a(n) const uint64_t and key is a(n) uint64_t"),
+              IsTrue());
+  // clang-format on
+}
+
 TEST_F(ParserSuite, ParseUnionSimpleDeclaration) {
   char inputstr[] = "union msi_domain_cookie;";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());

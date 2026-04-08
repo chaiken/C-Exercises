@@ -658,13 +658,14 @@ bool truncate_input(char **input, const struct parser_props *parser) {
 /********** debugging functions **********/
 
 void show_parser_list(const struct parser_props *parser, const int lineno) {
-  struct parser_props *pnext = parser->next;
+  struct parser_props *head = get_head_parser((struct parser_props *)parser);
+  struct parser_props *pnext = head->next;
   if (!pnext) {
     fprintf(parser->err_stream, "\nNo subsidiary parsers.\n");
     return;
   }
   /* The list head is a stack allocation. */
-  fprintf(parser->err_stream, "HEAD at %d: %p-->", lineno, parser);
+  fprintf(parser->err_stream, "HEAD at %d: %p-->", lineno, head);
   while (pnext) {
     fprintf(parser->err_stream, "%p", pnext);
     pnext = pnext->next;

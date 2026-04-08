@@ -1149,7 +1149,7 @@ TEST_F(ParserSuite, Showstack) {
   showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
 }
 
-TEST_F(ParserSuite, ShowParsers) {
+TEST_F(ParserSuite, ShowParsersFromHead) {
   // Create and check the parser list.
   _cleanup_(freep) struct parser_props *parser1 = make_parser(&parser);
   ASSERT_THAT(parser1, Not(IsNull()));
@@ -1163,6 +1163,33 @@ TEST_F(ParserSuite, ShowParsers) {
 
   show_parser_list(&parser, __LINE__);
 
+  const std::string descender{"-->"};
+  const std::string head{"HEAD at"};
+  std::ostringstream oss0{};
+  oss0 << &parser;
+  std::ostringstream oss1{};
+  oss1 << parser1;
+  std::ostringstream oss2{};
+  oss2 << parser2;
+  EXPECT_THAT(StderrMatches(head) && StderrMatches(oss0.str() + descender),
+              IsTrue());
+  EXPECT_THAT(StderrMatches(descender + oss1.str()), IsTrue());
+  EXPECT_THAT(StderrMatches(descender + oss2.str()), IsTrue());
+}
+
+TEST_F(ParserSuite, ShowParsersFromTail) {
+  // Create and check the parser list.
+  _cleanup_(freep) struct parser_props *parser1 = make_parser(&parser);
+  ASSERT_THAT(parser1, Not(IsNull()));
+  _cleanup_(freep) struct parser_props *parser2 = make_parser(parser1);
+  ASSERT_THAT(parser2, Not(IsNull()));
+  EXPECT_THAT(parser1->prev, Eq(&parser));
+  EXPECT_THAT(parser.next->next, Eq(parser2));
+  EXPECT_THAT(parser1->next, Eq(parser2));
+  EXPECT_THAT(parser2->prev, Eq(parser1));
+  EXPECT_THAT(parser2->prev->prev, Eq(&parser));
+
+  show_parser_list(parser2, __LINE__);
   const std::string descender{"-->"};
   const std::string head{"HEAD at"};
   std::ostringstream oss0{};
@@ -1201,7 +1228,8 @@ TEST_F(ParserSuite, ShowParsersReverse) {
 TEST_F(ParserSuite, GetHeadParser) {
   struct parser_props *parser0 = make_parser(&parser);
   struct parser_props *parser1 = make_parser(parser0);
-  struct parser_props *head = get_head_parser(parser1);
+  struct parser_props *parser2 = make_parser(parser1);
+  struct parser_props *head = get_head_parser(parser2);
   std::ostringstream oss0{};
   oss0 << head;
   std::ostringstream oss1{};

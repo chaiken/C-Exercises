@@ -52,4 +52,5 @@ matrix-determinant
 matrix-determinant_test
 cdecl
 cdecl-valgrind
+cdecl-debug
 cdecl_test

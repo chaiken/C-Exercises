@@ -1017,8 +1017,8 @@ TEST_F(ParserSuite, ProcessStructMembersOneMemberWithInstanceName) {
   // The following characters were processed by the first parser.
   parser.cursor = strlen("struct node nodelist");
 
-  parser.is_struct = true;
-  parser.has_struct_members = true;
+  parser.is_struct_or_union = true;
+  parser.has_struct_or_union_members = true;
   strlcpy(user_input, query, strlen(query) + 1);
 
   process_secondary_params(&parser, user_input);
@@ -1032,7 +1032,7 @@ TEST_F(ParserSuite, ProcessStructMembersOneMemberWithInstanceName) {
   EXPECT_THAT(parser.is_enum, IsFalse());
   ASSERT_THAT(parser.next, Not(IsNull()));
   // The subsidiary parser doesn't see "struct".
-  EXPECT_THAT(parser.next->is_struct, IsFalse());
+  EXPECT_THAT(parser.next->is_struct_or_union, IsFalse());
   EXPECT_THAT(parser.next->is_function, IsFalse());
   EXPECT_THAT(parser.next->is_enum, IsFalse());
   EXPECT_THAT(parser.next->stacklen, Eq(2));
@@ -1607,7 +1607,7 @@ TEST_F(ParserSuite, LoadStackSimpleStruct) {
   std::size_t consumed = load_stack(&parser, user_input);
   // -1 because the code returns when '}' is reached.
   EXPECT_THAT(consumed, Eq(strlen(probe) - 1));
-  EXPECT_THAT(parser.has_struct_members, IsTrue());
+  EXPECT_THAT(parser.has_struct_or_union_members, IsTrue());
   EXPECT_THAT(parser.stacklen, Eq(2));
   EXPECT_THAT(
       StdoutMatches("Token number 0 has kind type and string struct node"),
@@ -1644,7 +1644,7 @@ TEST_F(ParserSuite, LoadStackStructTrailingInstanceName) {
   std::size_t consumed = load_stack(&parser, user_input);
   // -1 because final ';' is not counted.
   EXPECT_THAT(consumed, Eq(strlen(probe)));
-  EXPECT_THAT(parser.has_struct_members, IsTrue());
+  EXPECT_THAT(parser.has_struct_or_union_members, IsTrue());
   EXPECT_THAT(parser.stacklen, Eq(2));
   EXPECT_THAT(
       StdoutMatches("Token number 0 has kind type and string struct node"),
@@ -1681,7 +1681,7 @@ TEST_F(ParserSuite, LoadStackStructNoInstanceName) {
   std::size_t consumed = load_stack(&parser, user_input);
   // -1 because '}' is not counted.
   EXPECT_THAT(consumed, Eq(strlen(probe)));
-  EXPECT_THAT(parser.has_struct_members, IsTrue());
+  EXPECT_THAT(parser.has_struct_or_union_members, IsTrue());
   EXPECT_THAT(parser.stacklen, Eq(1));
   EXPECT_THAT(
       StdoutMatches("Token number 0 has kind type and string struct node"),
@@ -2284,6 +2284,16 @@ TEST_F(ParserSuite, ParseUnionForwardDeclaration) {
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
   EXPECT_THAT(StdoutMatches("dcookie is a(n) union msi_domain_cookie"),
+              IsTrue());
+  // clang-format on
+}
+
+TEST_F(ParserSuite, ParseUnionWithTwoMembers) {
+  char inputstr[] =
+      "union short_to_bytes { uint16_t short_val; uint8_t bytes[2]; };";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  // clang-format off
+  EXPECT_THAT(StdoutMatches("union short_to_bytes has member(s) short_val is a(n) uint16_t and bytes is a(n) array of 2 uint8_t"),
               IsTrue());
   // clang-format on
 }

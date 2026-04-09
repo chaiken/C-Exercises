@@ -49,14 +49,14 @@ struct parser_props {
   /* These bools describe the high-level identity of the parsed object. */
   bool is_function;
   bool is_enum;
-  bool is_struct;
+  bool is_struct_or_union;
   bool is_pointer;
   bool is_function_ptr;
   bool is_typedef;
   /* Enumeration, function and struct objects contain subsidiary objects. */
   bool has_enum_constants;
   bool has_function_params;
-  bool has_struct_members;
+  bool has_struct_or_union_members;
   char enumerator_list[MAXTOKENLEN];
   size_t array_dimensions;
   size_t array_lengths;
@@ -98,8 +98,8 @@ bool check_for_array_dimensions(struct parser_props *parser,
                                 const char *offset_decl);
 bool check_for_function_parameters(struct parser_props *parser,
                                    const char *offset_decl);
-bool check_for_struct_members(struct parser_props *parser,
-                              const char *offset_decl);
+bool check_for_struct_or_union_members(struct parser_props *parser,
+                                       const char *offset_decl);
 bool check_for_enum_constants(struct parser_props *parser,
                               const char *offset_decl);
 bool check_for_function_ptr(struct parser_props *parser,

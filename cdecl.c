@@ -86,13 +86,12 @@ void limitations() {
   printf("Input must be shorter than %u characters, not including quotation "
          "marks and semicolon.\n",
          MAXTOKENLEN);
-  printf("Known deficiencies:\n\ta) doesn't handle multi-line union "
+  printf("Known deficiencies:\n\ta) doesn't handle multiple comma-separated "
          "declarations;\n");
-  printf("\tb) doesn't handle multiple comma-separated declarations;\n");
-  printf("\tc) includes only the qualifiers defined in ANSI C, not LIBC,\n");
+  printf("\tb) includes only the qualifiers defined in ANSI C, not LIBC,\n");
   printf("\t   kernel extensions or compiler attributes;\n");
-  printf("\td) does not support atomic types;\n");
-  printf("\te) does not support C23 additions.\n");
+  printf("\tc) does not support atomic types;\n");
+  printf("\td) does not support C23 additions.\n");
   exit(-1);
 }
 
@@ -111,7 +110,7 @@ void reset_parser(struct parser_props *parser) {
   parser->last_dimension_unspecified = true;
   parser->is_function = false;
   parser->is_enum = false;
-  parser->is_struct = false;
+  parser->is_struct_or_union = false;
   parser->is_pointer = false;
   parser->is_function_ptr = false;
   parser->is_typedef = false;
@@ -121,7 +120,7 @@ void reset_parser(struct parser_props *parser) {
   parser->array_dimensions = 0;
   parser->array_lengths = 0;
   parser->has_function_params = false;
-  parser->has_struct_members = false;
+  parser->has_struct_or_union_members = false;
   parser->stacklen = 0;
   parser->stack[0].kind = invalid;
   parser->prev = NULL;
@@ -393,13 +392,13 @@ bool check_for_function_parameters(struct parser_props *parser,
 }
 
 /* A true return value means no errors. */
-bool check_for_struct_members(struct parser_props *parser,
-                              const char *offset_decl) {
+bool check_for_struct_or_union_members(struct parser_props *parser,
+                                       const char *offset_decl) {
   size_t num_blanks = 0;
   while (isblank(*(offset_decl + num_blanks)))
     num_blanks++;
   const char *member_start = offset_decl + num_blanks;
-  if (parser->is_enum || parser->has_struct_members) {
+  if (parser->is_enum || parser->has_struct_or_union_members) {
     return true;
   }
   if ('{' != *(member_start)) {
@@ -408,10 +407,10 @@ bool check_for_struct_members(struct parser_props *parser,
   const char *params_end = strstr(member_start, "}");
   if (!params_end) {
     reset_parser(parser);
-    fprintf(parser->err_stream, "Malformed struct declaration.\n");
+    fprintf(parser->err_stream, "Malformed struct or union declaration.\n");
     return false;
   }
-  parser->is_struct = true;
+  parser->is_struct_or_union = true;
   /* No struct members since types are at least 3 chars long. */
   if (3 > (params_end - member_start)) {
     return true;
@@ -423,7 +422,7 @@ bool check_for_struct_members(struct parser_props *parser,
    * There is possibly a type within the parentheses and thus a struct
    * member.
    */
-  parser->has_struct_members = true;
+  parser->has_struct_or_union_members = true;
   return true;
 }
 
@@ -439,7 +438,7 @@ bool check_for_enum_constants(struct parser_props *parser,
   const char *spacep = strstr(offset_decl, " ");
   const char *startbracep = strstr(offset_decl, "{");
   const char *endbracep = strstr(offset_decl, "}");
-  if (parser->has_struct_members) {
+  if (parser->has_struct_or_union_members) {
     return true;
   }
 
@@ -865,7 +864,7 @@ void handle_trailing_instance_name(struct parser_props *parser,
   if (parser->cursor < strlen(user_input)) {
     if ((parser->is_enum &&
          first_identifier_is_enumerator(parser, user_input)) ||
-        (!parser->have_identifier && parser->has_struct_members)) {
+        (!parser->have_identifier && parser->has_struct_or_union_members)) {
       this_token.kind = invalid;
       strcpy(this_token.string, "");
       /*
@@ -911,7 +910,7 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
   const char separator = parser->has_function_params ? ',' : ';';
   const char start_delim = parser->has_function_params ? '(' : '{';
   const char end_delim = parser->has_function_params ? ')' : '}';
-  if (!parser->has_function_params && !parser->has_struct_members) {
+  if (!parser->has_function_params && !parser->has_struct_or_union_members) {
     return true;
   }
   /* Go past the ')' that follows the name of the function pointer. */
@@ -1169,7 +1168,8 @@ bool handled_extended_parsing(struct parser_props *parser, char *user_input,
                               struct token *this_token) {
   if (parser->array_dimensions) {
     process_array_dimensions(parser, user_input, this_token);
-  } else if (parser->has_function_params || parser->has_struct_members) {
+  } else if (parser->has_function_params ||
+             parser->has_struct_or_union_members) {
     /* Move past the already-processed characters and '('. */
     if (!process_secondary_params(parser, user_input)) {
       reset_parser(parser);
@@ -1342,7 +1342,7 @@ int pop_stack(struct parser_props *parser, bool no_enum_instance) {
             return ret;
         }
       }
-      if (parser->has_struct_members) {
+      if (parser->has_struct_or_union_members) {
         struct parser_props *cursor = parser->next;
         size_t depth = 0;
         if (parser->have_identifier) {
@@ -1574,8 +1574,8 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
             tokenoffset++;
             continue;
           }
-          if (parser->is_struct) {
-            parser->has_struct_members = true;
+          if (parser->is_struct_or_union) {
+            parser->has_struct_or_union_members = true;
           }
         }
         break;
@@ -1621,7 +1621,8 @@ void finish_token(struct parser_props *parser, const char *offset_decl,
     if (!parser->have_type ||
         !check_for_array_dimensions(parser, offset_decl) ||
         !check_for_function_parameters(parser, offset_decl) ||
-        (parser->is_struct && !check_for_struct_members(parser, offset_decl)) ||
+        (parser->is_struct_or_union &&
+         !check_for_struct_or_union_members(parser, offset_decl)) ||
         (parser->is_enum && !check_for_enum_constants(parser, offset_decl))) {
       /*
        * The current parser is a subsidiary one.  Failing here prevents
@@ -1647,8 +1648,9 @@ void finish_token(struct parser_props *parser, const char *offset_decl,
     if (!strcmp("enum", this_token->string)) {
       parser->is_enum = true;
     }
-    if (!strcmp("struct", this_token->string)) {
-      parser->is_struct = true;
+    if ((!strcmp("struct", this_token->string)) ||
+        (!strcmp("union", this_token->string))) {
+      parser->is_struct_or_union = true;
     }
     /*
      * The identifier which follows will be inside parens, so gettoken() will
@@ -1785,7 +1787,7 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
      * While a function pointer itself must be named, the funtion
      * parameters need only have types.
      */
-    if (!(parser->has_struct_members ||
+    if (!(parser->has_struct_or_union_members ||
           (parser->parent && parser->parent->is_function_ptr))) {
       free_all_parsers(parser);
       return 0;
@@ -1844,8 +1846,8 @@ bool input_parsing_successful(struct parser_props *parser, char inputstr[]) {
     return false;
   }
   if ((!parser->have_type) ||
-      (!parser->have_identifier &&
-       (!strlen(parser->enumerator_list) && !parser->has_struct_members))) {
+      (!parser->have_identifier && (!strlen(parser->enumerator_list) &&
+                                    !parser->has_struct_or_union_members))) {
     fprintf(parser->err_stream,
             "Input lacks required identifier or type element.\n");
     free_all_parsers(parser);

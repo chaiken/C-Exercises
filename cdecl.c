@@ -164,18 +164,6 @@ struct parser_props *make_parser(struct parser_props *const parser) {
   new_parser->err_stream = parser->err_stream;
   parser->next = new_parser;
   new_parser->prev = parser;
-  /* Record in the child parser context that the parent is a function pointer.
-   */
-  if (parser->is_function_ptr) {
-    new_parser->parent = parser;
-  } else if (parser->parent) {
-    /*
-     * The function whose pointer is declared may take multiple parameters,
-     * each with its own parser.  Each one of the parameter-parsers needs to
-     * know that its parent is a function pointer.
-     */
-    new_parser->parent = parser->parent;
-  }
   return new_parser;
 }
 
@@ -882,6 +870,32 @@ void handle_trailing_instance_name(struct parser_props *parser,
   }
 }
 
+bool load_next_secondary_param(struct parser_props *const current_parser,
+                               char *progress_ptr, const char demarcator,
+                               const char *err_string) {
+  size_t increm = 0;
+  _cleanup_(freep) char *next_param = (char *)malloc(MAXTOKENLEN);
+  const struct parser_props *head = get_head_parser(current_parser);
+
+  memset(next_param, '\0', MAXTOKENLEN);
+  if (!tokenize_secondary_params(&next_param, progress_ptr, demarcator)) {
+    fprintf(current_parser->err_stream, "Failed to process %s %s\n", err_string,
+            next_param ? next_param : "");
+    return false;
+  }
+  increm = load_stack(current_parser, next_param);
+  if (!increm) {
+    /* Referring to one of the stack-allocated parsers triggers use-after-free.
+     */
+    fprintf(head->err_stream, "Failed to load %s %s\n", err_string,
+            next_param ? next_param : "");
+    return false;
+  }
+  /* +1 to go past demarcator, which is not included in the cursor count. */
+  current_parser->parent->cursor += increm + 1;
+  return true;
+}
+
 /*
  * Spawn a new parser for each function parameter or struct member and
  * link it into a list whose head is the top-level parser.  Note that
@@ -892,9 +906,8 @@ void handle_trailing_instance_name(struct parser_props *parser,
 bool process_secondary_params(struct parser_props *parser, char *user_input) {
   struct parser_props *params_parser;
   struct parser_props *tail_parser = get_tail_parser(parser);
-  size_t increm = 0;
   char *progress_ptr = user_input + parser->cursor;
-  _cleanup_(freep) char *next_param = (char *)malloc(MAXTOKENLEN);
+
   /*
    * Create a pointer which the code doesn't otherwise need as a peg
    * on which to hang the function's error handler.  The approach is
@@ -905,8 +918,12 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
   _cleanup_(subsidiary_parsers_cleanup) struct parser_props **dummy_parserp =
       &parser;
   _cleanup_(freep) char *next_member = (char *)malloc(MAXTOKENLEN);
-  const char *err_string =
-      parser->has_function_params ? "function parameter" : "struct member";
+  const char *err_string = parser->has_function_params
+                               ? "function parameter"
+                               : "struct or union member";
+  const char *final_err_string = parser->has_function_params
+                                     ? "last function parameter"
+                                     : "last struct or union member";
   const char separator = parser->has_function_params ? ',' : ';';
   const char start_delim = parser->has_function_params ? '(' : '{';
   const char end_delim = parser->has_function_params ? ')' : '}';
@@ -948,6 +965,7 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
       }
       // Freed in pop_stack().
       params_parser = make_parser(tail_parser);
+      params_parser->parent = parser;
     } else {
       /* Parsing of function parameters or struct members is done. */
       break;
@@ -957,20 +975,10 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
      * process.
      */
     if (strchr(progress_ptr, separator)) {
-      if (!tokenize_secondary_params(&next_param, progress_ptr, separator)) {
-        fprintf(parser->err_stream, "Failed to process list %s %s\n",
-                err_string, next_param);
+      if (!load_next_secondary_param(params_parser, progress_ptr, separator,
+                                     err_string)) {
         return false;
       }
-      increm = load_stack(params_parser, next_param);
-      if (!increm) {
-        fprintf(parser->err_stream, "Failed to load list %s %s\n", err_string,
-                next_param);
-        return false;
-      }
-      /* +1 to go past separator. The delimiter is not included in the cursor
-       * count. */
-      parser->cursor += increm + 1;
       progress_ptr = user_input + parser->cursor;
 #ifdef DEBUG
       show_parser_list(parser, __LINE__);
@@ -981,18 +989,10 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
        * Pass progress_ptr rather than user_input since the params parser only
        * processes what's inside the delimiters.
        */
-      if (!tokenize_secondary_params(&next_param, progress_ptr, end_delim)) {
-        fprintf(parser->err_stream, "Failed to process last %s\n", err_string);
+      if (!load_next_secondary_param(params_parser, progress_ptr, end_delim,
+                                     final_err_string)) {
         return false;
       }
-      increm = load_stack(params_parser, next_param);
-      if (!increm) {
-        fprintf(parser->err_stream, "Failed to load last %s %s\n", err_string,
-                next_param);
-        return false;
-      }
-      /* 1 is for ')'. */
-      parser->cursor += increm + 1;
 #ifdef DEBUG
       show_parser_list(parser, __LINE__);
 #endif
@@ -1011,13 +1011,6 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
    * dummy_parserp flag down.
    */
   dummy_parserp = NULL;
-  /*
-   * If the subsidiary parser was processing the arguments of a function
-   * pointer, it is now done.  If, for example, the function pointer
-   * is a struct member, the next struct member may or may not also be a
-   * function pointer.
-   */
-  tail_parser->parent = NULL;
   handle_trailing_instance_name(parser, user_input);
   return true;
 }
@@ -1784,7 +1777,7 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
   if (!parser->have_identifier) {
     /*
      * As with enumerators, the instance name of a struct is optional.
-     * While a function pointer itself must be named, the funtion
+     * While a function pointer itself must be named, the function
      * parameters need only have types.
      */
     if (!(parser->has_struct_or_union_members ||

@@ -2288,12 +2288,42 @@ TEST_F(ParserSuite, ParseUnionForwardDeclaration) {
   // clang-format on
 }
 
-TEST_F(ParserSuite, ParseUnionWithTwoMembers) {
+TEST_F(ParserSuite, ParseUnionWithTwoMembersNoInstanceName) {
   char inputstr[] =
       "union short_to_bytes { uint16_t short_val; uint8_t bytes[2]; };";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
   EXPECT_THAT(StdoutMatches("union short_to_bytes has member(s) short_val is a(n) uint16_t and bytes is a(n) array of 2 uint8_t"),
+              IsTrue());
+  // clang-format on
+}
+
+TEST_F(ParserSuite, ParseUnionInstanceName) {
+  char inputstr[] =
+      "union short_to_bytes s_to_b { uint16_t short_val; uint8_t bytes[2];};";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  // clang-format off
+  EXPECT_THAT(StdoutMatches("s_to_b is a(n) union short_to_bytes which has member(s) short_val is a(n) uint16_t and bytes is a(n) array of 2 uint8_t"),
+              IsTrue());
+  // clang-format on
+}
+
+TEST_F(ParserSuite, ParseUnionTrailingInstanceNameWithSpace) {
+  char inputstr[] =
+      "union short_to_bytes { uint16_t short_val; uint8_t bytes[2]; } s_to_b;";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  // clang-format off
+  EXPECT_THAT(StdoutMatches("s_to_b is a(n) union short_to_bytes which has member(s) short_val is a(n) uint16_t and bytes is a(n) array of 2 uint8_t"),
+              IsTrue());
+  // clang-format on
+}
+
+TEST_F(ParserSuite, ParseUnionTrailingInstanceNameNoSpaces) {
+  char inputstr[] =
+      "union short_to_bytes {uint16_t short_val;uint8_t bytes[2];}s_to_b;";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  // clang-format off
+  EXPECT_THAT(StdoutMatches("s_to_b is a(n) union short_to_bytes which has member(s) short_val is a(n) uint16_t and bytes is a(n) array of 2 uint8_t"),
               IsTrue());
   // clang-format on
 }
@@ -2539,6 +2569,26 @@ TEST_F(ParserSuite, ParseStructTwoMembersTrailingInstanceName) {
   EXPECT_THAT(StdoutMatches("and nodelist is a(n)"), IsFalse());
 }
 
+TEST_F(ParserSuite, ParseStructTwoMembersTrailingInstanceNameWithSpace) {
+  char inputstr[] = "struct node {int payload; struct node *next; } nodelist;";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  // clang-format off
+  EXPECT_THAT(
+      StdoutMatches("nodelist is a(n) struct node which has member(s) payload is a(n) int and next is a(n) pointer to struct node"),
+      IsTrue());
+  // clang-format on
+  EXPECT_THAT(StdoutMatches("and nodelist is a(n)"), IsFalse());
+}
+
+TEST_F(ParserSuite, ParseStructTwoMembersTrailingInstanceNameNoSpaces) {
+  char inputstr[] = "struct node {ssize_t payload;struct node *next;}nodelist;";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  // clang-format off
+  EXPECT_THAT(StdoutMatches("nodelist is a(n) struct node which has member(s) payload is a(n) ssize_t and next is a(n) pointer to struct node"),
+              IsTrue());
+  // clang-format on
+}
+
 TEST_F(ParserSuite, ParseStructTwoMembersNoInstanceName) {
   char inputstr[] = "struct node {int payload; struct node *next;};";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
@@ -2557,17 +2607,18 @@ TEST_F(ParserSuite, ParseStructTwoMembersNoInstanceNameSpaces) {
   // clang-format on
 }
 
-TEST_F(ParserSuite, ParseStructTwoMembersTrailingInstanceNameNoSpaces) {
-  char inputstr[] = "struct node {ssize_t payload;struct node *next;}nodelist;";
+TEST_F(ParserSuite, ParseStructComplexMembers) {
+  char inputstr[] = "struct message {enum priority prio; uint8_t bytes[8];};";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
-  EXPECT_THAT(StdoutMatches("nodelist is a(n) struct node which has member(s) payload is a(n) ssize_t and next is a(n) pointer to struct node"),
+  EXPECT_THAT(StdoutMatches("struct message has member(s) prio is a(n) enum priority and bytes is a(n) array of 8 uint8_t"),
               IsTrue());
   // clang-format on
 }
 
-TEST_F(ParserSuite, ParseStructComplexMembers) {
-  char inputstr[] = "struct message {enum priority prio; uint8_t bytes[8];};";
+TEST_F(ParserSuite, ParseStructComplexMembersWithSpaces) {
+  char inputstr[] =
+      "struct message { enum priority prio; uint8_t bytes[8]; } ;";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
   EXPECT_THAT(StdoutMatches("struct message has member(s) prio is a(n) enum priority and bytes is a(n) array of 8 uint8_t"),

@@ -986,6 +986,10 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
         return false;
       }
       progress_ptr = user_input + parser->cursor;
+      /* All done with struct, union or functions params or members. */
+      if (!has_any_name_chars_before(progress_ptr, end_delim)) {
+        break;
+      }
 #ifdef DEBUG
       show_parser_list(parser, __LINE__);
 #endif

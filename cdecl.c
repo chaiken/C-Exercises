@@ -897,6 +897,23 @@ bool load_next_secondary_param(struct parser_props *const current_parser,
 }
 
 /*
+ * When processing a struct with a function pointer member with no
+ * parameters, advance past "();". has_any_name_chars_before() is needed because
+ * has_any_name_chars() will also observe subsequent struct members and trailing
+ * instance names.
+ */
+void advance_past_separator(size_t *cursor, const char *input,
+                            const char separator) {
+  if (strchr(input + *cursor, separator) &&
+      (!has_any_name_chars_before(input + *cursor, separator))) {
+    while (separator != *(input + *cursor)) {
+      (*cursor)++;
+    }
+    (*cursor)++;
+  }
+}
+
+/*
  * Spawn a new parser for each function parameter or struct member and
  * link it into a list whose head is the top-level parser.  Note that
  * the function or struct name is on the original parser's stack. enumerations
@@ -930,14 +947,12 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
   if (!parser->has_function_params && !parser->has_struct_or_union_members) {
     return true;
   }
-  /* Go past the ')' that follows the name of the function pointer. */
-  if (parser->is_function_ptr && (end_delim == *progress_ptr)) {
+  if (end_delim == *progress_ptr) {
     parser->cursor++;
   }
   parser->cursor += trim_leading_whitespace(progress_ptr, next_member) + 1;
   progress_ptr = user_input + parser->cursor;
-  /* Finally advance the parser into the function parameters or struct members.
-   */
+  /* Finally advance the parser into the parameters or members. */
   if (start_delim == *progress_ptr) {
     parser->cursor++;
     progress_ptr = user_input + parser->cursor;
@@ -948,21 +963,12 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
      * and delimiters. The second check prevents a trailing instance name from
      * being stacked in the tail parser. Instead,
      * handle_trailing_instance_name() should stack it in the head parser so
-     * that it can be popped at the start of output.
+     * that it can be popped at the start of output.  Functions have no trailing
+     * instance names, so the end delimiter in question is '}'.
      */
     if ((has_any_name_chars(progress_ptr)) && ('}' != *progress_ptr)) {
-      /* When processing a struct with a function pointer member with no
-       * parameters, advance past "();". Special handling is needed because
-       * has_any_name_chars() will consider subsequent struct members.
-       */
-      if (strchr(progress_ptr, separator) &&
-          (!has_any_name_chars_before(progress_ptr, separator))) {
-        while (separator != *(user_input + parser->cursor)) {
-          parser->cursor++;
-        }
-        parser->cursor++;
-        progress_ptr = user_input + parser->cursor;
-      }
+      advance_past_separator(&parser->cursor, user_input, separator);
+      progress_ptr = user_input + parser->cursor;
       // Freed in pop_stack().
       params_parser = make_parser(tail_parser);
       params_parser->parent = parser;
@@ -985,7 +991,9 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
 #endif
     } else if (parser->has_function_params) {
       /*
-       * There is only one remaining parameter.
+       * There is only one remaining parameter without a separator.
+       * While the trailing comma in a list of function parameters is optional,
+       * each struct member declaration must end with a semicolon.
        * Pass progress_ptr rather than user_input since the params parser only
        * processes what's inside the delimiters.
        */
@@ -998,10 +1006,6 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
 #endif
       break;
     } else {
-      /*
-       * While the trailing comma in a list of function parameters is optional,
-       * each struct member declaration must end with a semicolon.
-       */
       return false;
     }
     tail_parser = get_tail_parser(parser);

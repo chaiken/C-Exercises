@@ -902,13 +902,31 @@ bool load_next_secondary_param(struct parser_props *const current_parser,
  * has_any_name_chars() will also observe subsequent struct members and trailing
  * instance names.
  */
-void advance_past_separator(size_t *cursor, const char *input,
-                            const char separator) {
+static void advance_past_separator(size_t *cursor, const char *input,
+                                   const char separator) {
   if (strchr(input + *cursor, separator) &&
       (!has_any_name_chars_before(input + *cursor, separator))) {
     while (separator != *(input + *cursor)) {
       (*cursor)++;
     }
+    (*cursor)++;
+  }
+}
+
+static void advance_past_start_delim(size_t *cursor, const char *input,
+                                     const char start_delim,
+                                     const char end_delim) {
+  _cleanup_(freep) char *next_member = (char *)malloc(MAXTOKENLEN);
+  /*
+   * Function pointers need to advance past the ')' which follows the function
+   * name.
+   */
+  if (end_delim == *(input + *cursor)) {
+    (*cursor)++;
+  }
+  (*cursor) += trim_leading_whitespace(input + *cursor, next_member) + 1;
+  /* Finally advance the parser into the parameters or members. */
+  if (start_delim == *(input + *cursor)) {
     (*cursor)++;
   }
 }
@@ -934,7 +952,6 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
    */
   _cleanup_(subsidiary_parsers_cleanup) struct parser_props **dummy_parserp =
       &parser;
-  _cleanup_(freep) char *next_member = (char *)malloc(MAXTOKENLEN);
   const char *err_string = parser->has_function_params
                                ? "function parameter"
                                : "struct or union member";
@@ -947,16 +964,8 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
   if (!parser->has_function_params && !parser->has_struct_or_union_members) {
     return true;
   }
-  if (end_delim == *progress_ptr) {
-    parser->cursor++;
-  }
-  parser->cursor += trim_leading_whitespace(progress_ptr, next_member) + 1;
+  advance_past_start_delim(&parser->cursor, user_input, start_delim, end_delim);
   progress_ptr = user_input + parser->cursor;
-  /* Finally advance the parser into the parameters or members. */
-  if (start_delim == *progress_ptr) {
-    parser->cursor++;
-    progress_ptr = user_input + parser->cursor;
-  }
   while (strlen(progress_ptr)) {
     /*
      * has_any_chars() triggers a break if the input consists only of separators

@@ -334,6 +334,10 @@ bool parens_match(const char *offset_decl, size_t *pair_count) {
 /* A true return value means no errors. */
 bool check_for_function_ptr(struct parser_props *parser,
                             const char *offset_decl) {
+  if (parser->is_function_ptr ||
+      (parser->parent && parser->parent->is_function_ptr)) {
+    return true;
+  }
   size_t pair_count = 0;
   if (!parens_match(offset_decl, &pair_count)) {
     fprintf(parser->err_stream, "Unmatched parentheses: %s\n", offset_decl);
@@ -566,6 +570,73 @@ void elide_assignments(char **input) {
 }
 
 /*
+ * process_secondary_params() relies on tokenize_function_params() to
+ * extract individual tokens from function parameters from a parameter
+ * list.  It functions similarly to truncate_input() for the main
+ * parser.  If the input begins with '(', character, go past it
+ * without advancing the parser cursor.  Otherwise, overwrite the
+ * first delimiter character with a NULL. In either case, copy the
+ * resulting string to the output.  If the text chunk is the last in
+ * input, the effect is to drop the remaining non-name characters.
+ */
+bool tokenize_function_params(char **output, char *input, const char delim) {
+  char *param_end;
+  const char *param_start;
+  size_t param_len = 0;
+
+  /* The token terminator is ")," if the next token-group is a function ptr. */
+  char *end_next_param = strstr(input, "),");
+  const char *first_separator = strchr(input, ',');
+  const char *first_start_delim = strchr(input, '(');
+  if (end_next_param) {
+    /* Point to comma after ')'. */
+    param_end = end_next_param + 1;
+  } else {
+    /* Here we have 3 cases.
+     * The first is simple text followed by ')' for the last parameter.
+     * The second is simple text followed by a comma.
+     * The third is text followed by a comma and '(' where the comma precedes
+     * the parens. This order indicates a simple parameter preceding a function
+     * pointer.
+     */
+    if ((!first_separator && !first_start_delim) ||
+        (first_separator && !first_start_delim) ||
+        (first_separator && first_start_delim &&
+         (first_separator < first_start_delim))) {
+      param_end = strchr(input, delim);
+    } else if (strstr(input, "))")) {
+      /*
+       * The next comma is part of a function-ptr's params.  Skip over it and
+       * pass the function ptr as a whole to a subsidiary parser. The pattern
+       * holds when a function pointer is last in a function's params, which is
+       * the conventional case.
+       */
+      param_end = strrchr(input, delim);
+    }
+  }
+  if (!param_end) {
+    return false;
+  }
+  /*
+   * There is a leading delimiter.   Overwriting it directly with NULL would
+   * result in an empty string.
+   */
+  if (input == param_end) {
+    param_start = input + 1;
+    param_len = strlen(input) - 1;
+  } else {
+    /*
+     * There is a trailing delimiter, so just overwrite it with NULL.
+     */
+    param_start = input;
+    param_len = param_end - input;
+  }
+  /* Copy the entire input, as otherwise there is no trailing NULL. */
+  strlcpy(*output, param_start, param_len + 1);
+  return true;
+}
+
+/*
  * process_secondary_params() relies on tokenize_secondary_params() to
  * extract individual tokens from function parameters or struct
  * members.  It functions similarly to truncate_input() for the main
@@ -576,8 +647,7 @@ void elide_assignments(char **input) {
  * chunk is the last in input, the effect is to drop the remaining
  * non-name characters.
  */
-bool tokenize_secondary_params(char **output, const char *input,
-                               const char delim) {
+bool tokenize_struct_params(char **output, char *input, const char delim) {
   const char *param_end = strchr(input, delim);
   const char *param_start;
   size_t param_len = 0;
@@ -625,7 +695,7 @@ bool truncate_input(char **input, const struct parser_props *parser) {
     elide_assignments(input);
   } else {
     /* Dump chars after '=', if any. */
-    input_end = strstr(*input, "=");
+    input_end = strchr(*input, '=');
   }
   /*
    * If the input after '=' or ',' is not lopped off, the input should terminate
@@ -638,6 +708,9 @@ bool truncate_input(char **input, const struct parser_props *parser) {
      * arbitrarily many semicolons.
      */
     input_end = strrchr(*input, ';');
+    if (!input_end) {
+      input_end = strrchr(*input, ')');
+    }
     /* Input with two semicolons or ')' could reach this point. */
     if (input_end == *input) {
       fprintf(parser->err_stream, "Zero-length input string.\n");
@@ -762,7 +835,6 @@ bool handled_compound_type(struct parser_props *parser,
   }
   if (!name_end_ptr) {
     name_end_ptr = strchr(compound_type_name, parser->separator);
-    ;
   }
   if (!name_end_ptr) {
     return true;
@@ -888,6 +960,10 @@ void handle_trailing_instance_name(struct parser_props *parser,
   }
 }
 
+/*
+ * The caller passes either the terminating delimiter or an intermediate
+ * separator as the demarcator.
+ */
 bool load_next_secondary_param(struct parser_props *const current_parser,
                                char *progress_ptr, const char demarcator,
                                const char *err_string) {
@@ -896,10 +972,21 @@ bool load_next_secondary_param(struct parser_props *const current_parser,
   const struct parser_props *head = get_head_parser(current_parser);
 
   memset(next_param, '\0', MAXTOKENLEN);
-  if (!tokenize_secondary_params(&next_param, progress_ptr, demarcator)) {
-    fprintf(current_parser->err_stream, "Failed to process %s %s\n", err_string,
-            next_param ? next_param : "");
-    return false;
+  if (current_parser->parent && current_parser->parent->has_function_params) {
+    if (!tokenize_function_params(&next_param, progress_ptr, demarcator)) {
+      fprintf(current_parser->err_stream, "Failed to process %s %s\n",
+              err_string, next_param ? next_param : "");
+      return false;
+    }
+  } else if (current_parser->parent &&
+             current_parser->parent->has_struct_or_union_members) {
+    if (!tokenize_struct_params(&next_param, progress_ptr, demarcator)) {
+      fprintf(current_parser->err_stream, "Failed to process %s %s\n",
+              err_string, next_param ? next_param : "");
+      return false;
+    }
+  } else {
+    return true;
   }
   increm = load_stack(current_parser, next_param);
   if (!increm) {
@@ -942,11 +1029,22 @@ static void advance_past_start_delim(struct parser_props *parser,
     parser->cursor++;
   }
   parser->cursor +=
-      trim_leading_whitespace(input + parser->cursor, next_member) + 1;
+      trim_leading_whitespace(input + parser->cursor, next_member);
   /* Finally advance the parser into the parameters or members. */
   if (parser->start_delim == *(input + parser->cursor)) {
     parser->cursor++;
   }
+}
+
+static bool next_separator_is_inside_delims(const struct parser_props *parser,
+                                            const char *input) {
+  const char *startp = strchr(input, parser->start_delim);
+  const char *sepp = strchr(input, parser->separator);
+  if (!sepp)
+    return true;
+  if (!startp)
+    return false;
+  return (startp < sepp);
 }
 
 /*
@@ -1004,7 +1102,7 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
      * There may be more than one function parameter or struct member yet to
      * process.
      */
-    if (strchr(progress_ptr, parser->separator)) {
+    if (!next_separator_is_inside_delims(parser, progress_ptr)) {
       if (!load_next_secondary_param(params_parser, progress_ptr,
                                      parser->separator, err_string)) {
         return false;
@@ -1866,15 +1964,22 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
     reset_parser(parser);
     return 0;
   }
-  /* There is unclassifiable junk at the end of the expression. */
   if ((parser->cursor < strlen(user_input)) &&
       (has_any_name_chars(user_input + parser->cursor))) {
-    fprintf(parser->err_stream, "Expression ends with erroneous output: %s\n",
-            user_input + parser->cursor);
-    struct parser_props *head = get_head_parser(parser);
-    free_all_parsers(head);
-    reset_parser(head);
-    return 0;
+    if (parser->has_function_params && strchr(user_input, ')')) {
+      if (!handled_extended_parsing(parser, user_input, &this_token)) {
+        reset_parser(parser);
+        return 0;
+      }
+    } else {
+      /* There is unclassifiable junk at the end of the expression. */
+      fprintf(parser->err_stream, "Expression ends with erroneous output: %s\n",
+              user_input + parser->cursor);
+      struct parser_props *head = get_head_parser(parser);
+      free_all_parsers(head);
+      reset_parser(head);
+      return 0;
+    }
   }
   reorder_stacks(parser);
 #ifdef DEBUG

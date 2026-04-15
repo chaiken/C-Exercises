@@ -98,7 +98,7 @@ TEST_F(ProcessInputSuite, EmptyStdin1) {
 
 TEST_F(ProcessInputSuite, TooLongStdin) {
   // clang-format off
-  std::string too_long("01234567890ABCDEFGHIJKMLNOPQRSTUVWYZabcedfghijklmonopqrtsuvwyz0123456789tsuvwyz0123456789tsuvwyz0123456789tsuvwyz0123456789;\n");
+  std::string too_long("01234567890ABCDEFGHIJKMLNOPQRSTUVWYZabcedfghijklmonopqrtsuvwyz0123456789tsuvwyz0123456789tsuvwyz0123456789tsuvwyz01234567890123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ;\n");
   // clang-format on
   WriteStdin(too_long.c_str());
   EXPECT_THAT(process_stdin(&inputstr[0], fake_stdin), Eq(0));
@@ -444,29 +444,18 @@ TEST_F(TokenizerSuite, Push2ndElement) {
 }
 
 // c_str() and unique_ptr.get() are both r-values.
-TEST(HandleTrailingDelimSuite, InputOk) {
-  _cleanup_(freep) char *output = (char *)malloc(MAXTOKENLEN);
-  const char *input = "double val)";
-  EXPECT_THAT(tokenize_secondary_params(&output, input, ')'), IsTrue());
-  EXPECT_THAT(output, StrEq("double val"));
-}
-
-TEST(HandleTrailingDelimSuite, MissingDelim) {
-  _cleanup_(freep) char *output = (char *)malloc(MAXTOKENLEN);
-  const char *input = "double val";
-  EXPECT_THAT(tokenize_secondary_params(&output, input, ')'), IsFalse());
-}
-
 TEST(HandleTrailingDelimSuite, OnlyDelim) {
   _cleanup_(freep) char *output = (char *)malloc(MAXTOKENLEN);
-  const char *input = ")";
-  EXPECT_THAT(tokenize_secondary_params(&output, input, ')'), IsTrue());
+  char input[MAXTOKENLEN];
+  strlcpy(input, ")", 2);
+  EXPECT_THAT(tokenize_function_params(&output, &input[0], ')'), IsTrue());
 }
 
 TEST(HandleTrailingDelimSuite, DelimWithSpaces) {
   _cleanup_(freep) char *output = (char *)malloc(MAXTOKENLEN);
-  const char *input = "struct node *next; } ";
-  EXPECT_THAT(tokenize_secondary_params(&output, input, '}'), IsTrue());
+  char input[MAXTOKENLEN];
+  strlcpy(input, "struct node *next; } ", strlen("struct node *next; } ") + 1);
+  EXPECT_THAT(tokenize_struct_params(&output, &input[0], '}'), IsTrue());
 }
 
 /* finish_token() observes "enum " and sets parser.is_enum = true. */
@@ -868,7 +857,7 @@ TEST_F(ParserSuite, ProcessFunctionParamsOneParam) {
   // When process_secondary_params() runs, the first parser has already handled
   // all the text before the opening parentheses.
   EXPECT_THAT(parser.stacklen, Eq(0));
-  EXPECT_THAT(parser.cursor, Eq(strlen("double sqrt(double val)")));
+  EXPECT_THAT(parser.cursor, Eq(strlen(query)));
   // The whole string has been consumed.
   EXPECT_THAT(user_input + parser.cursor, StrEq(""));
   ASSERT_THAT(parser.next, Not(IsNull()));
@@ -1064,6 +1053,9 @@ TEST_F(ParserSuite, ProcessStructMembersOneMemberWithInstanceName) {
 
   parser.is_struct_or_union = true;
   parser.has_struct_or_union_members = true;
+  parser.start_delim = '{';
+  parser.end_delim = '}';
+  parser.separator = ';';
   strlcpy(user_input, query, strlen(query) + 1);
 
   process_secondary_params(&parser, user_input);
@@ -2361,11 +2353,76 @@ TEST_F(ParserSuite, ParseFunctionPtrsInStructTwoFunctionParamsWithIdentifiers) {
   // clang-format on
 }
 
-TEST_F(ParserSuite, ParseFunctionPtrsInFunctionWithFunctionParam) {
+TEST_F(ParserSuite, ParseFunctionPtrAsFunctionParamNoSubsidiaryParams) {
   // clang-format off
-  char inputstr[] = "double hash(bool encrypt(const uint64_t key), uint64_t key);";
+  char inputstr[] = "int heapsort(int (*compar)());";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(StdoutMatches("hash is a(n) function which returns double and takes param(s) encrypt is a(n) function which returns bool and takes param(s) key is a(n) const uint64_t and key is a(n) uint64_t"),
+  EXPECT_THAT(StdoutMatches("heapsort is a(n) function which returns int and takes param(s) compar is a(n) pointer to a function which returns int"),
+              IsTrue());
+  // clang-format on
+}
+
+TEST_F(ParserSuite, ParseFunctionPtrAsFunctionParamNamedParam) {
+  // clang-format off
+  char inputstr[] = "int heapsort(int (*compar)(void *a));";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("heapsort is a(n) function which returns int and takes param(s) compar is a(n) pointer to a function which returns int and takes param(s) a is a(n) pointer to void"),
+              IsTrue());
+  // clang-format on
+}
+
+TEST_F(ParserSuite, ParseFunctionPtrAsFunctionParamAnonymousParam) {
+  // clang-format off
+  char inputstr[] = "int heapsort(int (*compar)(void *));";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("heapsort is a(n) function which returns int and takes param(s) compar is a(n) pointer to a function which returns int and takes param(s) pointer to void"),
+              IsTrue());
+  // clang-format on
+}
+
+TEST_F(ParserSuite, ParseFunctionPtrAsFunctionParamWithParams) {
+  char inputstr[] = "int heapsort(int (*compar)(const void *, const void *));";
+  // clang-format off
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("heapsort is a(n) function which returns int and takes param(s) compar is a(n) pointer to a function which returns int and takes param(s) pointer to const void and pointer to const void"),
+              IsTrue());
+  // clang-format on
+}
+
+TEST_F(ParserSuite, ParseFunctionPtrAsFirstFunctionParam) {
+  // clang-format off
+  char inputstr[] = "int sort(int (*compar)(const void *, const void *), const void *a, const void *b);";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("sort is a(n) function which returns int and takes param(s) compar is a(n) pointer to a function which returns int and takes param(s) pointer to const void and pointer to const void and a is a(n) pointer to const void and b is a(n) pointer to const void"),
+              IsTrue());
+  // clang-format on
+}
+
+TEST_F(ParserSuite, ParseFunctionPtrAsLastFunctionParam) {
+  char inputstr[] = "int sort(const void *a, const void *b, int "
+                    "(*compar)(const void *, const void *));";
+  // clang-format off
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("sort is a(n) function which returns int and takes param(s) a is a(n) pointer to const void and b is a(n) pointer to const void and compar is a(n) pointer to a function which returns int and takes param(s) pointer to const void and pointer to const void"),
+              IsTrue());
+  // clang-format on
+}
+
+TEST_F(ParserSuite,
+       ParseFunctionPtrAsFunctionParamCompoundTypeParamWithSpaces) {
+  // clang-format off
+  char inputstr[] = "int heapsort(int (*compar)(struct msg *, struct msg *));";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("heapsort is a(n) function which returns int and takes param(s) compar is a(n) pointer to a function which returns int and takes param(s) pointer to struct msg and pointer to struct msg"),
+              IsTrue());
+  // clang-format on
+}
+
+TEST_F(ParserSuite, ParseFunctionPtrAsFunctionParamCompoundTypeParamNoSpaces) {
+  // clang-format off
+  char inputstr[] = "int heapsort(int (*compar)(struct msg*, struct msg*));";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("heapsort is a(n) function which returns int and takes param(s) compar is a(n) pointer to a function which returns int and takes param(s) pointer to struct msg and pointer to struct msg"),
               IsTrue());
   // clang-format on
 }

@@ -1,7 +1,7 @@
 #ifndef CDECL_INTERNAL
 #define CDECL_INTERNAL
 
-#define MAXTOKENLEN 96
+#define MAXTOKENLEN 128
 #define MAXTOKENS 256
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 #define _cleanup_(x) __attribute__((__cleanup__(x)))
@@ -112,8 +112,8 @@ bool check_for_function_ptr(struct parser_props *parser,
 size_t trim_leading_whitespace(const char *input, char *trimmed);
 size_t trim_trailing_whitespace(const char *input, char *trimmed);
 void elide_assignments(char **input);
-bool tokenize_secondary_params(char **output, const char *input,
-                               const char delim);
+bool tokenize_function_params(char **output, char *input, const char delim);
+bool tokenize_struct_params(char **output, char *input, const char delim);
 bool truncate_input(char **input, const struct parser_props *parser);
 
 /* debugging functions */

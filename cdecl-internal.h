@@ -63,6 +63,9 @@ struct parser_props {
   /* These parameters describe the internal parser state. */
   size_t cursor;
   size_t stacklen;
+  char start_delim;
+  char end_delim;
+  char separator;
   struct token stack[MAXTOKENS];
   struct parser_props *prev;
   struct parser_props *next;

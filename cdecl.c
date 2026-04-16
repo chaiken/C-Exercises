@@ -123,6 +123,9 @@ void reset_parser(struct parser_props *parser) {
   parser->has_struct_or_union_members = false;
   parser->stacklen = 0;
   parser->stack[0].kind = invalid;
+  parser->start_delim = '\0';
+  parser->end_delim = '\0';
+  parser->separator = '\0';
   parser->prev = NULL;
   parser->next = NULL;
   parser->parent = NULL;
@@ -365,6 +368,9 @@ bool check_for_function_parameters(struct parser_props *parser,
     return false;
   }
   parser->is_function = true;
+  parser->start_delim = '(';
+  parser->end_delim = ')';
+  parser->separator = ',';
   /* No function parameters since types are at least 3 chars long. */
   if (3 > (params_end - (offset_decl + trimnum))) {
     return true;
@@ -398,7 +404,6 @@ bool check_for_struct_or_union_members(struct parser_props *parser,
     fprintf(parser->err_stream, "Malformed struct or union declaration.\n");
     return false;
   }
-  parser->is_struct_or_union = true;
   /* No struct members since types are at least 3 chars long. */
   if (3 > (params_end - member_start)) {
     return true;
@@ -902,32 +907,32 @@ bool load_next_secondary_param(struct parser_props *const current_parser,
  * has_any_name_chars() will also observe subsequent struct members and trailing
  * instance names.
  */
-static void advance_past_separator(size_t *cursor, const char *input,
-                                   const char separator) {
-  if (strchr(input + *cursor, separator) &&
-      (!has_any_name_chars_before(input + *cursor, separator))) {
-    while (separator != *(input + *cursor)) {
-      (*cursor)++;
+static void advance_past_separator(struct parser_props *parser,
+                                   const char *input) {
+  if (strchr(input + parser->cursor, parser->separator) &&
+      (!has_any_name_chars_before(input + parser->cursor, parser->separator))) {
+    while (parser->separator != *(input + parser->cursor)) {
+      parser->cursor++;
     }
-    (*cursor)++;
+    parser->cursor++;
   }
 }
 
-static void advance_past_start_delim(size_t *cursor, const char *input,
-                                     const char start_delim,
-                                     const char end_delim) {
+static void advance_past_start_delim(struct parser_props *parser,
+                                     const char *input) {
   _cleanup_(freep) char *next_member = (char *)malloc(MAXTOKENLEN);
   /*
    * Function pointers need to advance past the ')' which follows the function
    * name.
    */
-  if (end_delim == *(input + *cursor)) {
-    (*cursor)++;
+  if (parser->end_delim == *(input + parser->cursor)) {
+    parser->cursor++;
   }
-  (*cursor) += trim_leading_whitespace(input + *cursor, next_member) + 1;
+  parser->cursor +=
+      trim_leading_whitespace(input + parser->cursor, next_member) + 1;
   /* Finally advance the parser into the parameters or members. */
-  if (start_delim == *(input + *cursor)) {
-    (*cursor)++;
+  if (parser->start_delim == *(input + parser->cursor)) {
+    parser->cursor++;
   }
 }
 
@@ -958,13 +963,10 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
   const char *final_err_string = parser->has_function_params
                                      ? "last function parameter"
                                      : "last struct or union member";
-  const char separator = parser->has_function_params ? ',' : ';';
-  const char start_delim = parser->has_function_params ? '(' : '{';
-  const char end_delim = parser->has_function_params ? ')' : '}';
   if (!parser->has_function_params && !parser->has_struct_or_union_members) {
     return true;
   }
-  advance_past_start_delim(&parser->cursor, user_input, start_delim, end_delim);
+  advance_past_start_delim(parser, user_input);
   progress_ptr = user_input + parser->cursor;
   while (strlen(progress_ptr)) {
     /*
@@ -976,7 +978,7 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
      * instance names, so the end delimiter in question is '}'.
      */
     if ((has_any_name_chars(progress_ptr)) && ('}' != *progress_ptr)) {
-      advance_past_separator(&parser->cursor, user_input, separator);
+      advance_past_separator(parser, user_input);
       progress_ptr = user_input + parser->cursor;
       // Freed in pop_stack().
       params_parser = make_parser(tail_parser);
@@ -989,14 +991,14 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
      * There may be more than one function parameter or struct member yet to
      * process.
      */
-    if (strchr(progress_ptr, separator)) {
-      if (!load_next_secondary_param(params_parser, progress_ptr, separator,
-                                     err_string)) {
+    if (strchr(progress_ptr, parser->separator)) {
+      if (!load_next_secondary_param(params_parser, progress_ptr,
+                                     parser->separator, err_string)) {
         return false;
       }
       progress_ptr = user_input + parser->cursor;
       /* All done with struct, union or functions params or members. */
-      if (!has_any_name_chars_before(progress_ptr, end_delim)) {
+      if (!has_any_name_chars_before(progress_ptr, parser->end_delim)) {
         break;
       }
 #ifdef DEBUG
@@ -1010,8 +1012,8 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
        * Pass progress_ptr rather than user_input since the params parser only
        * processes what's inside the delimiters.
        */
-      if (!load_next_secondary_param(params_parser, progress_ptr, end_delim,
-                                     final_err_string)) {
+      if (!load_next_secondary_param(params_parser, progress_ptr,
+                                     parser->end_delim, final_err_string)) {
         return false;
       }
 #ifdef DEBUG
@@ -1661,6 +1663,9 @@ void finish_token(struct parser_props *parser, const char *offset_decl,
     if ((!strcmp("struct", this_token->string)) ||
         (!strcmp("union", this_token->string))) {
       parser->is_struct_or_union = true;
+      parser->start_delim = '{';
+      parser->end_delim = '}';
+      parser->separator = ';';
     }
     /*
      * The identifier which follows will be inside parens, so gettoken() will

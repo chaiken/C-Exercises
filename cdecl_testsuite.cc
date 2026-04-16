@@ -858,6 +858,9 @@ TEST_F(ParserSuite, ProcessFunctionParamsOneParam) {
   parser.cursor = strlen("double sqrt");
 
   parser.has_function_params = true;
+  parser.start_delim = '(';
+  parser.end_delim = ')';
+  parser.separator = ',';
   strlcpy(user_input, query, strlen(query) + 1);
 
   process_secondary_params(&parser, user_input);
@@ -885,6 +888,9 @@ TEST_F(ParserSuite, ProcessFunctionParamsOneParamBadDelim) {
   parser.cursor = strlen("double sqrt");
 
   parser.has_function_params = true;
+  parser.start_delim = '(';
+  parser.end_delim = ')';
+  parser.separator = ',';
   strlcpy(user_input, query, strlen(query) + 1);
 
   process_secondary_params(&parser, user_input);
@@ -920,6 +926,9 @@ TEST_F(ParserSuite, ProcessFunctionParamsTwoParams) {
   parser.cursor = strlen("uint64_t hash");
 
   parser.has_function_params = true;
+  parser.start_delim = '(';
+  parser.end_delim = ')';
+  parser.separator = ',';
   strlcpy(user_input, query, strlen(query) + 1);
 
   process_secondary_params(&parser, user_input);
@@ -953,6 +962,9 @@ TEST_F(ParserSuite, ProcessFunctionParamsStrayComma) {
   parser.cursor = strlen("double sqrt");
 
   parser.has_function_params = true;
+  parser.start_delim = '(';
+  parser.end_delim = ')';
+  parser.separator = ',';
   strlcpy(user_input, query, strlen(query) + 1);
 
   EXPECT_THAT(process_secondary_params(&parser, user_input), IsTrue());
@@ -970,6 +982,9 @@ TEST_F(ParserSuite, ProcessFunctionParamsStrayMiddleComma) {
   parser.cursor = strlen("uint64_t hash");
 
   parser.has_function_params = true;
+  parser.start_delim = '(';
+  parser.end_delim = ')';
+  parser.separator = ',';
   strlcpy(user_input, query, strlen(query) + 1);
 
   EXPECT_THAT(process_secondary_params(&parser, user_input), IsTrue());
@@ -985,6 +1000,9 @@ TEST_F(ParserSuite, ProcessFunctionParamsLeadingWhitespace) {
   parser.cursor = strlen("uint64_t hash");
 
   parser.has_function_params = true;
+  parser.start_delim = '(';
+  parser.end_delim = ')';
+  parser.separator = ',';
   strlcpy(user_input, query, strlen(query) + 1);
 
   process_secondary_params(&parser, user_input);

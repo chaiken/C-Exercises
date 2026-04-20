@@ -1050,7 +1050,10 @@ size_t process_array_length(struct parser_props *parser,
     this_token->string[ctr] = *(offset_string + ctr);
   }
   this_token->kind = length;
-  finish_token(parser, offset_string, this_token, ctr);
+  if (!finish_token(parser, offset_string, this_token, ctr)) {
+    reset_parser(parser);
+    return 0;
+  }
   return ctr;
 }
 
@@ -1561,7 +1564,10 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
   if ('*' == *(declstring + tokenoffset)) {
     strlcpy(this_token->string, "*", 2);
     tokenoffset++;
-    finish_token(parser, declstring + tokenoffset, this_token, ctr);
+    if (!finish_token(parser, declstring + tokenoffset, this_token, ctr)) {
+      reset_parser(parser);
+      return 0;
+    }
     return tokenoffset;
   }
   /* The token has multiple characters, so copy them all. */
@@ -1609,25 +1615,32 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
   if ('-' == this_token->string[ctr - 1]) {
     this_token->string[ctr - 1] = '\0';
   }
-  finish_token(parser, declstring + tokenoffset, this_token, ctr);
+  if (!finish_token(parser, declstring + tokenoffset, this_token, ctr)) {
+    reset_parser(parser);
+    return 0;
+  }
   return tokenoffset;
 }
 
 /*
  * finish token() receives an unterminated string from gettoken() which it
- * readies for pushing onto the stack.
+ * readies for pushing onto the stack.  Upon failure, it resets the parser and
+ * returns false.
  */
-void finish_token(struct parser_props *parser, const char *offset_decl,
+bool finish_token(struct parser_props *parser, const char *offset_decl,
                   struct token *this_token, const size_t ctr) {
   this_token->string[ctr + 1] = '\0';
   this_token->kind = get_kind(this_token->string);
   switch (this_token->kind) {
   case identifier:
-    /* Indicate hard failure. */
+    /*
+     * Enum constants are classified as identifiers.   Otherwise, duplicate
+     * identifiers is an error.
+     */
     if ((parser->have_identifier) && (!parser->has_enum_constants)) {
       this_token->kind = invalid;
       reset_parser(parser);
-      return;
+      return false;
     }
     parser->have_identifier = true;
     if (!parser->have_type ||
@@ -1646,7 +1659,7 @@ void finish_token(struct parser_props *parser, const char *offset_decl,
         break;
       }
       reset_parser(parser);
-      return;
+      return false;
     }
     break;
   case type:
@@ -1654,7 +1667,7 @@ void finish_token(struct parser_props *parser, const char *offset_decl,
     if (parser->have_type) {
       this_token->kind = invalid;
       reset_parser(parser);
-      return;
+      return false;
     }
     parser->have_type = true;
     if (!strcmp("enum", this_token->string)) {
@@ -1676,7 +1689,7 @@ void finish_token(struct parser_props *parser, const char *offset_decl,
     if (!(parser->is_function || parser->is_function_ptr)) {
       if (!check_for_function_ptr(parser, offset_decl)) {
         reset_parser(parser);
-        return;
+        return false;
       }
     }
     break;
@@ -1714,7 +1727,7 @@ void finish_token(struct parser_props *parser, const char *offset_decl,
         fprintf(parser->err_stream, "The restrict qualifier only applies to "
                                     "otherwise unqualified pointers.\n");
         reset_parser(parser);
-        return;
+        return false;
       }
     } else {
       parser->have_qualifier = true;
@@ -1728,6 +1741,7 @@ void finish_token(struct parser_props *parser, const char *offset_decl,
   default:
     break;
   }
+  return true;
 }
 
 /*

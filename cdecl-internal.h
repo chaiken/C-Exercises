@@ -153,7 +153,7 @@ int pop_all(struct parser_props *parser);
 enum token_class get_kind(const char *intoken);
 size_t gettoken(struct parser_props *parser, const char *declstring,
                 struct token *this_token);
-void finish_token(struct parser_props *parser, const char *offset_decl,
+bool finish_token(struct parser_props *parser, const char *offset_decl,
                   struct token *this_token, const size_t ctr);
 void push_stack(struct parser_props *parser, struct token *this_token);
 size_t load_stack(struct parser_props *parser, char *user_input);

@@ -296,14 +296,14 @@ TEST_F(TokenizerSuite, IsOnlyArrayLength) {
 
 TEST_F(TokenizerSuite, HasDash) {
   char input[] = "first-val";
-  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(strlen(input)));
+  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(0));
   EXPECT_THAT(this_token.string, StrEq("first-val"));
   EXPECT_THAT(this_token.kind, Eq(identifier));
 }
 
 TEST_F(TokenizerSuite, HasUnderscore) {
   char input[] = "first_val";
-  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(strlen(input)));
+  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(0));
   EXPECT_THAT(this_token.string, StrEq("first_val"));
   EXPECT_THAT(this_token.kind, Eq(identifier));
 }
@@ -315,7 +315,7 @@ TEST_F(TokenizerSuite, HasUnderscore) {
 TEST_F(TokenizerSuite, IgnoreUnallowedCharsNoType) {
   // '5' is neither a name nor type char.
   char input[] = "f5asdf";
-  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(1));
+  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(0));
   EXPECT_THAT(this_token.string, StrEq("f"));
   EXPECT_THAT(this_token.kind, Eq(identifier));
 }
@@ -402,21 +402,21 @@ TEST_F(TokenizerSuite, IgnoreUnallowedCharsNoTypeIsArray) {
 
 TEST_F(TokenizerSuite, ElideTrailingDash) {
   char input[] = "val-";
-  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(strlen(input)));
+  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(0));
   EXPECT_THAT(this_token.string, StrEq("val"));
   EXPECT_THAT(this_token.kind, Eq(identifier));
 }
 
 TEST_F(TokenizerSuite, ElideLeadingDash) {
   char input[] = "--val";
-  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(strlen(input)));
+  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(0));
   EXPECT_THAT(this_token.string, StrEq("val"));
   EXPECT_THAT(this_token.kind, Eq(identifier));
 }
 
 TEST_F(TokenizerSuite, DoNotElideLeadingUnderscore) {
   char input[] = "__val";
-  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(strlen(input)));
+  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(0));
   EXPECT_THAT(this_token.string, StrEq("__val"));
   EXPECT_THAT(this_token.kind, Eq(identifier));
 }
@@ -2097,8 +2097,7 @@ TEST_F(ParserSuite, ParseArrayWithThreeLengths) {
 TEST_F(ParserSuite, ParseArrayWithBadLength) {
   char inputstr[] = "char val[9;";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
-  EXPECT_THAT(StderrMatches("Input lacks required identifier or type element"),
-              IsTrue());
+  EXPECT_THAT(StderrMatches("Unable to parse garbled input."), IsTrue());
 }
 
 TEST_F(ParserSuite, ParseSimpleFunctionOutput) {
@@ -2453,7 +2452,7 @@ TEST_F(ParserSuite, ParseForwardDeclarationBadDelim) {
   char inputstr[] = "enum State state {;";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
   // clang-format off
-  EXPECT_THAT(StderrMatches("Input lacks required identifier or type element."),
+  EXPECT_THAT(StderrMatches("Unable to parse garbled input."),
               IsTrue());
   // clang-format on
   EXPECT_THAT(parser.is_enum, IsFalse());

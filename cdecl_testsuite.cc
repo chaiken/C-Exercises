@@ -1565,9 +1565,13 @@ TEST_F(ParserSuite, IllegalEnumForwardDeclaration) {
   const char *probe = "enum State";
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input);
+  /*
+   * The parser has not yet searched for enumeration constants.  Thus, at the
+   * point that handled_compound_type returns, there is no error, and
+   * consequently no error message.   The error is detected only by
+   * input_parsing_successful(). */
   EXPECT_THAT(consumed, Eq(0));
-  EXPECT_THAT(StderrMatches("Enums cannot be forward-declared."), IsTrue());
-  EXPECT_THAT(parser.is_enum, IsFalse());
+  EXPECT_THAT(parser.is_enum, IsTrue());
 }
 
 TEST_F(ParserSuite, LoadStackOneEnumeratorNoIdentifier) {
@@ -1809,6 +1813,27 @@ TEST_F(ParserSuite, LoadStackFunctionPtrOneParamWithIdentifier) {
 TEST_F(ParserSuite, LoadStackFunctionPtrOneParamNoIdentifier) {
   char user_input[MAXTOKENLEN];
   const char *probe = "int (*open) (struct inode *);";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input);
+  EXPECT_THAT(consumed, Eq(strlen(probe) - 1));
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string int"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 1 has kind qualifier and string *"),
+              IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 2 has kind identifier and string open"),
+      IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 0 has kind type and string struct inode"),
+      IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 1 has kind qualifier and string *"),
+              IsTrue());
+  free_all_parsers(&parser);
+}
+
+TEST_F(ParserSuite, LoadStackFunctionPtrOneParamNoSpace) {
+  char user_input[MAXTOKENLEN];
+  const char *probe = "int (*open) (struct inode*);";
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input);
   EXPECT_THAT(consumed, Eq(strlen(probe) - 1));

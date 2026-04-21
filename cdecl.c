@@ -741,15 +741,10 @@ bool handled_compound_type(struct parser_props *parser,
                            const char *progress_ptr, struct token *this_token) {
   char compound_type_name[MAXTOKENLEN];
   char *name_end_ptr;
-  char *startbracep;
+  char *startdelimp;
   size_t existing_token_len;
-  size_t i;
-  size_t j;
+  size_t i, j = 0;
 
-  /*
-   * Starting with "struct page *pp", compound type name is "page" since "pp" is
-   * the identifier, not handled by this function.
-   */
   parser->cursor += trim_leading_whitespace(progress_ptr + parser->cursor,
                                             &compound_type_name[0]);
   /*
@@ -758,21 +753,31 @@ bool handled_compound_type(struct parser_props *parser,
    */
   name_end_ptr = strchr(compound_type_name, ' ');
   /*
-   * The declaration is something like "struct task_struct;", not
-   * "struct task_struct ts;" so no further action is needed.  Leave
-   * any trailing identifier for subsequent code to process.
+   * When the declaration is something like "struct task_struct;" or
+   * "struct msg*", leave any trailing identifier or '*' for subsequent code to
+   * process.
    */
+  if (!name_end_ptr) {
+    name_end_ptr = strchr(compound_type_name, '*');
+  }
+  if (!name_end_ptr) {
+    name_end_ptr = strchr(compound_type_name, parser->separator);
+    ;
+  }
   if (!name_end_ptr) {
     return true;
   }
-  /* Only enumerations and structs have compound type names. */
-  startbracep = strchr(compound_type_name, '{');
+  /*
+   * Enumerations, struct and function parameters may have compound type
+   * names.
+   */
+  startdelimp = strchr(compound_type_name, parser->start_delim);
   /*
    * The space is inside the enumeration list or between struct members, and
    * thus not part of the the compound type.  That can only occur with a
    * malformed declaration, probably one which lacks a space.
    */
-  if (startbracep && (name_end_ptr > startbracep)) {
+  if (startdelimp && (name_end_ptr > startdelimp)) {
     return false;
   }
   existing_token_len = strlen(this_token->string);
@@ -781,23 +786,31 @@ bool handled_compound_type(struct parser_props *parser,
   if ((existing_token_len + strlen(compound_type_name) + 2) > MAXTOKENLEN) {
     return false;
   }
-  j = 0;
   for (i = existing_token_len + 1;
        i < existing_token_len + 1 + strlen(compound_type_name); i++, j++) {
     /*
      * Reached the end of the compound_type_name, so stop before copying the
      * identifier into the type.
      */
-    if (' ' == compound_type_name[j])
+    if ((parser->separator == compound_type_name[j]) ||
+        ('*' == compound_type_name[j]) || (' ' == compound_type_name[j])) {
       break;
+    }
     this_token->string[i] = compound_type_name[j];
   }
   this_token->string[i] = '\0';
   /*
    * The 1 accounts for the space.  The characters left in progress_ptr should
-   *  be an identifier which names the instance, if any, of the compound type.
+   * be an identifier which names the instance, if any, of the compound type. If
+   * the object is a pointer, leave that also on the stack.  This special
+   * handling is needed when '*' immediately follows the compound type name
+   * without an intervening space.
    */
-  parser->cursor += j + 1;
+  if ('*' == *name_end_ptr) {
+    parser->cursor += j;
+  } else {
+    parser->cursor += j + 1;
+  }
   return true;
 }
 
@@ -1763,6 +1776,7 @@ void push_stack(struct parser_props *parser, struct token *this_token) {
 
 size_t load_stack(struct parser_props *parser, char *user_input) {
   struct token this_token;
+  struct parser_props *head = get_head_parser(parser);
   this_token.kind = invalid;
   strcpy(this_token.string, "");
   while (parser->cursor <= strlen(user_input)) {
@@ -1787,6 +1801,7 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
                                         !strcmp("enum", this_token.string))) {
         if (!handled_compound_type(parser, user_input, &this_token)) {
           free_all_parsers(parser);
+          reset_parser(head);
           return 0;
         }
       }

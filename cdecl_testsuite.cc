@@ -955,6 +955,33 @@ TEST_F(ParserSuite, ProcessFunctionParamsTwoParams) {
   }
 }
 
+TEST_F(ParserSuite, LoadStackFunctionParamNoSpace) {
+  char user_input[MAXTOKENLEN];
+  const char *probe = "extern int put_cmsg(struct msghdr*, int level)";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input);
+  EXPECT_THAT(consumed, Eq(strlen(probe)));
+  EXPECT_THAT(
+      StdoutMatches("Token number 0 has kind type and string struct msghdr"),
+      IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 1 has kind qualifier and string *"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string int"),
+              IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 1 has kind identifier and string level"),
+      IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string int"),
+              IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 1 has kind qualifier and string extern"),
+      IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 2 has kind identifier and string put_cmsg"),
+      IsTrue());
+  free_all_parsers(&parser);
+}
+
 TEST_F(ParserSuite, ProcessFunctionParamsStrayComma) {
   char user_input[MAXTOKENLEN];
   const char *query = "double sqrt(double val,)";
@@ -1831,7 +1858,7 @@ TEST_F(ParserSuite, LoadStackFunctionPtrOneParamNoIdentifier) {
   free_all_parsers(&parser);
 }
 
-TEST_F(ParserSuite, LoadStackFunctionPtrOneParamNoSpace) {
+TEST_F(ParserSuite, LoadStackFunctionPtrOneParamCompoundTypeNoSpace) {
   char user_input[MAXTOKENLEN];
   const char *probe = "int (*open) (struct inode*);";
   strlcpy(user_input, probe, strlen(probe) + 1);

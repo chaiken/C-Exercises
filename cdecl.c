@@ -1832,7 +1832,8 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
      * parameters need only have types.
      */
     if (!(parser->has_struct_or_union_members ||
-          (parser->parent && parser->parent->is_function_ptr))) {
+          (parser->parent && (parser->parent->is_function_ptr ||
+                              parser->parent->has_function_params)))) {
       free_all_parsers(parser);
       return 0;
     }

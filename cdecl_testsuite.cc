@@ -2066,6 +2066,14 @@ TEST_F(ParserSuite, ParseRestrictedPtrExpression) {
   EXPECT_THAT(StdoutMatches("x is a(n) restrict pointer to int "), IsTrue());
 }
 
+TEST_F(ParserSuite, ParseVolatilePtrExpression) {
+  char inputstr[] = "int * volatile x;";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(parser.is_pointer, IsTrue());
+  EXPECT_THAT(parser.have_identifier, IsTrue());
+  EXPECT_THAT(StdoutMatches("x is a(n) volatile pointer to int "), IsTrue());
+}
+
 TEST_F(ParserSuite, ParseRestrictedPtrWithQualifierExpression) {
   char inputstr[] = "const int * restrict x;";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
@@ -2170,13 +2178,37 @@ TEST_F(ParserSuite, ParseFunctionOutputOneParam) {
 }
 
 TEST_F(ParserSuite, ParseFunctionOutputOneParamQualifier) {
-  char inputstr[] = "volatile double sqrt(const double x);";
+  char inputstr[] = "extern double sqrt(const double x);";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(parser.has_function_params, IsTrue());
   // clang-format off
-  EXPECT_THAT(StdoutMatches("sqrt is a(n) function which returns volatile double and takes param(s) x is a(n) const double"),
+  EXPECT_THAT(StdoutMatches("sqrt is a(n) function which returns extern double and takes param(s) x is a(n) const double"),
               IsTrue());
   // clang-format on
+}
+
+TEST_F(ParserSuite, ParseFunctionOutputQualifiedParams) {
+  char inputstr[] = "static void iowrite_rep(volatile void *addr, const void "
+                    "*buffer, unsigned int count);";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(parser.has_function_params, IsTrue());
+  // clang-format off
+  EXPECT_THAT(StdoutMatches("iowrite_rep is a(n) function which returns static void and takes param(s) addr is a(n) pointer to volatile void and buffer is a(n) pointer to const void and count is a(n) unsigned int"),
+              IsTrue());
+  // clang-format on
+}
+
+TEST_F(ParserSuite, ParseFunctionOutputIllegalParamQualifier) {
+  char inputstr[] = "double sqrt(extern double x);";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  EXPECT_THAT(StderrMatches("Function parameters cannot be extern"), IsTrue());
+}
+
+TEST_F(ParserSuite, ParseFunctionOutputIllegalFunctionQualifier) {
+  char inputstr[] = "volatile double sqrt(double x);";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  EXPECT_THAT(StderrMatches("Function return types cannot be volatile"),
+              IsTrue());
 }
 
 TEST_F(ParserSuite, ParseFunctionOutputTwoParams) {
@@ -2348,10 +2380,10 @@ TEST_F(ParserSuite, ParseUnionSimpleDeclaration) {
 }
 
 TEST_F(ParserSuite, ParseUnionForwardDeclaration) {
-  char inputstr[] = "union msi_domain_cookie dcookie;";
+  char inputstr[] = "extern union msi_domain_cookie dcookie;";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
-  EXPECT_THAT(StdoutMatches("dcookie is a(n) union msi_domain_cookie"),
+  EXPECT_THAT(StdoutMatches("dcookie is a(n) extern union msi_domain_cookie"),
               IsTrue());
   // clang-format on
 }

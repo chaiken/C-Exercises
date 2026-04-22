@@ -1313,12 +1313,13 @@ void reorder_stacks(struct parser_props *parser) {
 /* Return true on success. */
 bool pop_stack(struct parser_props *parser, bool no_enum_instance) {
   struct parser_props *head = get_head_parser(parser);
-  /* Last element of stack with stacklen=n is at index = n-1. */
-  const size_t stacktop = parser->stacklen - 1;
+  size_t stacktop;
   if (!parser->stacklen) {
     fprintf(parser->err_stream, "Attempt to pop empty stack.\n");
     return false;
   }
+  /* Last element of stack with stacklen=n is at index = n-1. */
+  stacktop = parser->stacklen - 1;
   /*
    * Qualifiers following * apply to the pointer itself, rather than to the
    * object to which the pointer points.
@@ -1334,6 +1335,17 @@ bool pop_stack(struct parser_props *parser, bool no_enum_instance) {
     case whitespace:
       __attribute__((fallthrough));
     case qualifier:
+      if (!strcmp("volatile", parser->stack[stacktop].string) &&
+          parser->is_function) {
+        /* Purge any  already printed messages from the output stream which are
+         * now irrelevant. */
+        __fpurge(parser->out_stream);
+        fprintf(parser->err_stream,
+                "Function return types cannot be volatile.\n");
+        free_all_parsers(head);
+        reset_parser(parser);
+        return false;
+      }
       fprintf(parser->out_stream, "%s ", parser->stack[stacktop].string);
       break;
     /* Process the function parameters right after processing the return value
@@ -1458,7 +1470,6 @@ bool pop_stack(struct parser_props *parser, bool no_enum_instance) {
               parser->stack[stacktop].string, parser->stack[stacktop].kind);
       return false;
     }
-    fflush(parser->out_stream);
   }
   memset(parser->stack[stacktop].string, '\0', MAXTOKENLEN);
   parser->stack[stacktop].kind = invalid;
@@ -1743,6 +1754,18 @@ bool finish_token(struct parser_props *parser, const char *offset_decl,
         reset_parser(parser);
         return false;
       }
+    } else if (!strcmp("extern", this_token->string) &&
+               (parser->parent && parser->parent->has_function_params)) {
+      /*
+       * https://en.cppreference.com/c/language/storage_duration
+       * "The extern specifier specifies static storage duration . . . It can be
+       * used with function and object declarations in both file and block scope
+       * (excluding function parameter lists)."
+       */
+      fprintf(parser->err_stream, "Function parameters cannot be %s.\n",
+              this_token->string);
+      reset_parser(parser);
+      return false;
     } else {
       parser->have_qualifier = true;
     }

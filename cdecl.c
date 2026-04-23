@@ -1310,14 +1310,14 @@ void reorder_stacks(struct parser_props *parser) {
   }
 }
 
-/* Return 0 on success, an error code on failure */
-int pop_stack(struct parser_props *parser, bool no_enum_instance) {
-  int ret;
+/* Return true on success. */
+bool pop_stack(struct parser_props *parser, bool no_enum_instance) {
+  struct parser_props *head = get_head_parser(parser);
   /* Last element of stack with stacklen=n is at index = n-1. */
   const size_t stacktop = parser->stacklen - 1;
   if (!parser->stacklen) {
     fprintf(parser->err_stream, "Attempt to pop empty stack.\n");
-    return -ENODATA;
+    return false;
   }
   /*
    * Qualifiers following * apply to the pointer itself, rather than to the
@@ -1353,7 +1353,10 @@ int pop_stack(struct parser_props *parser, bool no_enum_instance) {
           } else {
             fprintf(parser->out_stream, "and takes param(s) ");
           }
-          ret = pop_all(cursor);
+          if (!pop_all(cursor)) {
+            free_all_parsers(head);
+            return false;
+          }
           depth++;
           struct parser_props *save_next = cursor->next;
           struct parser_props *save_prev = cursor->prev;
@@ -1366,8 +1369,6 @@ int pop_stack(struct parser_props *parser, bool no_enum_instance) {
             save_next->prev = save_prev;
           }
           cursor = save_next;
-          if (ret)
-            return ret;
         }
       }
       if (parser->has_struct_or_union_members) {
@@ -1382,7 +1383,10 @@ int pop_stack(struct parser_props *parser, bool no_enum_instance) {
           } else {
             fprintf(parser->out_stream, "has member(s) ");
           }
-          ret = pop_all(cursor);
+          if (!pop_all(cursor)) {
+            free_all_parsers(head);
+            return false;
+          }
           depth++;
           struct parser_props *save_next = cursor->next;
           struct parser_props *save_prev = cursor->prev;
@@ -1395,8 +1399,6 @@ int pop_stack(struct parser_props *parser, bool no_enum_instance) {
             save_next->prev = save_prev;
           }
           cursor = save_next;
-          if (ret)
-            return ret;
         }
       }
       if (parser->has_enum_constants) {
@@ -1454,29 +1456,28 @@ int pop_stack(struct parser_props *parser, bool no_enum_instance) {
       fprintf(parser->err_stream,
               "\nError: element %s is of unknown type %d.\n",
               parser->stack[stacktop].string, parser->stack[stacktop].kind);
-      return -EINVAL;
+      return false;
     }
     fflush(parser->out_stream);
   }
   memset(parser->stack[stacktop].string, '\0', MAXTOKENLEN);
   parser->stack[stacktop].kind = invalid;
-  return 0;
+  return true;
 }
 
-int pop_all(struct parser_props *parser) {
-  int ret;
+bool pop_all(struct parser_props *parser) {
   /* If there is a non-enumeration constant identifier, it will be at the top of
    * the stack.  Therefore, the comparison with the enumerator_list
    * must proceed the first call to pop_stack() and be passed to it.
    */
   const bool no_enum_instance = all_identifiers_are_enum_constants(parser);
   while (parser && parser->stacklen) {
-    ret = pop_stack(parser, no_enum_instance);
-    if (ret)
-      return ret;
+    if (!pop_stack(parser, no_enum_instance)) {
+      return false;
+    }
     parser->stacklen--;
   }
-  return 0;
+  return true;
 }
 
 /********** the core parser functions **********/
@@ -1901,7 +1902,7 @@ bool input_parsing_successful(struct parser_props *parser, char inputstr[]) {
 #ifdef DEBUG
   showstack(parser->stack, parser->stacklen, parser->out_stream, __LINE__);
 #endif
-  if (pop_all(parser)) {
+  if (!pop_all(parser)) {
     free_all_parsers(parser);
     return false;
   }

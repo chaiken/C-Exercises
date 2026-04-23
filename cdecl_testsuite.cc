@@ -1091,15 +1091,14 @@ TEST_F(ParserSuite, ProcessStructMembersOneMemberWithInstanceName) {
 }
 
 TEST_F(ParserSuite, PopEmpty) {
-  EXPECT_THAT(pop_stack(&parser, true), Eq(-ENODATA));
+  EXPECT_THAT(pop_stack(&parser, true), IsFalse());
   EXPECT_THAT(StderrMatches("Attempt to pop empty stack."), IsTrue());
 }
 
 TEST_F(ParserSuite, PopOne) {
   struct token token0{type, "int"};
   push_stack(&parser, &token0);
-
-  EXPECT_THAT(pop_stack(&parser, false), Eq(0));
+  EXPECT_THAT(pop_stack(&parser, false), IsTrue());
   EXPECT_THAT(StdoutMatches("int"), IsTrue());
 }
 
@@ -1111,7 +1110,7 @@ TEST_F(ParserSuite, PopAll) {
   struct token token2{identifier, "buffer"};
   push_stack(&parser, &token2);
 
-  EXPECT_THAT(pop_all(&parser), Eq(0));
+  EXPECT_THAT(pop_all(&parser), IsTrue());
   EXPECT_THAT(StdoutMatches("buffer"), IsTrue());
   EXPECT_THAT(StdoutMatches("is a(n) pointer to"), IsTrue());
   EXPECT_THAT(StdoutMatches("char"), IsTrue());
@@ -1134,7 +1133,7 @@ TEST_F(ParserSuite, PopAllOneFunctionParam) {
   struct token token3{identifier, "val"};
   push_stack(parser.next, &token3);
 
-  EXPECT_THAT(pop_all(&parser), Eq(0));
+  EXPECT_THAT(pop_all(&parser), IsTrue());
   EXPECT_THAT(StdoutMatches("sqrt"), IsTrue());
   EXPECT_THAT(StdoutMatches("double"), IsTrue());
   EXPECT_THAT(StdoutMatches("val"), IsTrue());
@@ -1170,7 +1169,7 @@ TEST_F(ParserSuite, PopAllTwoFunctionParams) {
   struct token token6{identifier, "seed"};
   push_stack(parser.next->next, &token6);
 
-  EXPECT_THAT(pop_all(&parser), Eq(0));
+  EXPECT_THAT(pop_all(&parser), IsTrue());
   EXPECT_THAT(StdoutMatches("hash"), IsTrue());
   EXPECT_THAT(StdoutMatches("double"), IsTrue());
   EXPECT_THAT(StdoutMatches("key"), IsTrue());

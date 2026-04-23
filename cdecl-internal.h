@@ -146,8 +146,8 @@ void reverse_lengths(struct parser_props *parser);
 void reorder_qualifier_and_type(struct parser_props *parser);
 void reorder_array_identifier_and_lengths(struct parser_props *parser);
 void reorder_stacks(struct parser_props *parser);
-int pop_stack(struct parser_props *parser, bool no_enum_instance);
-int pop_all(struct parser_props *parser);
+bool pop_stack(struct parser_props *parser, bool no_enum_instance);
+bool pop_all(struct parser_props *parser);
 
 /* the core parser functions */
 enum token_class get_kind(const char *intoken);

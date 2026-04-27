@@ -188,6 +188,14 @@ TEST(StringManipulateSuite, GetKindTypes) {
   EXPECT_THAT(get_kind("size_t"), Eq(type));
   EXPECT_THAT(get_kind("ssize_t"), Eq(type));
   EXPECT_THAT(get_kind("bool"), Eq(type));
+  EXPECT_THAT(get_kind("u8"), Eq(type));
+  EXPECT_THAT(get_kind("s8"), Eq(type));
+  EXPECT_THAT(get_kind("u16"), Eq(type));
+  EXPECT_THAT(get_kind("s16"), Eq(type));
+  EXPECT_THAT(get_kind("u32"), Eq(type));
+  EXPECT_THAT(get_kind("s32"), Eq(type));
+  EXPECT_THAT(get_kind("u64"), Eq(type));
+  EXPECT_THAT(get_kind("s64"), Eq(type));
 }
 
 TEST(StringManipulateSuite, GetArrayLength) {

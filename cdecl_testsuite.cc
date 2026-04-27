@@ -1597,7 +1597,7 @@ TEST_F(ParserSuite, IllegalEnumForwardDeclaration) {
    * consequently no error message.   The error is detected only by
    * input_parsing_successful(). */
   EXPECT_THAT(consumed, Eq(0));
-  EXPECT_THAT(parser.is_enum, IsTrue());
+  EXPECT_THAT(parser.is_enum, IsFalse());
 }
 
 TEST_F(ParserSuite, LoadStackOneEnumeratorNoIdentifier) {
@@ -2515,7 +2515,7 @@ TEST_F(ParserSuite, ParseStructForwardDeclarationNoName) {
   char inputstr[] = "struct *;";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
   // clang-format off
-  EXPECT_THAT(StderrMatches("Input lacks required identifier or type element."),
+  EXPECT_THAT(StderrMatches("Unable to parse garbled input."),
               IsTrue());
   // clang-format on
 }
@@ -2610,7 +2610,7 @@ TEST_F(ParserSuite, ParseForwardDeclarationBadDelim2) {
   char inputstr[] = "enum State } state;";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
   // clang-format off
-  EXPECT_THAT(StderrMatches("Input lacks required identifier or type element."),
+  EXPECT_THAT(StderrMatches("Unable to parse garbled input."),
               IsTrue());
   // clang-format on
 }

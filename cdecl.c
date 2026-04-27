@@ -67,8 +67,7 @@ static inline void subsidiary_parsers_cleanup(void *parserp) {
       !(**(struct parser_props ***)parserp))
     return;
   struct parser_props *parser = **((struct parser_props ***)parserp);
-  free_all_parsers(parser);
-  reset_parser(parser);
+  release_parser_resources(parser);
 }
 
 /********** documentation functions **********/
@@ -151,6 +150,16 @@ struct parser_props *get_tail_parser(struct parser_props *parser) {
     cursor = cursor->next;
   }
   return cursor;
+}
+
+/*
+ * Note that freeing the allocated parsers must come first since the reset makes
+ * the next pointer NULL.
+ */
+void release_parser_resources(struct parser_props *parser) {
+  struct parser_props *head = get_head_parser(parser);
+  free_all_parsers(head);
+  reset_parser(head);
 }
 
 struct parser_props *make_parser(struct parser_props *const parser) {
@@ -1298,12 +1307,12 @@ bool handled_extended_parsing(struct parser_props *parser, char *user_input,
              parser->has_struct_or_union_members) {
     /* Move past the already-processed characters and '('. */
     if (!process_secondary_params(parser, user_input)) {
-      reset_parser(parser);
+      release_parser_resources(parser);
       return false;
     }
   } else if (parser->has_enum_constants) {
     if (!process_enum_constants(parser, user_input)) {
-      reset_parser(parser);
+      release_parser_resources(parser);
       return false;
     }
   }
@@ -1410,7 +1419,6 @@ void reorder_stacks(struct parser_props *parser) {
 
 /* Return true on success. */
 bool pop_stack(struct parser_props *parser, bool no_enum_instance) {
-  struct parser_props *head = get_head_parser(parser);
   size_t stacktop;
   if (!parser->stacklen) {
     fprintf(parser->err_stream, "Attempt to pop empty stack.\n");
@@ -1440,8 +1448,7 @@ bool pop_stack(struct parser_props *parser, bool no_enum_instance) {
         __fpurge(parser->out_stream);
         fprintf(parser->err_stream,
                 "Function return types cannot be volatile.\n");
-        free_all_parsers(head);
-        reset_parser(parser);
+        release_parser_resources(parser);
         return false;
       }
       fprintf(parser->out_stream, "%s ", parser->stack[stacktop].string);
@@ -1464,7 +1471,7 @@ bool pop_stack(struct parser_props *parser, bool no_enum_instance) {
             fprintf(parser->out_stream, "and takes param(s) ");
           }
           if (!pop_all(cursor)) {
-            free_all_parsers(head);
+            release_parser_resources(parser);
             return false;
           }
           depth++;
@@ -1494,7 +1501,7 @@ bool pop_stack(struct parser_props *parser, bool no_enum_instance) {
             fprintf(parser->out_stream, "has member(s) ");
           }
           if (!pop_all(cursor)) {
-            free_all_parsers(head);
+            release_parser_resources(parser);
             return false;
           }
           depth++;
@@ -1898,7 +1905,6 @@ void push_stack(struct parser_props *parser, struct token *this_token) {
 
 size_t load_stack(struct parser_props *parser, char *user_input) {
   struct token this_token;
-  struct parser_props *head = get_head_parser(parser);
   this_token.kind = invalid;
   strcpy(this_token.string, "");
   while (parser->cursor <= strlen(user_input)) {
@@ -1922,8 +1928,7 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
                                         !strcmp("struct", this_token.string) ||
                                         !strcmp("enum", this_token.string))) {
         if (!handled_compound_type(parser, user_input, &this_token)) {
-          free_all_parsers(parser);
-          reset_parser(head);
+          release_parser_resources(parser);
           return 0;
         }
       }
@@ -1956,7 +1961,7 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
     if (!(parser->has_struct_or_union_members ||
           (parser->parent && (parser->parent->is_function_ptr ||
                               parser->parent->has_function_params)))) {
-      free_all_parsers(parser);
+      release_parser_resources(parser);
       return 0;
     }
   }
@@ -1975,9 +1980,7 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
       /* There is unclassifiable junk at the end of the expression. */
       fprintf(parser->err_stream, "Expression ends with erroneous output: %s\n",
               user_input + parser->cursor);
-      struct parser_props *head = get_head_parser(parser);
-      free_all_parsers(head);
-      reset_parser(head);
+      release_parser_resources(parser);
       return 0;
     }
   }
@@ -2016,22 +2019,14 @@ bool input_parsing_successful(struct parser_props *parser, char inputstr[]) {
   load_stack(parser, user_input);
   if (0 == parser->stacklen) {
     fprintf(parser->err_stream, "Unable to parse garbled input.\n");
-    free_all_parsers(parser);
-    return false;
-  }
-  if ((!parser->have_type) ||
-      (!parser->have_identifier && (!strlen(parser->enumerator_list) &&
-                                    !parser->has_struct_or_union_members))) {
-    fprintf(parser->err_stream,
-            "Input lacks required identifier or type element.\n");
-    free_all_parsers(parser);
+    release_parser_resources(parser);
     return false;
   }
 #ifdef DEBUG
   showstack(parser->stack, parser->stacklen, parser->out_stream, __LINE__);
 #endif
   if (!pop_all(parser)) {
-    free_all_parsers(parser);
+    release_parser_resources(parser);
     return false;
   }
   fprintf(parser->out_stream, "\n");

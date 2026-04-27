@@ -87,10 +87,13 @@ void limitations() {
          MAXTOKENLEN);
   printf("Known deficiencies:\n\ta) doesn't handle multiple comma-separated "
          "declarations;\n");
-  printf("\tb) includes only the qualifiers defined in ANSI C, not LIBC,\n");
-  printf("\t   kernel extensions or compiler attributes;\n");
+  printf("\tb) includes only the qualifiers defined in ANSI C, not all\n");
+  printf("\t   libc, kernel extensions or compiler attributes;\n");
   printf("\tc) does not support atomic types;\n");
-  printf("\td) does not support C23 additions.\n");
+  printf("\td) does not support C23 additions;\n");
+  printf("\te) handles 'extern' awkwardly;\n");
+  printf("\tf) does not support bitfields;\n");
+  printf("\tg) does not support volatile pointers.\n");
   exit(-1);
 }
 
@@ -646,21 +649,40 @@ bool tokenize_function_params(char **output, char *input, const char delim) {
 }
 
 /*
- * process_secondary_params() relies on tokenize_secondary_params() to
- * extract individual tokens from function parameters or struct
- * members.  It functions similarly to truncate_input() for the main
- * parser.  If the input begins with the specified delimiter
- * character, go past it without advancing the parser cursor.
- * Otherwise, overwrite the first delimiter character with a NULL. In
- * either case, copy the resulting string to the output.  If the text
- * chunk is the last in input, the effect is to drop the remaining
- * non-name characters.
+ * tokenize_struct_params() is considerably simpler than
+ * tokenize_function_params() because every struct or union member is
+ * terminated by a semicolon, unlike the case for function parameters, where
+ * the last one is terminated with ')'.  Also, '}' is always followed by a
+ * semicolon, while the character ')' occurs multiple times in a nested function
+ * pointer but only terminates it when followed by a comma or another ')'.
  */
 bool tokenize_struct_params(char **output, char *input, const char delim) {
-  const char *param_end = strchr(input, delim);
+  char *param_end;
   const char *param_start;
   size_t param_len = 0;
 
+  /* "};" is the token terminator for embedded structs and unions. */
+  char *end_next_param = strstr(input, "};");
+  /* A semicolon terminates simple tokens and function pointers. */
+  const char *first_separator = strchr(input, ';');
+  const char *first_start_delim = strchr(input, '{');
+
+  if (end_next_param) {
+    /* Point to semicolon after '}'. */
+    param_end = end_next_param + 1;
+  } else {
+    /* Here we have 2 cases.
+     * The first is simple text followed by a semicolon.
+     * The second is text followed by a semicolon and '{' where the semicolon
+     * precedes the bracket. This order indicates a simple parameter preceding a
+     * subsidiary struct.
+     */
+    if ((first_separator && !first_start_delim) ||
+        (first_separator && first_start_delim &&
+         (first_separator < first_start_delim))) {
+      param_end = strchr(input, delim);
+    }
+  }
   if (!param_end) {
     return false;
   }
@@ -829,12 +851,22 @@ bool handled_compound_type(struct parser_props *parser, char *progress_ptr,
                            struct token *this_token) {
   char compound_type_name[MAXTOKENLEN];
   char *name_end_ptr;
-  char *startdelimp;
+  char *startdelimp =
+      strchr(progress_ptr + parser->cursor, parser->start_delim);
   size_t existing_token_len;
   size_t i, j = 0;
 
   parser->cursor += trim_leading_whitespace(progress_ptr + parser->cursor,
                                             &compound_type_name[0]);
+  /*
+   * A struct or union inside another struct or union can be anonymous, without
+   * a compound type or a trailing instance name.
+   */
+  if (parser->prev && parser->prev->is_struct_or_union && startdelimp &&
+      !has_any_name_chars_before(progress_ptr + parser->cursor,
+                                 parser->start_delim)) {
+    return true;
+  }
   /*
    * Since there's no leading whitespace, the next blank terminates the compound
    * identifier.
@@ -1135,7 +1167,8 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
 #ifdef DEBUG
       show_parser_list(parser, __LINE__);
 #endif
-    } else if (parser->has_function_params) {
+    } else if (parser->has_function_params ||
+               parser->has_struct_or_union_members) {
       /*
        * There is only one remaining parameter without a separator.
        * While the trailing comma in a list of function parameters is optional,

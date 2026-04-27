@@ -1818,11 +1818,10 @@ TEST_F(ParserSuite, LoadStackTypedef) {
 
 TEST_F(ParserSuite, LoadStackFunctionPtrOneParamWithIdentifier) {
   char user_input[MAXTOKENLEN];
-  const char *probe = "int (*open) (struct inode *blk);";
+  const char *probe = "int (*open) (struct inode *blk)";
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input);
-  // -1 due to semicolon.
-  EXPECT_THAT(consumed, Eq(strlen(probe) - 1));
+  EXPECT_THAT(consumed, Eq(strlen(probe)));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string int"),
               IsTrue());
   EXPECT_THAT(StdoutMatches("Token number 1 has kind qualifier and string *"),
@@ -1843,10 +1842,10 @@ TEST_F(ParserSuite, LoadStackFunctionPtrOneParamWithIdentifier) {
 
 TEST_F(ParserSuite, LoadStackFunctionPtrOneParamNoIdentifier) {
   char user_input[MAXTOKENLEN];
-  const char *probe = "int (*open) (struct inode *);";
+  const char *probe = "int (*open) (struct inode *)";
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input);
-  EXPECT_THAT(consumed, Eq(strlen(probe) - 1));
+  EXPECT_THAT(consumed, Eq(strlen(probe)));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string int"),
               IsTrue());
   EXPECT_THAT(StdoutMatches("Token number 1 has kind qualifier and string *"),
@@ -1864,10 +1863,10 @@ TEST_F(ParserSuite, LoadStackFunctionPtrOneParamNoIdentifier) {
 
 TEST_F(ParserSuite, LoadStackFunctionPtrOneParamCompoundTypeNoSpace) {
   char user_input[MAXTOKENLEN];
-  const char *probe = "int (*open) (struct inode*);";
+  const char *probe = "int (*open) (struct inode*)";
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input);
-  EXPECT_THAT(consumed, Eq(strlen(probe) - 1));
+  EXPECT_THAT(consumed, Eq(strlen(probe)));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string int"),
               IsTrue());
   EXPECT_THAT(StdoutMatches("Token number 1 has kind qualifier and string *"),
@@ -1885,10 +1884,10 @@ TEST_F(ParserSuite, LoadStackFunctionPtrOneParamCompoundTypeNoSpace) {
 
 TEST_F(ParserSuite, LoadStackFunctionPtrTwoParamsWithIdentifiers) {
   char user_input[MAXTOKENLEN];
-  const char *probe = "int (*open) (struct inode *blk, struct file *dir);";
+  const char *probe = "int (*open) (struct inode *blk, struct file *dir)";
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input);
-  EXPECT_THAT(consumed, Eq(strlen(probe) - 1));
+  EXPECT_THAT(consumed, Eq(strlen(probe)));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string int"),
               IsTrue());
   EXPECT_THAT(StdoutMatches("Token number 1 has kind qualifier and string *"),
@@ -1917,10 +1916,10 @@ TEST_F(ParserSuite, LoadStackFunctionPtrTwoParamsWithIdentifiers) {
 
 TEST_F(ParserSuite, LoadStackFunctionPtrTwoParamsNoIdentifiers) {
   char user_input[MAXTOKENLEN];
-  const char *probe = "int (*open) (struct inode *, struct file *);";
+  const char *probe = "int (*open) (struct inode *, struct file *)";
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input);
-  EXPECT_THAT(consumed, Eq(strlen(probe) - 1));
+  EXPECT_THAT(consumed, Eq(strlen(probe)));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string int"),
               IsTrue());
   EXPECT_THAT(StdoutMatches("Token number 1 has kind qualifier and string *"),
@@ -1944,10 +1943,10 @@ TEST_F(ParserSuite, LoadStackFunctionPtrTwoParamsNoIdentifiers) {
 TEST_F(ParserSuite, LoadStackTwoFunctionPtrsInStructNoFunctionParams) {
   char user_input[MAXTOKENLEN];
   const char *probe =
-      "struct file_operations {int (*open)(); ssize_t (*read)(); };";
+      "struct file_operations {int (*open)(); ssize_t (*read)(); }";
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input);
-  EXPECT_THAT(consumed, Eq(strlen(probe) - 1));
+  EXPECT_THAT(consumed, Eq(strlen(probe)));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string int"),
               IsTrue());
   EXPECT_THAT(StdoutMatches("Token number 1 has kind qualifier and string *"),
@@ -1977,10 +1976,10 @@ TEST_F(ParserSuite, LoadStackTwoFunctionPtrsInStructNoFunctionParams) {
 TEST_F(ParserSuite, LoadStackTwoFunctionPtrsInStructTrailingFunctionParam) {
   char user_input[MAXTOKENLEN];
   const char *probe =
-      "struct f {int (*open)(); ssize_t (*read)(struct inode *); };";
+      "struct f {int (*open)(); ssize_t (*read)(struct inode *); }";
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input);
-  EXPECT_THAT(consumed, Eq(strlen(probe) - 1));
+  EXPECT_THAT(consumed, Eq(strlen(probe)));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string int"),
               IsTrue());
   EXPECT_THAT(StdoutMatches("Token number 1 has kind qualifier and string *"),
@@ -2008,6 +2007,70 @@ TEST_F(ParserSuite, LoadStackTwoFunctionPtrsInStructTrailingFunctionParam) {
   // Assure that there are no unexpected parsers producing garbage on the
   // output.
   EXPECT_THAT(parser.next->next->next->next, IsNull());
+  release_parser_resources(&parser);
+}
+
+TEST_F(ParserSuite, LoadStackNestedStruct) {
+  char user_input[MAXTOKENLEN];
+  const char *probe = "struct ethtool_hist { struct ethtool_value { u64 sum; "
+                      "u32 per_lane; }; }";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input);
+  // Trailing delimiters are not included in cursor count in
+  // load_next_secondary_param().
+  // Trailing separator is overwritten with NULL in tokenize_struct_params().
+  EXPECT_THAT(consumed, Eq(strlen(probe) - strlen("};}")));
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string u64"),
+              IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 1 has kind identifier and string sum"),
+      IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string u32"),
+              IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 1 has kind identifier and string per_lane"),
+      IsTrue());
+  EXPECT_THAT(
+      StdoutMatches(
+          "Token number 0 has kind type and string struct ethtool_value"),
+      IsTrue());
+  EXPECT_THAT(
+      StdoutMatches(
+          "Token number 0 has kind type and string struct ethtool_hist"),
+      IsTrue());
+  release_parser_resources(&parser);
+}
+
+TEST_F(ParserSuite, LoadStackNestedAnonymousUnion) {
+  char user_input[MAXTOKENLEN];
+  const char *probe = "struct ethtool_info { union { enum ethtool_autoneg "
+                      "autoneg; enum ethtool_training training; }; }";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input);
+  // Trailing delimiters are not included in cursor count in
+  // load_next_secondary_param().
+  // Trailing separator is overwritten with NULL in tokenize_struct_params().
+  EXPECT_THAT(consumed, Eq(strlen(probe) - strlen("};}")));
+  EXPECT_THAT(
+      StdoutMatches(
+          "Token number 0 has kind type and string enum ethtool_autoneg"),
+      IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 1 has kind identifier and string autoneg"),
+      IsTrue());
+  EXPECT_THAT(
+      StdoutMatches(
+          "Token number 0 has kind type and string enum ethtool_training"),
+      IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 1 has kind identifier and string training"),
+      IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string union"),
+              IsTrue());
+  EXPECT_THAT(
+      StdoutMatches(
+          "Token number 0 has kind type and string struct ethtool_info"),
+      IsTrue());
   release_parser_resources(&parser);
 }
 
@@ -2498,6 +2561,17 @@ TEST_F(ParserSuite, ParseUnionTrailingInstanceNameNoSpaces) {
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
   EXPECT_THAT(StdoutMatches("s_to_b is a(n) union short_to_bytes which has member(s) short_val is a(n) uint16_t and bytes is a(n) array of 2 uint8_t"),
+              IsTrue());
+  // clang-format on
+}
+
+TEST_F(ParserSuite, ParseNestedUnion) {
+  char inputstr[] =
+      "struct fscrypt_ops { const char *legacy_key_prefix; const union "
+      "fscrypt_policy *(*get_dummy_policy)(struct super_block *sb)};";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  // clang-format off
+  EXPECT_THAT(StdoutMatches("struct fscrypt_ops has member(s) legacy_key_prefix is a(n) pointer to const char and get_dummy_policy is a(n) pointer to a function which returns pointer to a function which returns const union fscrypt_policy and takes param(s) sb is a(n) pointer to struct super_block"),
               IsTrue());
   // clang-format on
 }

@@ -152,13 +152,29 @@ struct parser_props *get_tail_parser(struct parser_props *parser) {
   return cursor;
 }
 
+/* The list head is a stack allocation. */
+static void _free_all_parsers(struct parser_props *parser) {
+  if (!parser)
+    return;
+  struct parser_props *tail = get_tail_parser(parser);
+  while (tail->prev) {
+    struct parser_props *save = tail->prev;
+#ifdef DEBUG
+    fprintf(stderr, "free_all_parsers(): freeing %p\n", tail);
+#endif
+    free(tail);
+    save->next = 0;
+    tail = save;
+  }
+}
+
 /*
  * Note that freeing the allocated parsers must come first since the reset makes
  * the next pointer NULL.
  */
 void release_parser_resources(struct parser_props *parser) {
   struct parser_props *head = get_head_parser(parser);
-  free_all_parsers(head);
+  _free_all_parsers(head);
   reset_parser(head);
 }
 
@@ -177,20 +193,6 @@ struct parser_props *make_parser(struct parser_props *const parser) {
   parser->next = new_parser;
   new_parser->prev = parser;
   return new_parser;
-}
-
-/* The list head is a stack allocation. */
-void free_all_parsers(struct parser_props *parser) {
-  if (!parser)
-    return;
-  while (parser->next) {
-    struct parser_props *save = parser->next->next;
-#ifdef DEBUG
-    fprintf(stderr, "free_all_parsers(): freeing %p\n", parser->next);
-#endif
-    free(parser->next);
-    parser->next = save;
-  }
 }
 
 /********** functions which characterize input **********/
@@ -291,7 +293,7 @@ bool check_for_array_dimensions(struct parser_props *parser,
     parser->array_dimensions++;
     return true;
   }
-  reset_parser(parser);
+  parser->stacklen = 0;
   return false;
 }
 
@@ -376,7 +378,7 @@ bool check_for_function_parameters(struct parser_props *parser,
   }
   const char *params_end = strstr(offset_decl + trimnum, ")");
   if (!params_end) {
-    reset_parser(parser);
+    parser->stacklen = 0;
     fprintf(parser->err_stream, "Malformed function declaration.\n");
     return false;
   }
@@ -413,7 +415,7 @@ bool check_for_struct_or_union_members(struct parser_props *parser,
   }
   const char *params_end = strstr(member_start, "}");
   if (!params_end) {
-    reset_parser(parser);
+    parser->stacklen = 0;
     fprintf(parser->err_stream, "Malformed struct or union declaration.\n");
     return false;
   }
@@ -745,6 +747,9 @@ bool truncate_input(char **input, const struct parser_props *parser) {
 void show_parser_list(const struct parser_props *parser, const int lineno) {
   struct parser_props *head = get_head_parser((struct parser_props *)parser);
   struct parser_props *pnext = head->next;
+  if (!parser || !parser->err_stream) {
+    return;
+  }
   if (!pnext) {
     fprintf(parser->err_stream, "\nNo subsidiary parsers.\n");
     return;
@@ -1161,7 +1166,7 @@ size_t process_array_length(struct parser_props *parser,
   /* Check if the array is ill-formed. */
   if (NULL == strstr(offset_string, "]")) {
     /* Indicate hard failure. */
-    reset_parser(parser);
+    parser->stacklen = 0;
     return 0;
   }
   for (ctr = 0;
@@ -1171,7 +1176,7 @@ size_t process_array_length(struct parser_props *parser,
   }
   this_token->kind = length;
   if (!finish_token(parser, offset_string, this_token, ctr)) {
-    reset_parser(parser);
+    parser->stacklen = 0;
     return 0;
   }
   return ctr;
@@ -1277,7 +1282,7 @@ bool process_enum_constants(struct parser_props *parser, char *user_input) {
     if ((invalid == this_token.kind) || (0 == strlen(this_token.string)) ||
         (strlen(this_token.string) > MAXTOKENLEN)) {
       fprintf(parser->err_stream, "Invalid enumerator %s\n", this_token.string);
-      reset_parser(parser);
+      parser->stacklen = 0;
       return false;
     }
     list_capacity = (MAXTOKENLEN - strlen(parser->enumerator_list)) - 1;
@@ -1695,7 +1700,7 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
     strlcpy(this_token->string, "*", 2);
     tokenoffset++;
     if (!finish_token(parser, declstring + tokenoffset, this_token, ctr)) {
-      reset_parser(parser);
+      parser->stacklen = 0;
       return 0;
     }
     return tokenoffset;
@@ -1746,7 +1751,7 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
     this_token->string[ctr - 1] = '\0';
   }
   if (!finish_token(parser, declstring + tokenoffset, this_token, ctr)) {
-    reset_parser(parser);
+    parser->stacklen = 0;
     return 0;
   }
   return tokenoffset;
@@ -1769,7 +1774,7 @@ bool finish_token(struct parser_props *parser, const char *offset_decl,
      */
     if ((parser->have_identifier) && (!parser->has_enum_constants)) {
       this_token->kind = invalid;
-      reset_parser(parser);
+      parser->stacklen = 0;
       return false;
     }
     parser->have_identifier = true;
@@ -1788,7 +1793,7 @@ bool finish_token(struct parser_props *parser, const char *offset_decl,
       if (parser->prev) {
         break;
       }
-      reset_parser(parser);
+      parser->stacklen = 0;
       return false;
     }
     break;
@@ -1796,7 +1801,7 @@ bool finish_token(struct parser_props *parser, const char *offset_decl,
     /* Indicate hard failure. */
     if (parser->have_type) {
       this_token->kind = invalid;
-      reset_parser(parser);
+      parser->stacklen = 0;
       return false;
     }
     parser->have_type = true;
@@ -1818,7 +1823,7 @@ bool finish_token(struct parser_props *parser, const char *offset_decl,
      */
     if (!(parser->is_function || parser->is_function_ptr)) {
       if (!check_for_function_ptr(parser, offset_decl)) {
-        reset_parser(parser);
+        parser->stacklen = 0;
         return false;
       }
     }
@@ -1826,7 +1831,7 @@ bool finish_token(struct parser_props *parser, const char *offset_decl,
   case length:
     if ((!parser->have_identifier) || (!parser->array_dimensions)) {
       /* Indicate hard failure. */
-      reset_parser(parser);
+      parser->stacklen = 0;
       this_token->kind = invalid;
       strncpy(this_token->string, "\0", 1);
       break;
@@ -1846,17 +1851,21 @@ bool finish_token(struct parser_props *parser, const char *offset_decl,
        * the number of dimensions >= the number of lengths.  This code should be
        * unreachable since "[]" terminates the stack-loading.
        */
-      reset_parser(parser);
+      parser->stacklen = 0;
     }
     break;
   case qualifier:
     if (!strcmp("*", this_token->string)) {
+      /*
+       * Don't set parser->have_qualifier, as that would cause restricted
+       * pointers to fail.
+       */
       parser->is_pointer = true;
     } else if (!strcmp("restrict", this_token->string)) {
       if (!parser->is_pointer || parser->have_qualifier) {
         fprintf(parser->err_stream, "The restrict qualifier only applies to "
                                     "otherwise unqualified pointers.\n");
-        reset_parser(parser);
+        parser->stacklen = 0;
         return false;
       }
     } else if (!strcmp("extern", this_token->string) &&
@@ -1869,7 +1878,7 @@ bool finish_token(struct parser_props *parser, const char *offset_decl,
        */
       fprintf(parser->err_stream, "Function parameters cannot be %s.\n",
               this_token->string);
-      reset_parser(parser);
+      parser->stacklen = 0;
       return false;
     } else {
       parser->have_qualifier = true;
@@ -1905,6 +1914,7 @@ void push_stack(struct parser_props *parser, struct token *this_token) {
 
 size_t load_stack(struct parser_props *parser, char *user_input) {
   struct token this_token;
+  size_t increm = 0;
   this_token.kind = invalid;
   strcpy(this_token.string, "");
   while (parser->cursor <= strlen(user_input)) {
@@ -1914,12 +1924,12 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
      */
     while ((this_token.kind != identifier) &&
            strlen(parser->cursor + user_input)) {
-      parser->cursor +=
-          gettoken(parser, user_input + parser->cursor, &this_token);
-      if ((!parser->cursor) || (invalid == this_token.kind)) {
+      increm = gettoken(parser, user_input + parser->cursor, &this_token);
+      if (!increm || (invalid == this_token.kind)) {
         /* Reached end of input, or hit an error. */
         break;
       }
+      parser->cursor += increm;
       /* Don't place "typedef" on the stack. */
       if (!strcmp("typedef", this_token.string)) {
         continue;
@@ -1966,14 +1976,14 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
     }
   }
   if (!handled_extended_parsing(parser, user_input, &this_token)) {
-    reset_parser(parser);
+    parser->stacklen = 0;
     return 0;
   }
   if ((parser->cursor < strlen(user_input)) &&
       (has_any_name_chars(user_input + parser->cursor))) {
     if (parser->has_function_params && strchr(user_input, ')')) {
       if (!handled_extended_parsing(parser, user_input, &this_token)) {
-        reset_parser(parser);
+        parser->stacklen = 0;
         return 0;
       }
     } else {

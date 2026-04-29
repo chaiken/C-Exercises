@@ -85,7 +85,6 @@ void initialize_parser(struct parser_props *parser);
 void reset_parser(struct parser_props *parser);
 void release_parser_resources(struct parser_props *parser);
 struct parser_props *make_parser(struct parser_props *const parser);
-void free_all_parsers(struct parser_props *parser);
 
 /*
  * Functions which characterize input.  A returned false value indicates an

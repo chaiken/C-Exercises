@@ -976,7 +976,7 @@ TEST_F(ParserSuite, LoadStackFunctionParamNoSpace) {
   EXPECT_THAT(
       StdoutMatches("Token number 2 has kind identifier and string put_cmsg"),
       IsTrue());
-  free_all_parsers(&parser);
+  release_parser_resources(&parser);
 }
 
 TEST_F(ParserSuite, ProcessFunctionParamsStrayComma) {
@@ -993,7 +993,7 @@ TEST_F(ParserSuite, ProcessFunctionParamsStrayComma) {
 
   EXPECT_THAT(process_secondary_params(&parser, user_input), IsTrue());
   ASSERT_THAT(parser.next, Not(IsNull()));
-  free_all_parsers(&parser);
+  release_parser_resources(&parser);
 }
 
 // Parsing succeeds as a side effect of the code added to
@@ -1014,7 +1014,7 @@ TEST_F(ParserSuite, ProcessFunctionParamsStrayMiddleComma) {
   EXPECT_THAT(process_secondary_params(&parser, user_input), IsTrue());
   ASSERT_THAT(parser.next, Not(IsNull()));
   EXPECT_THAT(parser.next->next, Not(IsNull()));
-  free_all_parsers(&parser);
+  release_parser_resources(&parser);
 }
 
 TEST_F(ParserSuite, ProcessFunctionParamsLeadingWhitespace) {
@@ -1087,7 +1087,7 @@ TEST_F(ParserSuite, ProcessStructMembersOneMemberWithInstanceName) {
   EXPECT_THAT(parser.next->stack[1].string, StrEq("payload"));
   EXPECT_THAT(parser.next->next, IsNull());
   // Normally freed by pop_stack().
-  free_all_parsers(&parser);
+  release_parser_resources(&parser);
 }
 
 TEST_F(ParserSuite, PopEmpty) {
@@ -1280,7 +1280,7 @@ TEST_F(ParserSuite, GetHeadParser) {
   std::ostringstream oss1{};
   oss1 << &parser;
   EXPECT_THAT(oss0.str(), StrEq(oss1.str()));
-  free_all_parsers(head);
+  release_parser_resources(head);
 }
 
 TEST_F(ParserSuite, GetTailParser) {
@@ -1293,7 +1293,7 @@ TEST_F(ParserSuite, GetTailParser) {
   std::ostringstream oss1{};
   oss1 << parser2;
   EXPECT_THAT(oss0.str(), StrEq(oss1.str()));
-  free_all_parsers(&parser);
+  release_parser_resources(&parser);
 }
 
 TEST_F(ParserSuite, LoadStackWorks) {
@@ -1439,7 +1439,7 @@ TEST_F(ParserSuite, LoadStackCommaTerminatorFunctionSpaces) {
       StdoutMatches("Token number 1 has kind identifier and string hash"),
       IsTrue());
   // Otherwise freed by pop_all().
-  free_all_parsers(&parser);
+  release_parser_resources(&parser);
 }
 
 TEST_F(ParserSuite, LoadStackArrayNoLength) {
@@ -1682,7 +1682,7 @@ TEST_F(ParserSuite, LoadStackSimpleStruct) {
   EXPECT_THAT(
       StdoutMatches("Token number 2 has kind identifier and string next"),
       IsTrue());
-  free_all_parsers(&parser);
+  release_parser_resources(&parser);
 }
 
 TEST_F(ParserSuite, LoadStackStructTrailingInstanceName) {
@@ -1719,7 +1719,7 @@ TEST_F(ParserSuite, LoadStackStructTrailingInstanceName) {
   EXPECT_THAT(
       StdoutMatches("Token number 2 has kind identifier and string next"),
       IsTrue());
-  free_all_parsers(&parser);
+  release_parser_resources(&parser);
 }
 
 TEST_F(ParserSuite, LoadStackStructNoInstanceName) {
@@ -1753,7 +1753,7 @@ TEST_F(ParserSuite, LoadStackStructNoInstanceName) {
   EXPECT_THAT(
       StdoutMatches("Token number 2 has kind identifier and string next"),
       IsTrue());
-  free_all_parsers(&parser);
+  release_parser_resources(&parser);
 }
 
 TEST_F(ParserSuite, LoadStackStructNoInstanceNameMissingLeadingSpace) {
@@ -1833,7 +1833,7 @@ TEST_F(ParserSuite, LoadStackFunctionPtrOneParamWithIdentifier) {
   EXPECT_THAT(
       StdoutMatches("Token number 2 has kind identifier and string blk"),
       IsTrue());
-  free_all_parsers(&parser);
+  release_parser_resources(&parser);
 }
 
 TEST_F(ParserSuite, LoadStackFunctionPtrOneParamNoIdentifier) {
@@ -1854,7 +1854,7 @@ TEST_F(ParserSuite, LoadStackFunctionPtrOneParamNoIdentifier) {
       IsTrue());
   EXPECT_THAT(StdoutMatches("Token number 1 has kind qualifier and string *"),
               IsTrue());
-  free_all_parsers(&parser);
+  release_parser_resources(&parser);
 }
 
 TEST_F(ParserSuite, LoadStackFunctionPtrOneParamCompoundTypeNoSpace) {
@@ -1875,7 +1875,7 @@ TEST_F(ParserSuite, LoadStackFunctionPtrOneParamCompoundTypeNoSpace) {
       IsTrue());
   EXPECT_THAT(StdoutMatches("Token number 1 has kind qualifier and string *"),
               IsTrue());
-  free_all_parsers(&parser);
+  release_parser_resources(&parser);
 }
 
 TEST_F(ParserSuite, LoadStackFunctionPtrTwoParamsWithIdentifiers) {
@@ -1907,7 +1907,7 @@ TEST_F(ParserSuite, LoadStackFunctionPtrTwoParamsWithIdentifiers) {
   EXPECT_THAT(
       StdoutMatches("Token number 2 has kind identifier and string dir"),
       IsTrue());
-  free_all_parsers(&parser);
+  release_parser_resources(&parser);
 }
 
 TEST_F(ParserSuite, LoadStackFunctionPtrTwoParamsNoIdentifiers) {
@@ -1933,7 +1933,7 @@ TEST_F(ParserSuite, LoadStackFunctionPtrTwoParamsNoIdentifiers) {
       IsTrue());
   EXPECT_THAT(StdoutMatches("Token number 1 has kind qualifier and string *"),
               IsTrue());
-  free_all_parsers(&parser);
+  release_parser_resources(&parser);
 }
 
 TEST_F(ParserSuite, LoadStackTwoFunctionPtrsInStructNoFunctionParams) {
@@ -1966,7 +1966,7 @@ TEST_F(ParserSuite, LoadStackTwoFunctionPtrsInStructNoFunctionParams) {
   // Assure that there are no unexpected parsers producing garbage on the
   // output.
   EXPECT_THAT(parser.next->next->next, IsNull());
-  free_all_parsers(&parser);
+  release_parser_resources(&parser);
 }
 
 TEST_F(ParserSuite, LoadStackTwoFunctionPtrsInStructTrailingFunctionParam) {
@@ -2003,7 +2003,7 @@ TEST_F(ParserSuite, LoadStackTwoFunctionPtrsInStructTrailingFunctionParam) {
   // Assure that there are no unexpected parsers producing garbage on the
   // output.
   EXPECT_THAT(parser.next->next->next->next, IsNull());
-  free_all_parsers(&parser);
+  release_parser_resources(&parser);
 }
 
 TEST_F(ParserSuite, LoadStackReorder) {

@@ -173,9 +173,7 @@ static void _free_all_parsers(struct parser_props *parser) {
  * the next pointer NULL.
  */
 void release_parser_resources(struct parser_props *parser) {
-  struct parser_props *head = get_head_parser(parser);
-  _free_all_parsers(head);
-  reset_parser(head);
+  _free_all_parsers(parser);
 }
 
 struct parser_props *make_parser(struct parser_props *const parser) {
@@ -692,7 +690,7 @@ bool tokenize_struct_params(char **output, char *input, const char delim) {
  * its initial state, so checking if it contains an enum or function via
  * parser_props boolean values is not yet possible.
  */
-bool truncate_input(char **input, const struct parser_props *parser) {
+bool truncate_input(char **input, struct parser_props *parser) {
   char trimmed[MAXTOKENLEN];
   char *input_end = NULL;
   const char *found_enum = strstr(*input, "enum ");
@@ -725,9 +723,11 @@ bool truncate_input(char **input, const struct parser_props *parser) {
     /* Input with two semicolons or ')' could reach this point. */
     if (input_end == *input) {
       fprintf(parser->err_stream, "Zero-length input string.\n");
+      parser->stacklen = 0;
       return false;
     } else if (!input_end) { /* There are no terminators. */
       fprintf(parser->err_stream, "\nImproperly terminated declaration.\n");
+      parser->stacklen = 0;
       return false;
     }
   }
@@ -737,6 +737,7 @@ bool truncate_input(char **input, const struct parser_props *parser) {
   }
   if (!strlen(*input)) {
     fprintf(parser->err_stream, "Zero-length input string.\n");
+    parser->stacklen = 0;
     return false;
   }
   return true;
@@ -824,8 +825,8 @@ bool have_stacked_compound_type(const struct parser_props *parser) {
  * "enum", so progress_ptr+offset should point past one of them.  The
  * return value indicates success or failure.
  */
-bool handled_compound_type(struct parser_props *parser,
-                           const char *progress_ptr, struct token *this_token) {
+bool handled_compound_type(struct parser_props *parser, char *progress_ptr,
+                           struct token *this_token) {
   char compound_type_name[MAXTOKENLEN];
   char *name_end_ptr;
   char *startdelimp;
@@ -1119,6 +1120,11 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
     if (!next_separator_is_inside_delims(parser, progress_ptr)) {
       if (!load_next_secondary_param(params_parser, progress_ptr,
                                      parser->separator, err_string)) {
+        /*
+         * Automated cleanup causes use-after-free when the parser is not the
+         * top-level one.
+         */
+        dummy_parserp = NULL;
         return false;
       }
       progress_ptr = user_input + parser->cursor;
@@ -1139,6 +1145,7 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
        */
       if (!load_next_secondary_param(params_parser, progress_ptr,
                                      parser->end_delim, final_err_string)) {
+        dummy_parserp = NULL;
         return false;
       }
 #ifdef DEBUG
@@ -1312,12 +1319,10 @@ bool handled_extended_parsing(struct parser_props *parser, char *user_input,
              parser->has_struct_or_union_members) {
     /* Move past the already-processed characters and '('. */
     if (!process_secondary_params(parser, user_input)) {
-      release_parser_resources(parser);
       return false;
     }
   } else if (parser->has_enum_constants) {
     if (!process_enum_constants(parser, user_input)) {
-      release_parser_resources(parser);
       return false;
     }
   }
@@ -1453,7 +1458,6 @@ bool pop_stack(struct parser_props *parser, bool no_enum_instance) {
         __fpurge(parser->out_stream);
         fprintf(parser->err_stream,
                 "Function return types cannot be volatile.\n");
-        release_parser_resources(parser);
         return false;
       }
       fprintf(parser->out_stream, "%s ", parser->stack[stacktop].string);
@@ -1476,7 +1480,6 @@ bool pop_stack(struct parser_props *parser, bool no_enum_instance) {
             fprintf(parser->out_stream, "and takes param(s) ");
           }
           if (!pop_all(cursor)) {
-            release_parser_resources(parser);
             return false;
           }
           depth++;
@@ -1506,7 +1509,6 @@ bool pop_stack(struct parser_props *parser, bool no_enum_instance) {
             fprintf(parser->out_stream, "has member(s) ");
           }
           if (!pop_all(cursor)) {
-            release_parser_resources(parser);
             return false;
           }
           depth++;
@@ -1571,7 +1573,7 @@ bool pop_stack(struct parser_props *parser, bool no_enum_instance) {
       parser->array_lengths--;
       break;
     case invalid:
-      __attribute__((fallthrough));
+      break;
     case typedefn:
       break;
     default:
@@ -1888,7 +1890,18 @@ bool finish_token(struct parser_props *parser, const char *offset_decl,
     parser->is_typedef = true;
     break;
   case invalid:
-    __attribute__((fallthrough));
+    /*
+     * Compound types plus nonymous structs and unions result in empty tokens, so
+     * don't print an error.
+     */
+    if (!(strlen(this_token->string))) {
+      if (!parser->is_struct_or_union) {
+        fprintf(parser->err_stream, "Cannot process empty token.\n");
+      }
+    } else {
+      fprintf(parser->err_stream, "Cannot process invalid token %s\n",
+              this_token->string);
+    }
   default:
     break;
   }
@@ -1938,7 +1951,6 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
                                         !strcmp("struct", this_token.string) ||
                                         !strcmp("enum", this_token.string))) {
         if (!handled_compound_type(parser, user_input, &this_token)) {
-          release_parser_resources(parser);
           return 0;
         }
       }
@@ -1990,7 +2002,7 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
       /* There is unclassifiable junk at the end of the expression. */
       fprintf(parser->err_stream, "Expression ends with erroneous output: %s\n",
               user_input + parser->cursor);
-      release_parser_resources(parser);
+      parser->stacklen = 0;
       return 0;
     }
   }
@@ -2026,7 +2038,9 @@ bool input_parsing_successful(struct parser_props *parser, char inputstr[]) {
   if (strlen(trimmed)) {
     strlcpy(user_input, trimmed, MAXTOKENLEN);
   }
-  load_stack(parser, user_input);
+  if (!load_stack(parser, user_input)) {
+    return false;
+  }
   if (0 == parser->stacklen) {
     fprintf(parser->err_stream, "Unable to parse garbled input.\n");
     release_parser_resources(parser);

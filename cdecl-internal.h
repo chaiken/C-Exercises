@@ -115,7 +115,7 @@ size_t trim_trailing_whitespace(const char *input, char *trimmed);
 void elide_assignments(char **input);
 bool tokenize_function_params(char **output, char *input, const char delim);
 bool tokenize_struct_params(char **output, char *input, const char delim);
-bool truncate_input(char **input, const struct parser_props *parser);
+bool truncate_input(char **input, struct parser_props *parser);
 
 /* debugging functions */
 struct parser_props *get_head_parser(struct parser_props *parser);
@@ -125,8 +125,8 @@ void showstack(const struct token *stack, const size_t stacklen,
 
 /* parser helper functions */
 bool have_stacked_compound_type(const struct parser_props *parser);
-bool handled_compound_type(struct parser_props *parser,
-                           const char *progress_ptr, struct token *this_token);
+bool handled_compound_type(struct parser_props *parser, char *progress_ptr,
+                           struct token *this_token);
 bool all_identifiers_are_enum_constants(const struct parser_props *parser);
 bool first_identifier_is_enumerator(const struct parser_props *parser,
                                     const char *user_input);

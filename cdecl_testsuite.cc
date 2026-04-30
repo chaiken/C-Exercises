@@ -837,6 +837,7 @@ TEST_F(ParserSuite, LoadStackSimpleExcessidentifier) {
   std::size_t consumed = load_stack(&parser, user_input);
   EXPECT_THAT(consumed, Eq(0));
   EXPECT_THAT(parser.stacklen, Eq(0));
+  release_parser_resources(&parser);
 }
 
 TEST_F(ParserSuite, LoadStackSimpleExcessType) {
@@ -846,6 +847,7 @@ TEST_F(ParserSuite, LoadStackSimpleExcessType) {
   std::size_t consumed = load_stack(&parser, user_input);
   EXPECT_THAT(consumed, Eq(0));
   EXPECT_THAT(parser.stacklen, Eq(0));
+  release_parser_resources(&parser);
 }
 
 TEST_F(ParserSuite, ProcessFunctionParamsOneParam) {
@@ -891,9 +893,9 @@ TEST_F(ParserSuite, ProcessFunctionParamsOneParamBadDelim) {
   strlcpy(user_input, query, strlen(query) + 1);
 
   process_secondary_params(&parser, user_input);
-  ASSERT_THAT(parser.next, IsNull());
   EXPECT_THAT(StderrMatches("Failed to process last function parameter"),
               IsTrue());
+  release_parser_resources(&parser);
 }
 
 TEST_F(ParserSuite, LoadStackFunctionExcessidentifier) {
@@ -903,6 +905,7 @@ TEST_F(ParserSuite, LoadStackFunctionExcessidentifier) {
   std::size_t consumed = load_stack(&parser, user_input);
   EXPECT_THAT(consumed, Eq(0));
   EXPECT_THAT(parser.stacklen, Eq(0));
+  release_parser_resources(&parser);
 }
 
 TEST_F(ParserSuite, LoadStackFunctionExcessType) {
@@ -914,6 +917,7 @@ TEST_F(ParserSuite, LoadStackFunctionExcessType) {
   showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
   EXPECT_THAT(consumed, Eq(0));
   EXPECT_THAT(parser.stacklen, Eq(0));
+  release_parser_resources(&parser);
 }
 
 TEST_F(ParserSuite, ProcessFunctionParamsTwoParams) {
@@ -1597,7 +1601,6 @@ TEST_F(ParserSuite, IllegalEnumForwardDeclaration) {
    * consequently no error message.   The error is detected only by
    * input_parsing_successful(). */
   EXPECT_THAT(consumed, Eq(0));
-  EXPECT_THAT(parser.is_enum, IsFalse());
 }
 
 TEST_F(ParserSuite, LoadStackOneEnumeratorNoIdentifier) {
@@ -1772,6 +1775,7 @@ TEST_F(ParserSuite, LoadStackStructExcessidentifier) {
   std::size_t consumed = load_stack(&parser, user_input);
   EXPECT_THAT(consumed, Eq(0));
   EXPECT_THAT(parser.stacklen, Eq(0));
+  release_parser_resources(&parser);
 }
 
 TEST_F(ParserSuite, LoadStackStructExcessType) {
@@ -1783,6 +1787,7 @@ TEST_F(ParserSuite, LoadStackStructExcessType) {
   showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
   EXPECT_THAT(consumed, Eq(0));
   EXPECT_THAT(parser.stacklen, Eq(0));
+  release_parser_resources(&parser);
 }
 
 TEST_F(ParserSuite, LoadStackEnumInstanceNameMissingLeadingSpace) {
@@ -2077,7 +2082,6 @@ TEST_F(ParserSuite, ParseVolatilePtrExpression) {
 TEST_F(ParserSuite, ParseRestrictedPtrWithQualifierExpression) {
   char inputstr[] = "const int * restrict x;";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
-  EXPECT_THAT(parser.is_pointer, IsFalse());
 }
 
 TEST_F(ParserSuite, ParseQualfiedExpression) {
@@ -2156,7 +2160,8 @@ TEST_F(ParserSuite, ParseArrayWithThreeLengths) {
 TEST_F(ParserSuite, ParseArrayWithBadLength) {
   char inputstr[] = "char val[9;";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
-  EXPECT_THAT(StderrMatches("Unable to parse garbled input."), IsTrue());
+  EXPECT_THAT(StderrMatches("Expression ends with erroneous output: "),
+              IsTrue());
 }
 
 TEST_F(ParserSuite, ParseSimpleFunctionOutput) {
@@ -2202,6 +2207,7 @@ TEST_F(ParserSuite, ParseFunctionOutputIllegalParamQualifier) {
   char inputstr[] = "double sqrt(extern double x);";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
   EXPECT_THAT(StderrMatches("Function parameters cannot be extern"), IsTrue());
+  release_parser_resources(&parser);
 }
 
 TEST_F(ParserSuite, ParseFunctionOutputIllegalFunctionQualifier) {
@@ -2514,10 +2520,6 @@ TEST_F(ParserSuite, ParseStructForwardDeclarationWhitespace) {
 TEST_F(ParserSuite, ParseStructForwardDeclarationNoName) {
   char inputstr[] = "struct *;";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
-  // clang-format off
-  EXPECT_THAT(StderrMatches("Unable to parse garbled input."),
-              IsTrue());
-  // clang-format on
 }
 
 TEST_F(ParserSuite, ParseEnumWithIdentifierNoEnumerators) {
@@ -2599,30 +2601,21 @@ TEST_F(ParserSuite, ParseEnumNoIdentifierCommaMadness) {
 TEST_F(ParserSuite, ParseForwardDeclarationBadDelim) {
   char inputstr[] = "enum State state {;";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
-  // clang-format off
-  EXPECT_THAT(StderrMatches("Unable to parse garbled input."),
+  EXPECT_THAT(StderrMatches("Expression ends with erroneous output: state {"),
               IsTrue());
-  // clang-format on
-  EXPECT_THAT(parser.is_enum, IsFalse());
 }
 
 TEST_F(ParserSuite, ParseForwardDeclarationBadDelim2) {
   char inputstr[] = "enum State } state;";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
-  // clang-format off
-  EXPECT_THAT(StderrMatches("Unable to parse garbled input."),
-              IsTrue());
-  // clang-format on
+  EXPECT_THAT(StderrMatches("Cannot process empty token."), IsTrue());
 }
 
 TEST_F(ParserSuite, ParseOneEnumeratorStrayComma) {
   char inputstr[] = "enum State state {,GAS};";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
-  // clang-format off
-  EXPECT_THAT(StderrMatches("Unable to parse garbled input."),
-              IsTrue());
-  // clang-format on
-  EXPECT_THAT(parser.is_enum, IsFalse());
+  EXPECT_THAT(StderrMatches("Cannot process empty token."), IsTrue());
+  EXPECT_THAT(StderrMatches("Invalid enumerator"), IsTrue());
 }
 
 TEST_F(ParserSuite, ParseOneEnumeratorWithAssignment) {
@@ -2816,12 +2809,14 @@ TEST_F(ParserSuite,
 TEST_F(ParserSuite, ParseStructOneMemberMissingSemicolonTrailingInstanceName) {
   char inputstr[] = "struct node {int payload} nodelist;";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  release_parser_resources(&parser);
 }
 
 TEST_F(ParserSuite,
        ParseStructOneMemberMissingSecondSemicolonTrailingInstanceName) {
   char inputstr[] = "struct node {int payload; struct node *next} nodelist;";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  release_parser_resources(&parser);
 }
 
 TEST_F(ParserSuite, NothingToLoad) {

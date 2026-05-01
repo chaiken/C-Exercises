@@ -2019,7 +2019,7 @@ TEST_F(ParserSuite, LoadStackNestedStruct) {
   // Trailing delimiters are not included in cursor count in
   // load_next_secondary_param().
   // Trailing separator is overwritten with NULL in tokenize_struct_params().
-  EXPECT_THAT(consumed, Eq(strlen(probe) - strlen("};}")));
+  EXPECT_THAT(consumed, Eq(strlen(probe)));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string u64"),
               IsTrue());
   EXPECT_THAT(
@@ -2050,7 +2050,7 @@ TEST_F(ParserSuite, LoadStackNestedAnonymousUnion) {
   // Trailing delimiters are not included in cursor count in
   // load_next_secondary_param().
   // Trailing separator is overwritten with NULL in tokenize_struct_params().
-  EXPECT_THAT(consumed, Eq(strlen(probe) - strlen("};}")));
+  EXPECT_THAT(consumed, Eq(strlen(probe)));
   EXPECT_THAT(
       StdoutMatches(
           "Token number 0 has kind type and string enum ethtool_autoneg"),
@@ -2071,6 +2071,35 @@ TEST_F(ParserSuite, LoadStackNestedAnonymousUnion) {
       StdoutMatches(
           "Token number 0 has kind type and string struct ethtool_info"),
       IsTrue());
+  release_parser_resources(&parser);
+}
+
+TEST_F(ParserSuite, LoadStackNestedUnionTrailingInstanceName) {
+  char user_input[MAXTOKENLEN];
+  const char *probe = "struct v { union pad { char  c[5]; float f; }  p; }";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input);
+  // Trailing delimiters are not included in cursor count in
+  // load_next_secondary_param().
+  // Trailing separator is overwritten with NULL in tokenize_struct_params().
+  EXPECT_THAT(consumed, Eq(strlen(probe)));
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string char"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 1 has kind length and string 5"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 2 has kind identifier and string c"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string float"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 1 has kind identifier and string f"),
+              IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 0 has kind type and string union pad"),
+      IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 1 has kind identifier and string p"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string struct v"),
+              IsTrue());
   release_parser_resources(&parser);
 }
 
@@ -2565,13 +2594,90 @@ TEST_F(ParserSuite, ParseUnionTrailingInstanceNameNoSpaces) {
   // clang-format on
 }
 
-TEST_F(ParserSuite, ParseNestedUnion) {
-  char inputstr[] =
-      "struct fscrypt_ops { const char *legacy_key_prefix; const union "
-      "fscrypt_policy *(*get_dummy_policy)(struct super_block *sb)};";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+TEST_F(ParserSuite, ParseUnionReturnValue) {
   // clang-format off
+  char inputstr[] =
+      "struct fscrypt_ops { const char *legacy_key_prefix; const union fscrypt_policy *(*get_dummy_policy)(struct super_block *sb)};";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("struct fscrypt_ops has member(s) legacy_key_prefix is a(n) pointer to const char and get_dummy_policy is a(n) pointer to a function which returns pointer to a function which returns const union fscrypt_policy and takes param(s) sb is a(n) pointer to struct super_block"),
+              IsTrue());
+  // clang-format on
+}
+
+// Anonymous unions require  identifiers for each of the individual union
+// elements.
+TEST_F(ParserSuite, ParseNestedAnonymousUnion) {
+  // clang-format off
+  char inputstr[] ="struct v { union { int i; char *j; }; };";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("struct v has member(s) union has member(s) i is a(n) int and j is a(n) pointer to char"),
+              IsTrue());
+  // clang-format on
+}
+
+// Unions cannot have instance names unless they also have compound types.
+TEST_F(ParserSuite, ParseNestedUnionCompoundType) {
+  // clang-format off
+  char inputstr[] = "struct v { union pad { char  c[5]; float f; }  p; };";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("struct v has member(s) p is a(n) union pad which has member(s) c is a(n) array of 5 char and f is a(n) float"),
+              IsTrue());
+  // clang-format on
+}
+
+TEST_F(ParserSuite, ParseNestedAnonymousUnionWithLeadingTopLevelIdentifier) {
+  parser.err_stream = stderr;
+  parser.err_stream = stdout;
+  // clang-format off
+  char inputstr[] = "struct v vee { union { char c[5]; int m; }; };";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("vee is a(n) struct v which has member(s) union has member(s) c is a(n) array of 5 char and m is a(n) int"),
+              IsTrue());
+  // clang-format on
+}
+
+TEST_F(ParserSuite, ParseNestedAnonymousUnionWithTrailingTopLevelIdentifier) {
+  // clang-format off
+  char inputstr[] = "struct v { union { char c[5]; int m; }; } vee;";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("vee is a(n) struct v which has member(s) union has member(s) c is a(n) array of 5 char and m is a(n) int"),
+              IsTrue());
+  // clang-format on
+}
+
+TEST_F(ParserSuite, ParseNestedTrailingAnonymousUnion) {
+  // clang-format off
+  char inputstr[] = "struct v { int m; union { int i; char *j; }; };";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches(""),
+              IsTrue());
+  // clang-format on
+}
+
+TEST_F(ParserSuite, ParseNestedLeadingAnonymousUnion) {
+  // clang-format off
+  char inputstr[] = "struct v {  union { int i; char *j; }; int m; };";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches(""),
+              IsTrue());
+  // clang-format on
+}
+
+TEST_F(ParserSuite, ParseNestedUnionWithTrailing2ndLevelIdentifierFirst) {
+  // clang-format off
+  char inputstr[] = "struct v { union u { int i; char *j; } obj; int m; };";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches(""),
+              IsTrue());
+  // clang-format on
+}
+
+TEST_F(ParserSuite,
+       ParseNestedAnonymousUnionWithTrailing2ndLevelIdentifierLast) {
+  // clang-format off
+  char inputstr[] = "struct v { int m; union u { int i; char *j; } obj; };";
+  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches(""),
               IsTrue());
   // clang-format on
 }

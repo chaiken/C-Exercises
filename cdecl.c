@@ -667,7 +667,13 @@ bool tokenize_struct_params(char **output, char *input, const char delim) {
   const char *first_separator = strchr(input, ';');
   const char *first_start_delim = strchr(input, '{');
 
-  if (end_next_param) {
+  /*
+   * If "};" occurs after the first separator, there's another struct or union
+   * member before it which should be processed first.
+   */
+  if (end_next_param && first_separator &&
+      ((end_next_param < first_separator) ||
+       (first_separator > first_start_delim))) {
     /* Point to semicolon after '}'. */
     param_end = end_next_param + 1;
   } else {
@@ -859,12 +865,17 @@ bool handled_compound_type(struct parser_props *parser, char *progress_ptr,
   parser->cursor += trim_leading_whitespace(progress_ptr + parser->cursor,
                                             &compound_type_name[0]);
   /*
-   * A struct or union inside another struct or union can be anonymous, without
-   * a compound type or a trailing instance name.
+   * A struct or union inside another struct or union can be
+   * anonymous, without a compound type or a trailing instance name.
+   * Since for enumerators parser->start_delim is NULL, strchr() will
+   * set startdelimp to the trailing NULL in the string.  startdelimp can thus
+   * genuinely be NULL for structs, unions or functions, but never will be for
+   * enums, so also check *startdelimp.
    */
-  if (parser->prev && parser->prev->is_struct_or_union && startdelimp &&
+  if (parser->parent && parser->parent->is_struct_or_union && startdelimp &&
+      ('\0' != *startdelimp) &&
       !has_any_name_chars_before(progress_ptr + parser->cursor,
-                                 parser->start_delim)) {
+                                 parser->parent->start_delim)) {
     return true;
   }
   /*
@@ -972,19 +983,24 @@ bool first_identifier_is_enumerator(const struct parser_props *parser,
 }
 
 /*
- * Handle the case of an enumeration or struct instance name which
- * follows the enumeration constant or struct member list.
+ * Handle the case of an enumeration or struct instance name which follows the
+ * enumeration constant or struct member list.
  */
 void handle_trailing_instance_name(struct parser_props *parser,
                                    char *user_input) {
-  const char *endbracep = strchr(user_input, '}');
+  const char *first_end_delim = strchr(user_input, '}');
+  const char *last_end_delim = strrchr(user_input, '}');
+  int delim_offset = 0;
   struct token this_token;
-  if (!endbracep)
+  if (!first_end_delim) {
     return;
+  }
   /*
-   * There can only be one instance name.  If the first identifier on
-   * the stack is not an enumeration constant, it's an enumeration
-   * instance name which precedes the enumeration constant list.
+   * There can only be one instance name.  If the first identifier on the stack
+   * is an enumeration constant, then any enumeration instance name must follow
+   * the enumeration constants list.  The situation is similar if the object is
+   * a struct or union, and parsing has reached the brace indicating the start
+   * of the member list.
    */
   if (parser->cursor < strlen(user_input)) {
     if ((parser->is_enum &&
@@ -994,15 +1010,29 @@ void handle_trailing_instance_name(struct parser_props *parser,
       strcpy(this_token.string, "");
       /*
        * Advance processing to the char after the brace which closes the
-       * enumerator list.
+       * enumeration constant or struct member list.  The next character is
+       * either a space or the start of the instance name.
        */
-      parser->cursor += (endbracep - (user_input + parser->cursor)) + 1;
+      delim_offset = (first_end_delim - (user_input + parser->cursor)) + 1;
+      /*
+       * Parsing has already passed the first end delimiter, so advance the
+       * cursor to the last one.
+       */
+      if (0 > delim_offset) {
+        delim_offset = (last_end_delim - (user_input + parser->cursor)) + 1;
+      }
+      parser->cursor += delim_offset;
       parser->cursor +=
           gettoken(parser, user_input + parser->cursor, &this_token);
       if ((invalid == this_token.kind) || !strlen(this_token.string)) {
         return;
       }
       push_stack(parser, &this_token);
+      /* Check parser->separator since enums set it to NULL. */
+      if (parser->separator &&
+          (parser->separator == *(user_input + parser->cursor))) {
+        parser->cursor++;
+      }
     }
   }
 }
@@ -1842,6 +1872,9 @@ bool finish_token(struct parser_props *parser, const char *offset_decl,
     parser->have_type = true;
     if (!strcmp("enum", this_token->string)) {
       parser->is_enum = true;
+      parser->start_delim = '\0';
+      parser->end_delim = '\0';
+      parser->separator = '\0';
     }
     if ((!strcmp("struct", this_token->string)) ||
         (!strcmp("union", this_token->string))) {
@@ -2029,7 +2062,8 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
   }
   if ((parser->cursor < strlen(user_input)) &&
       (has_any_name_chars(user_input + parser->cursor))) {
-    if (parser->has_function_params && strchr(user_input, ')')) {
+    if ((parser->has_function_params && strchr(user_input, ')')) ||
+        (parser->has_struct_or_union_members && strchr(user_input, '}'))) {
       if (!handled_extended_parsing(parser, user_input, &this_token)) {
         parser->stacklen = 0;
         return 0;

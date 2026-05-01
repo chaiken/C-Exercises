@@ -2082,6 +2082,9 @@ TEST_F(ParserSuite, ParseVolatilePtrExpression) {
 TEST_F(ParserSuite, ParseRestrictedPtrWithQualifierExpression) {
   char inputstr[] = "const int * restrict x;";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  EXPECT_THAT(StderrMatches("The restrict qualifier only applies to otherwise "
+                            "unqualified pointers."),
+              IsTrue());
 }
 
 TEST_F(ParserSuite, ParseQualfiedExpression) {
@@ -2520,6 +2523,8 @@ TEST_F(ParserSuite, ParseStructForwardDeclarationWhitespace) {
 TEST_F(ParserSuite, ParseStructForwardDeclarationNoName) {
   char inputstr[] = "struct *;";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  EXPECT_THAT(StderrMatches("Input lacks required identifier or type element."),
+              IsTrue());
 }
 
 TEST_F(ParserSuite, ParseEnumWithIdentifierNoEnumerators) {
@@ -2609,6 +2614,8 @@ TEST_F(ParserSuite, ParseForwardDeclarationBadDelim2) {
   char inputstr[] = "enum State } state;";
   EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
   EXPECT_THAT(StderrMatches("Cannot process empty token."), IsTrue());
+  EXPECT_THAT(StderrMatches("Input lacks required identifier or type element."),
+              IsTrue());
 }
 
 TEST_F(ParserSuite, ParseOneEnumeratorStrayComma) {

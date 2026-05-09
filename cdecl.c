@@ -649,15 +649,17 @@ bool tokenize_function_params(char **output, char *input, const char delim) {
 }
 
 /*
- * tokenize_struct_params() is considerably simpler than
+ * tokenize_struct_params() is somewhat simpler than
  * tokenize_function_params() because every struct or union member is
  * terminated by a semicolon, unlike the case for function parameters, where
- * the last one is terminated with ')'.  Also, '}' is always followed by a
+ * the last one is terminated with "))".  Also, '}' is always followed by a
  * semicolon, while the character ')' occurs multiple times in a nested function
- * pointer but only terminates it when followed by a comma or another ')'.
+ * pointer but only terminates it when followed by a comma or another ')'.  On
+ * the other hand, tokenize_struct_params() must deal with trailing identifiers
+ * and arbitrarily large nesting levels.
  */
 bool tokenize_struct_params(char **output, char *input, const char delim) {
-  char *param_end;
+  char *param_end = NULL;
   const char *param_start;
   size_t param_len = 0;
 
@@ -666,29 +668,35 @@ bool tokenize_struct_params(char **output, char *input, const char delim) {
   /* A semicolon terminates simple tokens and function pointers. */
   const char *first_separator = strchr(input, ';');
   const char *first_start_delim = strchr(input, '{');
+  const char *last_end_delim = strrchr(input, '}');
 
   /*
    * If "};" occurs after the first separator, there's another struct or union
    * member before it which should be processed first.
    */
+  /* Here we have 3 cases.
+   * The first is text followed by a semicolon and '{' where the semicolon
+   * precedes the bracket. This order indicates a simple parameter preceding a
+   * subsidiary struct.
+   * The second is simple text followed by a semicolon.
+   * The third is that the current scope has no parameters left, but the
+   * enclosing one does.
+   */
   if (end_next_param && first_separator &&
       ((end_next_param < first_separator) ||
        (first_separator > first_start_delim))) {
-    /* Point to semicolon after '}'. */
+    /* Case 0: point to semicolon after '}'. */
     param_end = end_next_param + 1;
-  } else {
-    /* Here we have 2 cases.
-     * The first is simple text followed by a semicolon.
-     * The second is text followed by a semicolon and '{' where the semicolon
-     * precedes the bracket. This order indicates a simple parameter preceding a
-     * subsidiary struct.
-     */
-    if ((first_separator && !first_start_delim) ||
-        (first_separator && first_start_delim &&
-         (first_separator < first_start_delim))) {
-      param_end = strchr(input, delim);
-    }
+  } else if ((first_separator && !first_start_delim) ||
+             (first_separator && first_start_delim &&
+              (first_separator < first_start_delim))) {
+    /* Case 1. */
+    param_end = strchr(input, delim);
+  } else if (last_end_delim == (input + (strlen(input) - 1))) {
+    /* Case 2. */
+    param_end = (char *)last_end_delim;
   }
+  /* Nothing to do. */
   if (!param_end) {
     return false;
   }
@@ -705,6 +713,9 @@ bool tokenize_struct_params(char **output, char *input, const char delim) {
      */
     param_start = input;
     param_len = param_end - input;
+  }
+  if (!param_len) {
+    return false;
   }
   /* Copy the entire input, as otherwise there is no trailing NULL. */
   strlcpy(*output, param_start, param_len + 1);
@@ -886,15 +897,16 @@ bool handled_compound_type(struct parser_props *parser, char *progress_ptr,
   /*
    * When the declaration is something like "struct task_struct;" or
    * "struct msg*", leave any trailing identifier or '*' for subsequent code to
-   * process.
+   * process.  Check the value of name_end_ptr since strchr() never sets it to
+   * NULL.
    */
-  if (!name_end_ptr) {
+  if (!name_end_ptr || !(*name_end_ptr)) {
     name_end_ptr = strchr(compound_type_name, '*');
   }
-  if (!name_end_ptr) {
+  if (!name_end_ptr || !(*name_end_ptr)) {
     name_end_ptr = strchr(compound_type_name, parser->separator);
   }
-  if (!name_end_ptr) {
+  if (!name_end_ptr || !(*name_end_ptr)) {
     return true;
   }
   /*
@@ -1171,9 +1183,6 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
       // Freed in pop_stack().
       params_parser = make_parser(tail_parser);
       params_parser->parent = parser;
-    } else {
-      /* Parsing of function parameters or struct members is done. */
-      break;
     }
     /*
      * There may be more than one function parameter or struct member yet to
@@ -1214,6 +1223,17 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
 #ifdef DEBUG
       show_parser_list(parser, __LINE__);
 #endif
+      progress_ptr = user_input + parser->cursor;
+      /* Exit the current scope. */
+      if (parser->separator == *progress_ptr) {
+        parser->cursor++;
+        progress_ptr = user_input + parser->cursor;
+      }
+      /* The surrounding scope may yet have parameters. */
+      if (!next_separator_is_inside_delims(parser, progress_ptr)) {
+        tail_parser = get_tail_parser(parser);
+        continue;
+      }
       break;
     } else {
       return false;

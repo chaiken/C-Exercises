@@ -1795,7 +1795,6 @@ TEST_F(ParserSuite, LoadStackEnumInstanceNameMissingLeadingSpace) {
   const char *probe = "enum State state{GAS}";
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input);
-  parser.err_stream = stderr;
   showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
   EXPECT_THAT(consumed, Eq(0));
   EXPECT_THAT(parser.stacklen, Eq(0));
@@ -2076,7 +2075,7 @@ TEST_F(ParserSuite, LoadStackNestedAnonymousUnion) {
 
 TEST_F(ParserSuite, LoadStackNestedUnionTrailingInstanceName) {
   char user_input[MAXTOKENLEN];
-  const char *probe = "struct v { union pad { char  c[5]; float f; }  p; }";
+  const char *probe = "struct v { union pad { char  c[5]; float f; } p; }";
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input);
   // Trailing delimiters are not included in cursor count in
@@ -2120,44 +2119,44 @@ TEST_F(ParserSuite, LoadStackReorder) {
 
 TEST_F(ParserSuite, ParseSimpleExpression) {
   char inputstr[] = "int x;";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // The output has a trailng space in case there's output after the type.
   EXPECT_THAT(StdoutMatches("x is a(n) int "), IsTrue());
 }
 
 TEST_F(ParserSuite, ParsePtrExpression) {
   char inputstr[] = "int *x;";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("x is a(n) pointer to int "), IsTrue());
 }
 
 TEST_F(ParserSuite, ParsePtrExpressionWithSpace) {
   char inputstr[] = "int * x;";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("x is a(n) pointer to int "), IsTrue());
 }
 
 TEST_F(ParserSuite, ParsePtrExpressionAlternate) {
   char inputstr[] = "int* x;";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("x is a(n) pointer to int "), IsTrue());
 }
 
 TEST_F(ParserSuite, ParsePtrPtrExpression) {
   char inputstr[] = "int **x;";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("x is a(n) pointer to pointer to int "), IsTrue());
 }
 
 TEST_F(ParserSuite, ParsePtrPtrExpressionSpace) {
   char inputstr[] = "int * *x;";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("x is a(n) pointer to pointer to int "), IsTrue());
 }
 
 TEST_F(ParserSuite, ParseRestrictedPtrExpression) {
   char inputstr[] = "int * restrict x;";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(parser.is_pointer, IsTrue());
   EXPECT_THAT(parser.have_identifier, IsTrue());
   EXPECT_THAT(StdoutMatches("x is a(n) restrict pointer to int "), IsTrue());
@@ -2165,7 +2164,7 @@ TEST_F(ParserSuite, ParseRestrictedPtrExpression) {
 
 TEST_F(ParserSuite, ParseVolatilePtrExpression) {
   char inputstr[] = "int * volatile x;";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(parser.is_pointer, IsTrue());
   EXPECT_THAT(parser.have_identifier, IsTrue());
   EXPECT_THAT(StdoutMatches("x is a(n) volatile pointer to int "), IsTrue());
@@ -2173,7 +2172,7 @@ TEST_F(ParserSuite, ParseVolatilePtrExpression) {
 
 TEST_F(ParserSuite, ParseRestrictedPtrWithQualifierExpression) {
   char inputstr[] = "const int * restrict x;";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
   EXPECT_THAT(StderrMatches("The restrict qualifier only applies to otherwise "
                             "unqualified pointers."),
               IsTrue());
@@ -2181,20 +2180,20 @@ TEST_F(ParserSuite, ParseRestrictedPtrWithQualifierExpression) {
 
 TEST_F(ParserSuite, ParseQualfiedExpression) {
   char inputstr[] = "const int x;";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("x is a(n) const int "), IsTrue());
 }
 
 TEST_F(ParserSuite, ParseConstPtr) {
   char inputstr[] = "int * const x;";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("x is a(n) const pointer to int "), IsTrue());
 }
 
 // From https://en.cppreference.com/w/c/language/pointer.html
 TEST_F(ParserSuite, ParseConstPtrPtr) {
   char inputstr[] = "int *const *npp = &np;";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // Website says "non-const pointer to const pointer to non-const int""
   EXPECT_THAT(StdoutMatches("npp is a(n) pointer to const pointer to int"),
               IsTrue());
@@ -2203,21 +2202,21 @@ TEST_F(ParserSuite, ParseConstPtrPtr) {
 // From https://en.cppreference.com/w/c/language/pointer.html
 TEST_F(ParserSuite, ParsePtrArray) {
   char inputstr[] = "int *ap[2] = &a;";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // Website says "pointer to array of int""
   EXPECT_THAT(StdoutMatches("ap is a(n) array of 2 pointer to int"), IsTrue());
 }
 
 TEST_F(ParserSuite, ParseSimpleArray) {
   char inputstr[] = "const double x[]];";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(parser.array_lengths, Eq(0));
   EXPECT_THAT(StdoutMatches("x is a(n) array of const double "), IsTrue());
 }
 
 TEST_F(ParserSuite, ParseArrayWithLength) {
   char inputstr[] = "char val[9];";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // pop_stack() decrements array_lengths.
   EXPECT_THAT(parser.array_lengths, Eq(0));
   EXPECT_THAT(StdoutMatches("val is a(n) array of 9 char"), IsTrue());
@@ -2225,28 +2224,28 @@ TEST_F(ParserSuite, ParseArrayWithLength) {
 
 TEST_F(ParserSuite, ParseArrayWithTwoDimsOneLength) {
   char inputstr[] = "char val[9][];";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(parser.array_lengths, Eq(0));
   EXPECT_THAT(StdoutMatches("val is a(n) array of 9x? char"), IsTrue());
 }
 
 TEST_F(ParserSuite, ParseArrayWithTwoLengths) {
   char inputstr[] = "char val[9][11];";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(parser.array_lengths, Eq(0));
   EXPECT_THAT(StdoutMatches("val is a(n) array of 9x11 char"), IsTrue());
 }
 
 TEST_F(ParserSuite, ParseArrayWithThreeDimTwoLengths) {
   char inputstr[] = "char val[9][11][];";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(parser.array_lengths, Eq(0));
   EXPECT_THAT(StdoutMatches("val is a(n) array of 9x11x? char"), IsTrue());
 }
 
 TEST_F(ParserSuite, ParseArrayWithThreeLengths) {
   char inputstr[] = "char val[9][11][6];";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
 
   EXPECT_THAT(parser.array_lengths, Eq(0));
   EXPECT_THAT(StdoutMatches("val is a(n) array of 9x11x6 char"), IsTrue());
@@ -2254,14 +2253,14 @@ TEST_F(ParserSuite, ParseArrayWithThreeLengths) {
 
 TEST_F(ParserSuite, ParseArrayWithBadLength) {
   char inputstr[] = "char val[9;";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
   EXPECT_THAT(StderrMatches("Expression ends with erroneous output: "),
               IsTrue());
 }
 
 TEST_F(ParserSuite, ParseSimpleFunctionOutput) {
   char inputstr[] = "double sqrt();";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(parser.has_function_params, IsFalse());
   EXPECT_THAT(StdoutMatches("sqrt is a(n) function which returns double"),
               IsTrue());
@@ -2269,7 +2268,7 @@ TEST_F(ParserSuite, ParseSimpleFunctionOutput) {
 
 TEST_F(ParserSuite, ParseFunctionOutputOneParam) {
   char inputstr[] = "double sqrt(const double x);";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(parser.has_function_params, IsTrue());
   // clang-format off
   EXPECT_THAT(StdoutMatches("sqrt is a(n) function which returns double and takes param(s) x is a(n) const double"),
@@ -2279,7 +2278,7 @@ TEST_F(ParserSuite, ParseFunctionOutputOneParam) {
 
 TEST_F(ParserSuite, ParseFunctionOutputOneParamQualifier) {
   char inputstr[] = "extern double sqrt(const double x);";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(parser.has_function_params, IsTrue());
   // clang-format off
   EXPECT_THAT(StdoutMatches("sqrt is a(n) function which returns extern double and takes param(s) x is a(n) const double"),
@@ -2290,7 +2289,7 @@ TEST_F(ParserSuite, ParseFunctionOutputOneParamQualifier) {
 TEST_F(ParserSuite, ParseFunctionOutputQualifiedParams) {
   char inputstr[] = "static void iowrite_rep(volatile void *addr, const void "
                     "*buffer, unsigned int count);";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(parser.has_function_params, IsTrue());
   // clang-format off
   EXPECT_THAT(StdoutMatches("iowrite_rep is a(n) function which returns static void and takes param(s) addr is a(n) pointer to volatile void and buffer is a(n) pointer to const void and count is a(n) unsigned int"),
@@ -2300,21 +2299,21 @@ TEST_F(ParserSuite, ParseFunctionOutputQualifiedParams) {
 
 TEST_F(ParserSuite, ParseFunctionOutputIllegalParamQualifier) {
   char inputstr[] = "double sqrt(extern double x);";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
   EXPECT_THAT(StderrMatches("Function parameters cannot be extern"), IsTrue());
   release_parser_resources(&parser);
 }
 
 TEST_F(ParserSuite, ParseFunctionOutputIllegalFunctionQualifier) {
   char inputstr[] = "volatile double sqrt(double x);";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
   EXPECT_THAT(StderrMatches("Function return types cannot be volatile"),
               IsTrue());
 }
 
 TEST_F(ParserSuite, ParseFunctionOutputTwoParams) {
   char inputstr[] = "uint64_t hash(char *key, uint64_t seed);";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(parser.has_function_params, IsTrue());
   // clang-format off
   EXPECT_THAT(StdoutMatches("hash is a(n) function which returns uint64_t and takes param(s) key is a(n) pointer to char and seed is a(n) uint64_t"),
@@ -2324,7 +2323,7 @@ TEST_F(ParserSuite, ParseFunctionOutputTwoParams) {
 
 TEST_F(ParserSuite, ParseFunctionOutputLeadingWhitespace) {
   char inputstr[] = "double sqrt(   const double x);";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(parser.has_function_params, IsTrue());
   // clang-format off
   EXPECT_THAT(StdoutMatches("sqrt is a(n) function which returns double and takes param(s) x is a(n) const double"),
@@ -2334,7 +2333,7 @@ TEST_F(ParserSuite, ParseFunctionOutputLeadingWhitespace) {
 
 TEST_F(ParserSuite, ParseFunctionOutputNoWhitespace) {
   char inputstr[] = "uint64_t hash(char *key,uint64_t seed);";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(parser.has_function_params, IsTrue());
   // clang-format off
   EXPECT_THAT(StdoutMatches("hash is a(n) function which returns uint64_t and takes param(s) key is a(n) pointer to char and seed is a(n) uint64_t"),
@@ -2344,7 +2343,7 @@ TEST_F(ParserSuite, ParseFunctionOutputNoWhitespace) {
 
 TEST_F(ParserSuite, ParseFunctionPtrWithOneParamIdentifier) {
   char inputstr[] = "int (*open) (struct file *dir);";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
   EXPECT_THAT(StdoutMatches("open is a(n) pointer to a function which returns int and takes param(s) dir is a(n) pointer to struct file"),
               IsTrue());
@@ -2353,7 +2352,7 @@ TEST_F(ParserSuite, ParseFunctionPtrWithOneParamIdentifier) {
 
 TEST_F(ParserSuite, ParseFunctionPtrWithTwoParamIdentifiers) {
   char inputstr[] = "int (*open) (struct inode *blk, struct file *dir);";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
   EXPECT_THAT(StdoutMatches("open is a(n) pointer to a function which returns int and takes param(s) blk is a(n) pointer to struct inode and dir is a(n) pointer to struct file"),
               IsTrue());
@@ -2362,7 +2361,7 @@ TEST_F(ParserSuite, ParseFunctionPtrWithTwoParamIdentifiers) {
 
 TEST_F(ParserSuite, ParseFunctionPtrWithTwoParamsNoIdentifiers) {
   char inputstr[] = "int (*open) (struct inode *, struct file *);";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
   EXPECT_THAT(StdoutMatches("open is a(n) pointer to a function which returns int and takes param(s) pointer to struct inode and pointer to struct file"),
               IsTrue());
@@ -2371,7 +2370,7 @@ TEST_F(ParserSuite, ParseFunctionPtrWithTwoParamsNoIdentifiers) {
 
 TEST_F(ParserSuite, ParseFunctionPtrWithTwoParamsNoIdentifiersVariantSpaces) {
   char inputstr[] = "int (*open)( struct inode *, struct file *);";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
   EXPECT_THAT(StdoutMatches("open is a(n) pointer to a function which returns int and takes param(s) pointer to struct inode and pointer to struct file"),
               IsTrue());
@@ -2380,7 +2379,7 @@ TEST_F(ParserSuite, ParseFunctionPtrWithTwoParamsNoIdentifiersVariantSpaces) {
 
 TEST_F(ParserSuite, ParseFunctionPtrInStructNoParams) {
   char inputstr[] = "struct file { int (*open)(); };";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
   EXPECT_THAT(StdoutMatches("struct file has member(s) open is a(n) pointer to a function which returns int"),
               IsTrue());
@@ -2389,7 +2388,7 @@ TEST_F(ParserSuite, ParseFunctionPtrInStructNoParams) {
 
 TEST_F(ParserSuite, ParseFunctionPtrInStructTwoMembersNoParamsPtrFirst) {
   char inputstr[] = "struct file { int (*open)(); int payload; };";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
   EXPECT_THAT(StdoutMatches("struct file has member(s) open is a(n) pointer to a function which returns int"),
               IsTrue());
@@ -2398,7 +2397,7 @@ TEST_F(ParserSuite, ParseFunctionPtrInStructTwoMembersNoParamsPtrFirst) {
 
 TEST_F(ParserSuite, ParseFunctionPtrInStructTwoMembersNoParamsPtrLast) {
   char inputstr[] = "struct file { int payload; int (*open)(); };";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
   EXPECT_THAT(StdoutMatches("struct file has member(s) payload is a(n) int and open is a(n) pointer to a function which returns int"),
               IsTrue());
@@ -2407,7 +2406,7 @@ TEST_F(ParserSuite, ParseFunctionPtrInStructTwoMembersNoParamsPtrLast) {
 
 TEST_F(ParserSuite, ParseFunctionPtrTwoInStructNoParams) {
   char inputstr[] = "struct file { int (*open)(); int (*read)(); };";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
   EXPECT_THAT(StdoutMatches("struct file has member(s) open is a(n) pointer to a function which returns int and read is a(n) pointer to a function which returns int"),
               IsTrue());
@@ -2416,7 +2415,7 @@ TEST_F(ParserSuite, ParseFunctionPtrTwoInStructNoParams) {
 
 TEST_F(ParserSuite, ParseFunctionPtrInStructOneParamWithIdentifier) {
   char inputstr[] = "struct file { int (*open)(struct inode *blk); };";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
   EXPECT_THAT(StdoutMatches("struct file has member(s) open is a(n) pointer to a function which returns int"),
               IsTrue());
@@ -2425,7 +2424,7 @@ TEST_F(ParserSuite, ParseFunctionPtrInStructOneParamWithIdentifier) {
 
 TEST_F(ParserSuite, ParseFunctionPtrInStructOneParamNoIdentifier) {
   char inputstr[] = "struct file { int (*open)(struct inode *); };";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
   EXPECT_THAT(StdoutMatches("struct file has member(s) open is a(n) pointer to a function which returns int"),
               IsTrue());
@@ -2435,7 +2434,7 @@ TEST_F(ParserSuite, ParseFunctionPtrInStructOneParamNoIdentifier) {
 TEST_F(ParserSuite, ParseFunctionPtrInStructTwoParamsNoIdentifiers) {
   char inputstr[] =
       "struct file { int (*open)(struct inode *, struct file *); };";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
   EXPECT_THAT(StdoutMatches("struct file has member(s) open is a(n) pointer to a function which returns int and takes param(s) pointer to struct inode and pointer to struct file"),
               IsTrue());
@@ -2445,7 +2444,7 @@ TEST_F(ParserSuite, ParseFunctionPtrInStructTwoParamsNoIdentifiers) {
 TEST_F(ParserSuite, ParseFunctionPtrsInStructTrailingFunctionParam) {
   char inputstr[] =
       "struct f {int (*open)(); ssize_t (*read)(struct inode *); };";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
   EXPECT_THAT(StdoutMatches("struct f has member(s) open is a(n) pointer to a function which returns int and read is a(n) pointer to a function which returns ssize_t and takes param(s) pointer to struct inode "),
               IsTrue());
@@ -2456,7 +2455,7 @@ TEST_F(ParserSuite, ParseFunctionPtrsInStructTwoFunctionParamsWithIdentifiers) {
   // clang-format off
   char inputstr[] = "struct fops {int (*open)(struct file *f); ssize_t "
                     "(*read)(struct inode *i); };";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("struct fops has member(s) open is a(n) pointer to a function which returns int and takes param(s) f is a(n) pointer to struct file and read is a(n) pointer to a function which returns ssize_t and takes param(s) i is a(n) pointer to struct inode"),
               IsTrue());
   // clang-format on
@@ -2465,7 +2464,7 @@ TEST_F(ParserSuite, ParseFunctionPtrsInStructTwoFunctionParamsWithIdentifiers) {
 TEST_F(ParserSuite, ParseFunctionPtrAsFunctionParamNoSubsidiaryParams) {
   // clang-format off
   char inputstr[] = "int heapsort(int (*compar)());";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("heapsort is a(n) function which returns int and takes param(s) compar is a(n) pointer to a function which returns int"),
               IsTrue());
   // clang-format on
@@ -2474,7 +2473,7 @@ TEST_F(ParserSuite, ParseFunctionPtrAsFunctionParamNoSubsidiaryParams) {
 TEST_F(ParserSuite, ParseFunctionPtrAsFunctionParamNamedParam) {
   // clang-format off
   char inputstr[] = "int heapsort(int (*compar)(void *a));";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("heapsort is a(n) function which returns int and takes param(s) compar is a(n) pointer to a function which returns int and takes param(s) a is a(n) pointer to void"),
               IsTrue());
   // clang-format on
@@ -2483,7 +2482,7 @@ TEST_F(ParserSuite, ParseFunctionPtrAsFunctionParamNamedParam) {
 TEST_F(ParserSuite, ParseFunctionPtrAsFunctionParamAnonymousParam) {
   // clang-format off
   char inputstr[] = "int heapsort(int (*compar)(void *));";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("heapsort is a(n) function which returns int and takes param(s) compar is a(n) pointer to a function which returns int and takes param(s) pointer to void"),
               IsTrue());
   // clang-format on
@@ -2492,7 +2491,7 @@ TEST_F(ParserSuite, ParseFunctionPtrAsFunctionParamAnonymousParam) {
 TEST_F(ParserSuite, ParseFunctionPtrAsFunctionParamWithParams) {
   char inputstr[] = "int heapsort(int (*compar)(const void *, const void *));";
   // clang-format off
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("heapsort is a(n) function which returns int and takes param(s) compar is a(n) pointer to a function which returns int and takes param(s) pointer to const void and pointer to const void"),
               IsTrue());
   // clang-format on
@@ -2501,7 +2500,7 @@ TEST_F(ParserSuite, ParseFunctionPtrAsFunctionParamWithParams) {
 TEST_F(ParserSuite, ParseFunctionPtrAsFirstFunctionParam) {
   // clang-format off
   char inputstr[] = "int sort(int (*compar)(const void *, const void *), const void *a, const void *b);";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("sort is a(n) function which returns int and takes param(s) compar is a(n) pointer to a function which returns int and takes param(s) pointer to const void and pointer to const void and a is a(n) pointer to const void and b is a(n) pointer to const void"),
               IsTrue());
   // clang-format on
@@ -2511,7 +2510,7 @@ TEST_F(ParserSuite, ParseFunctionPtrAsLastFunctionParam) {
   char inputstr[] = "int sort(const void *a, const void *b, int "
                     "(*compar)(const void *, const void *));";
   // clang-format off
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("sort is a(n) function which returns int and takes param(s) a is a(n) pointer to const void and b is a(n) pointer to const void and compar is a(n) pointer to a function which returns int and takes param(s) pointer to const void and pointer to const void"),
               IsTrue());
   // clang-format on
@@ -2521,7 +2520,7 @@ TEST_F(ParserSuite,
        ParseFunctionPtrAsFunctionParamCompoundTypeParamWithSpaces) {
   // clang-format off
   char inputstr[] = "int heapsort(int (*compar)(struct msg *, struct msg *));";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("heapsort is a(n) function which returns int and takes param(s) compar is a(n) pointer to a function which returns int and takes param(s) pointer to struct msg and pointer to struct msg"),
               IsTrue());
   // clang-format on
@@ -2530,7 +2529,7 @@ TEST_F(ParserSuite,
 TEST_F(ParserSuite, ParseFunctionPtrAsFunctionParamCompoundTypeParamNoSpaces) {
   // clang-format off
   char inputstr[] = "int heapsort(int (*compar)(struct msg*, struct msg*));";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("heapsort is a(n) function which returns int and takes param(s) compar is a(n) pointer to a function which returns int and takes param(s) pointer to struct msg and pointer to struct msg"),
               IsTrue());
   // clang-format on
@@ -2538,7 +2537,7 @@ TEST_F(ParserSuite, ParseFunctionPtrAsFunctionParamCompoundTypeParamNoSpaces) {
 
 TEST_F(ParserSuite, ParseUnionSimpleDeclaration) {
   char inputstr[] = "union msi_domain_cookie;";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
   EXPECT_THAT(StdoutMatches("msi_domain_cookie is a(n) union"),
               IsTrue());
@@ -2547,7 +2546,7 @@ TEST_F(ParserSuite, ParseUnionSimpleDeclaration) {
 
 TEST_F(ParserSuite, ParseUnionForwardDeclaration) {
   char inputstr[] = "extern union msi_domain_cookie dcookie;";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
   EXPECT_THAT(StdoutMatches("dcookie is a(n) extern union msi_domain_cookie"),
               IsTrue());
@@ -2557,7 +2556,7 @@ TEST_F(ParserSuite, ParseUnionForwardDeclaration) {
 TEST_F(ParserSuite, ParseUnionWithTwoMembersNoInstanceName) {
   char inputstr[] =
       "union short_to_bytes { uint16_t short_val; uint8_t bytes[2]; };";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
   EXPECT_THAT(StdoutMatches("union short_to_bytes has member(s) short_val is a(n) uint16_t and bytes is a(n) array of 2 uint8_t"),
               IsTrue());
@@ -2567,7 +2566,7 @@ TEST_F(ParserSuite, ParseUnionWithTwoMembersNoInstanceName) {
 TEST_F(ParserSuite, ParseUnionInstanceName) {
   char inputstr[] =
       "union short_to_bytes s_to_b { uint16_t short_val; uint8_t bytes[2];};";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
   EXPECT_THAT(StdoutMatches("s_to_b is a(n) union short_to_bytes which has member(s) short_val is a(n) uint16_t and bytes is a(n) array of 2 uint8_t"),
               IsTrue());
@@ -2577,7 +2576,7 @@ TEST_F(ParserSuite, ParseUnionInstanceName) {
 TEST_F(ParserSuite, ParseUnionTrailingInstanceNameWithSpace) {
   char inputstr[] =
       "union short_to_bytes { uint16_t short_val; uint8_t bytes[2]; } s_to_b;";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
   EXPECT_THAT(StdoutMatches("s_to_b is a(n) union short_to_bytes which has member(s) short_val is a(n) uint16_t and bytes is a(n) array of 2 uint8_t"),
               IsTrue());
@@ -2587,7 +2586,7 @@ TEST_F(ParserSuite, ParseUnionTrailingInstanceNameWithSpace) {
 TEST_F(ParserSuite, ParseUnionTrailingInstanceNameNoSpaces) {
   char inputstr[] =
       "union short_to_bytes {uint16_t short_val;uint8_t bytes[2];}s_to_b;";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
   EXPECT_THAT(StdoutMatches("s_to_b is a(n) union short_to_bytes which has member(s) short_val is a(n) uint16_t and bytes is a(n) array of 2 uint8_t"),
               IsTrue());
@@ -2598,7 +2597,7 @@ TEST_F(ParserSuite, ParseUnionReturnValue) {
   // clang-format off
   char inputstr[] =
       "struct fscrypt_ops { const char *legacy_key_prefix; const union fscrypt_policy *(*get_dummy_policy)(struct super_block *sb)};";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("struct fscrypt_ops has member(s) legacy_key_prefix is a(n) pointer to const char and get_dummy_policy is a(n) pointer to a function which returns pointer to a function which returns const union fscrypt_policy and takes param(s) sb is a(n) pointer to struct super_block"),
               IsTrue());
   // clang-format on
@@ -2609,7 +2608,7 @@ TEST_F(ParserSuite, ParseUnionReturnValue) {
 TEST_F(ParserSuite, ParseNestedAnonymousUnion) {
   // clang-format off
   char inputstr[] ="struct v { union { int i; char *j; }; };";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("struct v has member(s) union has member(s) i is a(n) int and j is a(n) pointer to char"),
               IsTrue());
   // clang-format on
@@ -2618,19 +2617,17 @@ TEST_F(ParserSuite, ParseNestedAnonymousUnion) {
 // Unions cannot have instance names unless they also have compound types.
 TEST_F(ParserSuite, ParseNestedUnionCompoundType) {
   // clang-format off
-  char inputstr[] = "struct v { union pad { char  c[5]; float f; }  p; };";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  char inputstr[] = "struct v { union pad { char  c[5]; float f; } p; };";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("struct v has member(s) p is a(n) union pad which has member(s) c is a(n) array of 5 char and f is a(n) float"),
               IsTrue());
   // clang-format on
 }
 
 TEST_F(ParserSuite, ParseNestedAnonymousUnionWithLeadingTopLevelIdentifier) {
-  parser.err_stream = stderr;
-  parser.err_stream = stdout;
   // clang-format off
   char inputstr[] = "struct v vee { union { char c[5]; int m; }; };";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("vee is a(n) struct v which has member(s) union has member(s) c is a(n) array of 5 char and m is a(n) int"),
               IsTrue());
   // clang-format on
@@ -2639,7 +2636,7 @@ TEST_F(ParserSuite, ParseNestedAnonymousUnionWithLeadingTopLevelIdentifier) {
 TEST_F(ParserSuite, ParseNestedAnonymousUnionWithTrailingTopLevelIdentifier) {
   // clang-format off
   char inputstr[] = "struct v { union { char c[5]; int m; }; } vee;";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("vee is a(n) struct v which has member(s) union has member(s) c is a(n) array of 5 char and m is a(n) int"),
               IsTrue());
   // clang-format on
@@ -2648,8 +2645,8 @@ TEST_F(ParserSuite, ParseNestedAnonymousUnionWithTrailingTopLevelIdentifier) {
 TEST_F(ParserSuite, ParseNestedTrailingAnonymousUnion) {
   // clang-format off
   char inputstr[] = "struct v { int m; union { int i; char *j; }; };";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(StdoutMatches(""),
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("struct v has member(s) m is a(n) int and union has member(s) i is a(n) int and j is a(n) pointer to char"),
               IsTrue());
   // clang-format on
 }
@@ -2657,8 +2654,8 @@ TEST_F(ParserSuite, ParseNestedTrailingAnonymousUnion) {
 TEST_F(ParserSuite, ParseNestedLeadingAnonymousUnion) {
   // clang-format off
   char inputstr[] = "struct v {  union { int i; char *j; }; int m; };";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(StdoutMatches(""),
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("struct v has member(s) union has member(s) i is a(n) int and j is a(n) pointer to char and m is a(n) int"),
               IsTrue());
   // clang-format on
 }
@@ -2666,25 +2663,34 @@ TEST_F(ParserSuite, ParseNestedLeadingAnonymousUnion) {
 TEST_F(ParserSuite, ParseNestedUnionWithTrailing2ndLevelIdentifierFirst) {
   // clang-format off
   char inputstr[] = "struct v { union u { int i; char *j; } obj; int m; };";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(StdoutMatches(""),
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("struct v has member(s) obj is a(n) union u which has member(s) i is a(n) int and j is a(n) pointer to char and m is a(n) int"),
               IsTrue());
   // clang-format on
 }
 
 TEST_F(ParserSuite,
        ParseNestedAnonymousUnionWithTrailing2ndLevelIdentifierLast) {
-  // clang-format off
   char inputstr[] = "struct v { int m; union u { int i; char *j; } obj; };";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(StdoutMatches(""),
-              IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  // clang-format off
+  EXPECT_THAT(
+      StdoutMatches(
+          "struct v has member(s) m is a(n) int and obj is a(n) union u which has member(s) i is a(n) int and j is a(n) pointer to char"),
+      IsTrue());
   // clang-format on
+}
+
+TEST_F(ParserSuite, ParseNestedAnonymousUnionMismatchedDelimiters) {
+  char inputstr[] = "struct v { int m; union u ( int i; char *j; } obj; };";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  EXPECT_THAT(StderrMatches("Unmatched parentheses:  u ( int i"), IsTrue());
+  release_parser_resources(&parser);
 }
 
 TEST_F(ParserSuite, ParseStructForwardDeclaration) {
   char inputstr[] = "struct list_head list;";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
   EXPECT_THAT(StdoutMatches("list is a(n) struct list_head"),
               IsTrue());
@@ -2693,7 +2699,7 @@ TEST_F(ParserSuite, ParseStructForwardDeclaration) {
 
 TEST_F(ParserSuite, ParseStructForwardDeclarationWhitespace) {
   char inputstr[] = "struct   list_head   list;";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
   EXPECT_THAT(StdoutMatches("list is a(n) struct list_head"),
               IsTrue());
@@ -2702,97 +2708,97 @@ TEST_F(ParserSuite, ParseStructForwardDeclarationWhitespace) {
 
 TEST_F(ParserSuite, ParseStructForwardDeclarationNoName) {
   char inputstr[] = "struct *;";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
   EXPECT_THAT(StderrMatches("Input lacks required identifier or type element."),
               IsTrue());
 }
 
 TEST_F(ParserSuite, ParseEnumWithIdentifierNoEnumerators) {
   char inputstr[] = "enum State state;";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("state is a(n) enum State"), IsTrue());
 }
 
 TEST_F(ParserSuite, ParseEnumWithIdentifierOneEnumerator) {
   char inputstr[] = "enum State state {GAS};";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("state is a(n) enum State with enum constant GAS"),
               IsTrue());
 }
 
 TEST_F(ParserSuite, ParseEnumWithIdentifierOneEnumeratorTrailingInstanceName) {
   char inputstr[] = "enum State {GAS} state;";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("state is a(n) enum State with enum constant GAS"),
               IsTrue());
 }
 
 TEST_F(ParserSuite, ParseEnumWithIdentifierOneEnumeratorDoubleInstanceNames) {
   char inputstr[] = "enum State state {GAS} foo;";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("state is a(n) enum State with enum constant GAS"),
               IsTrue());
 }
 
 TEST_F(ParserSuite, ParseEnumNoIdentifierThreeEnumerators) {
   char inputstr[] = "enum State {GAS,LIQUID,SOLID};";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("enum State has enum constant GAS,LIQUID,SOLID"),
               IsTrue());
 }
 
 TEST_F(ParserSuite, ParseEnumNoIdentifierOneEnumerator) {
   char inputstr[] = "enum State {GAS};";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("enum State has enum constant GAS"), IsTrue());
 }
 
 TEST_F(ParserSuite, ParseEnumNoIdentifierTwoEnumerators) {
   char inputstr[] = "enum State {GAS, LIQUID };";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("enum State has enum constant GAS,LIQUID"),
               IsTrue());
 }
 
 TEST_F(ParserSuite, ParseOneEnumeratorMissingLeadingSpaceInstanceName) {
   char inputstr[] = "enum State state{GAS};";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
 }
 
 TEST_F(ParserSuite, ParseOneEnumeratorMissingLeadingSpaceNoInstanceName) {
   char inputstr[] = "enum State{GAS=1, LIQUID};";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
 }
 
 TEST_F(ParserSuite, ParseOneEnumeratorMissingLeadingSpaceTrailingInstanceName) {
   char inputstr[] = "enum State{GAS=1, LIQUID} state;";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
 }
 
 TEST_F(ParserSuite, ParseEnumWithIdentifierBadFormat) {
   char inputstr[] = "enum State state { GAS ,};";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("state is a(n) enum State with enum constant GAS"),
               IsTrue());
 }
 
 TEST_F(ParserSuite, ParseEnumNoIdentifierCommaMadness) {
   char inputstr[] = "enum State state { , , ,};";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
   EXPECT_THAT(StderrMatches("Enumeration constant list cannot be empty."),
               IsTrue());
 }
 
 TEST_F(ParserSuite, ParseForwardDeclarationBadDelim) {
   char inputstr[] = "enum State state {;";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
   EXPECT_THAT(StderrMatches("Expression ends with erroneous output: state {"),
               IsTrue());
 }
 
 TEST_F(ParserSuite, ParseForwardDeclarationBadDelim2) {
   char inputstr[] = "enum State } state;";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
   EXPECT_THAT(StderrMatches("Cannot process empty token."), IsTrue());
   EXPECT_THAT(StderrMatches("Input lacks required identifier or type element."),
               IsTrue());
@@ -2800,21 +2806,21 @@ TEST_F(ParserSuite, ParseForwardDeclarationBadDelim2) {
 
 TEST_F(ParserSuite, ParseOneEnumeratorStrayComma) {
   char inputstr[] = "enum State state {,GAS};";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
   EXPECT_THAT(StderrMatches("Cannot process empty token."), IsTrue());
   EXPECT_THAT(StderrMatches("Invalid enumerator"), IsTrue());
 }
 
 TEST_F(ParserSuite, ParseOneEnumeratorWithAssignment) {
   char inputstr[] = "enum State state { GAS=1,};";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("state is a(n) enum State with enum constant GAS"),
               IsTrue());
 }
 
 TEST_F(ParserSuite, ParseOneEnumeratorWithEndingAssignment) {
   char inputstr[] = "enum State state {GAS,LIQUID,SOLID=5};";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(
       StdoutMatches(
           "state is a(n) enum State with enum constant GAS,LIQUID,SOLID"),
@@ -2823,7 +2829,7 @@ TEST_F(ParserSuite, ParseOneEnumeratorWithEndingAssignment) {
 
 TEST_F(ParserSuite, ParseOneEnumeratorWitMiddleAssignment) {
   char inputstr[] = "enum State state {GAS,LIQUID=4,SOLID};";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(
       StdoutMatches(
           "state is a(n) enum State with enum constant GAS,LIQUID,SOLID"),
@@ -2832,27 +2838,27 @@ TEST_F(ParserSuite, ParseOneEnumeratorWitMiddleAssignment) {
 
 TEST_F(ParserSuite, ParseOneEnumeratorWithAssignmentNoInstanceName) {
   char inputstr[] = "enum State {GAS=1,};";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("enum State has enum constant GAS"), IsTrue());
 }
 
 TEST_F(ParserSuite, ParseTwoEnumeratorWithAssignmentNoInstanceName) {
   char inputstr[] = "enum State {GAS=1,LIQUID};";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("enum State has enum constant GAS,LIQUID"),
               IsTrue());
 }
 
 TEST_F(ParserSuite, ParseOneEnumeratorWithTrailingAssignmentNoInstanceName) {
   char inputstr[] = "enum State {GAS,LIQUID=4};";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("enum State has enum constant GAS,LIQUID"),
               IsTrue());
 }
 
 TEST_F(ParserSuite, ParseTwoEnumeratorWithAssignmentInstanceNameWhitespace) {
   char inputstr[] = "enum State {GAS,LIQUID=2 ,};";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("enum State has enum constant GAS,LIQUID"),
               IsTrue());
 }
@@ -2860,7 +2866,7 @@ TEST_F(ParserSuite, ParseTwoEnumeratorWithAssignmentInstanceNameWhitespace) {
 TEST_F(ParserSuite,
        ParseTwoEnumeratorWithAssignmentInstanceNameWhitespaceComma) {
   char inputstr[] = "enum State state {GAS, LIQUID = 2,};";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(
       StdoutMatches("state is a(n) enum State with enum constant GAS,LIQUID"),
       IsTrue());
@@ -2869,7 +2875,7 @@ TEST_F(ParserSuite,
 TEST_F(ParserSuite,
        ParseTwoEnumeratorWithAssignmentInstanceNameWhitespaceComma1) {
   char inputstr[] = "enum State {GAS,LIQUID=2 ,};";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("enum State has enum constant GAS,LIQUID"),
               IsTrue());
 }
@@ -2877,14 +2883,14 @@ TEST_F(ParserSuite,
 TEST_F(ParserSuite,
        ParseTwoEnumeratorWithAssignmentInstanceNameWhitespaceComma2) {
   char inputstr[] = "enum State {GAS,LIQUID =2,};";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("enum State has enum constant GAS,LIQUID"),
               IsTrue());
 }
 
 TEST_F(ParserSuite, ParseStructTwoMembersWithInstanceName) {
   char inputstr[] = "struct node nodelist {int payload; struct node *next;};";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
   EXPECT_THAT(
       StdoutMatches("nodelist is a(n) struct node which has member(s) payload is a(n) int and next is a(n) pointer to struct node"),
@@ -2895,7 +2901,7 @@ TEST_F(ParserSuite, ParseStructTwoMembersWithInstanceName) {
 TEST_F(ParserSuite, ParseStructTwoMembersWithEnumName) {
   char inputstr[] =
       "struct node nodelist {enum State state; struct node *next;};";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
   EXPECT_THAT(
       StdoutMatches("nodelist is a(n) struct node which has member(s) state is a(n) enum State and next is a(n) pointer to struct node"),
@@ -2905,7 +2911,7 @@ TEST_F(ParserSuite, ParseStructTwoMembersWithEnumName) {
 
 TEST_F(ParserSuite, ParseStructTwoMembersTrailingInstanceName) {
   char inputstr[] = "struct node {int payload; struct node *next;} nodelist;";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
   EXPECT_THAT(
       StdoutMatches("nodelist is a(n) struct node which has member(s) payload is a(n) int and next is a(n) pointer to struct node"),
@@ -2916,7 +2922,7 @@ TEST_F(ParserSuite, ParseStructTwoMembersTrailingInstanceName) {
 
 TEST_F(ParserSuite, ParseStructTwoMembersTrailingInstanceNameWithSpace) {
   char inputstr[] = "struct node {int payload; struct node *next; } nodelist;";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
   EXPECT_THAT(
       StdoutMatches("nodelist is a(n) struct node which has member(s) payload is a(n) int and next is a(n) pointer to struct node"),
@@ -2927,7 +2933,7 @@ TEST_F(ParserSuite, ParseStructTwoMembersTrailingInstanceNameWithSpace) {
 
 TEST_F(ParserSuite, ParseStructTwoMembersTrailingInstanceNameNoSpaces) {
   char inputstr[] = "struct node {ssize_t payload;struct node *next;}nodelist;";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
   EXPECT_THAT(StdoutMatches("nodelist is a(n) struct node which has member(s) payload is a(n) ssize_t and next is a(n) pointer to struct node"),
               IsTrue());
@@ -2936,7 +2942,7 @@ TEST_F(ParserSuite, ParseStructTwoMembersTrailingInstanceNameNoSpaces) {
 
 TEST_F(ParserSuite, ParseStructTwoMembersNoInstanceName) {
   char inputstr[] = "struct node {int payload; struct node *next;};";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
   EXPECT_THAT(StdoutMatches("struct node has member(s) payload is a(n) int and next is a(n) pointer to struct node"),
               IsTrue());
@@ -2945,7 +2951,7 @@ TEST_F(ParserSuite, ParseStructTwoMembersNoInstanceName) {
 
 TEST_F(ParserSuite, ParseStructTwoMembersNoInstanceNameSpaces) {
   char inputstr[] = "struct node  { int payload; struct node *next; };";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
   EXPECT_THAT(StdoutMatches("struct node has member(s) payload is a(n) int and next is a(n) pointer to struct node"),
               IsTrue());
@@ -2954,7 +2960,7 @@ TEST_F(ParserSuite, ParseStructTwoMembersNoInstanceNameSpaces) {
 
 TEST_F(ParserSuite, ParseStructComplexMembers) {
   char inputstr[] = "struct message {enum priority prio; uint8_t bytes[8];};";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
   EXPECT_THAT(StdoutMatches("struct message has member(s) prio is a(n) enum priority and bytes is a(n) array of 8 uint8_t"),
               IsTrue());
@@ -2964,7 +2970,7 @@ TEST_F(ParserSuite, ParseStructComplexMembers) {
 TEST_F(ParserSuite, ParseStructComplexMembersWithSpaces) {
   char inputstr[] =
       "struct message { enum priority prio; uint8_t bytes[8]; } ;";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
   EXPECT_THAT(StdoutMatches("struct message has member(s) prio is a(n) enum priority and bytes is a(n) array of 8 uint8_t"),
               IsTrue());
@@ -2975,7 +2981,7 @@ TEST_F(ParserSuite, ParseStructComplexMembersWithSpaces) {
 // so correctly, there's no need to make it fail.
 TEST_F(ParserSuite, ParseStructOneMemberMissingLeadingSpaceInstanceName) {
   char inputstr[] = "struct node nodelist{int payload;struct node *next;};";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
   EXPECT_THAT(StdoutMatches("nodelist is a(n) struct node which has member(s) payload is a(n) int and next is a(n) pointer to struct node"),
               IsTrue());
@@ -2984,55 +2990,55 @@ TEST_F(ParserSuite, ParseStructOneMemberMissingLeadingSpaceInstanceName) {
 
 TEST_F(ParserSuite, ParseStructOneMemberMissingLeadingSpaceNoInstanceName) {
   char inputstr[] = "struct node{int payload;};";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
 }
 
 TEST_F(ParserSuite,
        ParseStructOneMemberMissingLeadingSpaceTrailingInstanceName) {
   char inputstr[] = "struct node{int payload;}nodelist;";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
 }
 
 TEST_F(ParserSuite, ParseStructOneMemberMissingSemicolonTrailingInstanceName) {
   char inputstr[] = "struct node {int payload} nodelist;";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
   release_parser_resources(&parser);
 }
 
 TEST_F(ParserSuite,
        ParseStructOneMemberMissingSecondSemicolonTrailingInstanceName) {
   char inputstr[] = "struct node {int payload; struct node *next} nodelist;";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
   release_parser_resources(&parser);
 }
 
 TEST_F(ParserSuite, NothingToLoad) {
   char inputstr[] = "=;";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
   EXPECT_THAT(StderrMatches("Input lacks required elements:"), IsTrue());
 }
 
 TEST_F(ParserSuite, LotsOfWhitespace) {
   char inputstr[] = "     ";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
   EXPECT_THAT(StderrMatches("Input lacks required elements:"), IsTrue());
 }
 
 TEST_F(ParserSuite, ParseTypedef) {
   char inputstr[] = "typedef size_t mm_id_t;";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("mm_id_t is a(n) alias for size_t"), IsTrue());
 }
 
 TEST_F(ParserSuite, ParseTypedefArray) {
   char inputstr[] = "typedef int A[]];";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("A is a(n) alias for array of int"), IsTrue());
 }
 
 TEST_F(ParserSuite, ParseTypedefCompoundType) {
   char inputstr[] = "typedef struct list_head list;";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
   EXPECT_THAT(StdoutMatches("list is a(n) alias for struct list_head"),
               IsTrue());
@@ -3041,7 +3047,7 @@ TEST_F(ParserSuite, ParseTypedefCompoundType) {
 
 TEST_F(ParserSuite, ParseTypedefFunction) {
   char inputstr[] = "typedef int proc_handler(const struct ctl_table *ctl);";
-  EXPECT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
   EXPECT_THAT(
       StdoutMatches("proc_handler is a(n) alias for function which returns int and takes param(s) ctl is a(n) pointer to const struct ctl_table"),

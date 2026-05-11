@@ -2688,6 +2688,39 @@ TEST_F(ParserSuite, ParseNestedAnonymousUnionMismatchedDelimiters) {
   release_parser_resources(&parser);
 }
 
+TEST_F(ParserSuite, ParseNestedStructMissingSemicolon) {
+  char inputstr[] = "struct v { struct { int i; char *j } obj; int m; };";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  EXPECT_THAT(StderrMatches("Expression ends with erroneous output:  } obj"),
+              IsTrue());
+  release_parser_resources(&parser);
+}
+
+TEST_F(ParserSuite, ParseNestedStructMissingSemicolon2) {
+  char inputstr[] = "struct v { struct { int i; char *j; } obj; int m };";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  EXPECT_THAT(StderrMatches("Failed to load last struct or union member  "
+                            "struct { int i; char *j; } obj; int m"),
+              IsTrue());
+  release_parser_resources(&parser);
+}
+
+TEST_F(ParserSuite, ParseNestedStructAnonymousOuterStruct) {
+  char inputstr[] = "struct { struct obj { int i; char *j; }; int m; };";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  EXPECT_THAT(StderrMatches("Malformed or incomplete compound type 'struct'"),
+              IsTrue());
+  release_parser_resources(&parser);
+}
+
+TEST_F(ParserSuite, ParseNestedStructAnonymousOuterStructTrailingIdentifer) {
+  char inputstr[] = "struct { struct obj { int i; char *j; }; int m; } vee;";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  EXPECT_THAT(StderrMatches("Malformed or incomplete compound type 'struct'"),
+              IsTrue());
+  release_parser_resources(&parser);
+}
+
 TEST_F(ParserSuite, ParseStructForwardDeclaration) {
   char inputstr[] = "struct list_head list;";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());

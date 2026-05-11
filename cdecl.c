@@ -920,6 +920,8 @@ bool handled_compound_type(struct parser_props *parser, char *progress_ptr,
    * malformed declaration, probably one which lacks a space.
    */
   if (startdelimp && (name_end_ptr > startdelimp)) {
+    fprintf(parser->err_stream, "Malformed or incomplete compound type '%s'\n",
+            this_token->string);
     return false;
   }
   existing_token_len = strlen(this_token->string);

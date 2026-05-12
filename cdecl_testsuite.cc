@@ -2688,6 +2688,15 @@ TEST_F(ParserSuite, ParseNestedAnonymousUnionMismatchedDelimiters) {
   release_parser_resources(&parser);
 }
 
+TEST_F(ParserSuite, ParseNestedAnonymousUnionMismatchedDelimiters2) {
+  char inputstr[] = "struct v { int m; union u { int i; char *j; ) obj; };";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  EXPECT_THAT(StderrMatches("Failed to load last struct or union member  union "
+                            "u { int i; char *j; ) obj;"),
+              IsTrue());
+  release_parser_resources(&parser);
+}
+
 TEST_F(ParserSuite, ParseNestedStructMissingSemicolon) {
   char inputstr[] = "struct v { struct { int i; char *j } obj; int m; };";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
@@ -2702,6 +2711,18 @@ TEST_F(ParserSuite, ParseNestedStructMissingSemicolon2) {
   EXPECT_THAT(StderrMatches("Failed to load last struct or union member  "
                             "struct { int i; char *j; } obj; int m"),
               IsTrue());
+  release_parser_resources(&parser);
+}
+
+TEST_F(ParserSuite, ParseNestedStructLotsOfWhitespace) {
+  char inputstr[] =
+      "struct v   { struct { int i  ; char *j; } obj  ; int m; } ;";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(
+      StdoutMatches(
+          "struct v has member(s) obj is a(n) struct which has member(s) i is "
+          "a(n) int and j is a(n) pointer to char and m is a(n) int"),
+      IsTrue());
   release_parser_resources(&parser);
 }
 

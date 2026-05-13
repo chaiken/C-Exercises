@@ -6,6 +6,10 @@
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 #define _cleanup_(x) __attribute__((__cleanup__(x)))
 
+#include <math.h>
+
+const size_t BITS_PER_INT = (size_t)floor(log2(8.0 * sizeof(int)));
+
 const char typechars[] = {'1', '2', '3', '4', '6', '8', 'a', 'b',
                           'c', 'd', 'e', 'f', 'g', 'h', 'i', 'l',
                           'n', 'o', 'r', 's', 't', 'u'};
@@ -54,6 +58,7 @@ struct parser_props {
   bool is_pointer;
   bool is_function_ptr;
   bool is_typedef;
+  bool is_bitfield;
   /* Enumeration, function and struct objects contain subsidiary objects. */
   bool has_enum_constants;
   bool has_function_params;
@@ -61,6 +66,7 @@ struct parser_props {
   char enumerator_list[MAXTOKENLEN];
   size_t array_dimensions;
   size_t array_lengths;
+  size_t bitfield_width;
   /* These parameters describe the internal parser state. */
   size_t cursor;
   size_t stacklen;

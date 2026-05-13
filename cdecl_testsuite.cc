@@ -160,8 +160,8 @@ TEST(StringManipulateSuite, GetKindQualifiers) {
   EXPECT_THAT(get_kind("const"), Eq(qualifier));
   EXPECT_THAT(get_kind("volatile"), Eq(qualifier));
   EXPECT_THAT(get_kind("static"), Eq(qualifier));
-  EXPECT_THAT(get_kind("extern"), Eq(qualifier));
   EXPECT_THAT(get_kind("*"), Eq(qualifier));
+  EXPECT_THAT(get_kind("extern"), Eq(qualifier));
   EXPECT_THAT(get_kind("unsigned"), Eq(qualifier));
   EXPECT_THAT(get_kind("restrict"), Eq(qualifier));
 }
@@ -1564,6 +1564,7 @@ TEST_F(ParserSuite, TypedefEnumForwardDeclaration) {
       StdoutMatches("Token number 1 has kind identifier and string state"),
       IsTrue());
 }
+
 TEST_F(ParserSuite, IllegalEnumForwardDeclaration) {
   char user_input[MAXTOKENLEN];
   const char *probe = "enum State";
@@ -3081,4 +3082,51 @@ TEST_F(ParserSuite, ParseTypedefFunction) {
       StdoutMatches("proc_handler is a(n) alias for function which returns int and takes param(s) ctl is a(n) pointer to const struct ctl_table"),
       // clang-format on
       IsTrue());
+}
+
+TEST_F(ParserSuite, ParseBitfield) {
+  char inputstr[] = "unsigned int has_32bit_inodes : 1;";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches(
+                  "has_32bit_inodes is a(n) unsigned int bitfield of width 1"),
+              IsTrue());
+}
+
+TEST_F(ParserSuite, ParseBitfieldNoSpaces) {
+  char inputstr[] = "unsigned int has_32bit_inodes:1;";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches(
+                  "has_32bit_inodes is a(n) unsigned int bitfield of width 1"),
+              IsTrue());
+}
+
+TEST_F(ParserSuite, ParseBitfieldTooManyColons) {
+  char inputstr[] = "unsigned int has_32bit_inodes::1;";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  EXPECT_THAT(StderrMatches("Malformed bitfield specification"), IsTrue());
+}
+
+TEST_F(ParserSuite, ParseBitfieldNoLength) {
+  char inputstr[] = "unsigned int has_32bit_inodes : ;";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  EXPECT_THAT(StderrMatches("Malformed bitfield specification"), IsTrue());
+}
+
+TEST_F(ParserSuite, ParseBitfieldBadLength) {
+  char inputstr[] = "unsigned int has_32bit_inodes : b;";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  EXPECT_THAT(StderrMatches("Malformed bitfield specification"), IsTrue());
+}
+
+TEST_F(ParserSuite, ParseBitfieldBadType) {
+  char inputstr[] = "double strange_bits : 8;";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  EXPECT_THAT(StderrMatches("Type does not support bitfields."), IsTrue());
+}
+
+TEST_F(ParserSuite, ParseBitfieldTooWide) {
+  char inputstr[] = "int strange_bits : 8;";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  EXPECT_THAT(StderrMatches("Bitfield width 8 too wide for integer type."),
+              IsTrue());
 }

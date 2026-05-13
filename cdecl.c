@@ -255,9 +255,22 @@ static bool is_type_char(const char c) {
   return false;
 }
 
-/* Do not allow any characters in identifiers besides a-z, '_' and '-'. */
-static bool is_name_char(const char c) {
+/*
+ * For the first character, allow only a-z, A-Z, '_' and '-'.
+ * Per https://en.cppreference.com/c/language/identifier:
+ * A valid identifier must begin with a non-digit character (Latin letter,
+ * underscore, or Unicode non-digit character(since C99) . . .
+ */
+static bool is_first_name_char(const char c) {
   if (isalpha(c) || ('-' == c) || ('_' == c)) {
+    return true;
+  }
+  return false;
+}
+
+/* Digits are in addition allowed after the first character. */
+static bool is_following_name_char(const char c) {
+  if ((is_first_name_char(c)) || isdigit(c)) {
     return true;
   }
   return false;
@@ -265,9 +278,15 @@ static bool is_name_char(const char c) {
 
 static bool has_any_name_chars(const char *s) {
   char c;
-  for (size_t ctr = 0; ctr < strlen(s); ctr++) {
+  if (!s) {
+    return false;
+  }
+  if (is_first_name_char(*s)) {
+    return true;
+  }
+  for (size_t ctr = 1; ctr < strlen(s); ctr++) {
     c = *(s + ctr);
-    if (is_name_char(c)) {
+    if (is_following_name_char(c)) {
       return true;
     }
   }
@@ -1755,6 +1774,7 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
   size_t ctr = 0;
   char trimmed[MAXTOKENLEN];
   const char *startbracep = strchr(declstring, '{');
+  char nextchar = '\0';
   memset(this_token->string, '\0', MAXTOKENLEN);
   this_token->kind = invalid;
 
@@ -1792,15 +1812,15 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
     }
     return tokenoffset;
   }
+  nextchar = *(declstring + tokenoffset);
   /* The token has multiple characters, so copy them all. */
   for (int i = 0; i < (int)tokenlen; i++) {
-    char nextchar = *(declstring + tokenoffset);
     if (parser->have_type) {
       /*
        * We are looking for an identifier. Finding an identifier terminates
        * parsing unless we are processing an enum with an enumerator list.
        */
-      if (!is_name_char(nextchar)) {
+      if (!is_following_name_char(nextchar)) {
         if ((('{' == nextchar) || ('=' == nextchar) ||
              (isdigit(nextchar) || isblank(nextchar))) &&
             (startbracep && (startbracep <= (declstring + tokenoffset)))) {
@@ -1810,28 +1830,39 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
              * running later.
              */
             parser->has_enum_constants = true;
-            /* Move past '}'. */
+            /* Move past curly braces. */
             tokenoffset++;
+            nextchar = *(declstring + tokenoffset);
             continue;
           }
           if (parser->is_struct_or_union) {
             parser->has_struct_or_union_members = true;
           }
+        } else if (('[' != nextchar) && (']' != nextchar) &&
+                   (parser->array_dimensions || parser->array_lengths)) {
+          /* Proceed past array dimension delimiters , but otherwise fail. */
+          return 0;
         }
         break;
+      } else if (((trimnum == tokenoffset) || (0 == tokenoffset)) &&
+                 (!is_first_name_char(nextchar))) {
+        /* The first character of a name cannot be a digit, so special-case it.
+         */
+        return 0;
       }
     } else {
       /*
        * We are looking for a type but we might first see a qualifier composed
        * of name_chars.
        */
-      if (!is_name_char(nextchar) && !is_type_char(nextchar)) {
+      if (!is_following_name_char(nextchar) && !is_type_char(nextchar)) {
         break;
       }
     }
     this_token->string[ctr] = nextchar;
     ctr++;
     tokenoffset++;
+    nextchar = *(declstring + tokenoffset);
   } /* end of character-copying for-loop */
   /* Overwrite any trailing dash with a NUL. */
   if ('-' == this_token->string[ctr - 1]) {

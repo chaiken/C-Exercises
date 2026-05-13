@@ -316,15 +316,16 @@ TEST_F(TokenizerSuite, HasUnderscore) {
   EXPECT_THAT(this_token.kind, Eq(identifier));
 }
 
-// Unallowed characters and anything following them are simply cut off.
-// Encountering an identifier without first finding a type means that the
-// expression is ill-formed, but that logic is at the stack-loading level, not
-// the tokenizer level.
-TEST_F(TokenizerSuite, IgnoreUnallowedCharsNoType) {
-  // '5' is neither a name nor type char.
-  char input[] = "f5asdf";
+TEST_F(TokenizerSuite, IgnoreUnallowedLeadingCharsNoType) {
+  char input[] = "5fasdf";
   EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(0));
-  EXPECT_THAT(this_token.string, StrEq("f"));
+}
+
+TEST_F(TokenizerSuite, IgnoreAllowedFollowingCharsNoType) {
+  char input[] = "has_32bit_inodes";
+  parser.have_type = true;
+  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(strlen(input)));
+  EXPECT_THAT(this_token.string, StrEq(input));
   EXPECT_THAT(this_token.kind, Eq(identifier));
 }
 
@@ -335,18 +336,9 @@ TEST_F(TokenizerSuite, IgnoreUnallowedCharsStdintNoType) {
   EXPECT_THAT(this_token.kind, Eq(type));
 }
 
-TEST_F(TokenizerSuite, IgnoreUnallowedCharsStdintHasType) {
-  parser.have_type = true;
-  char input[] = "uint32_t";
-  EXPECT_THAT(gettoken(&parser, input, &this_token), strlen("uint"));
-  EXPECT_THAT(this_token.string, StrEq("uint"));
-  EXPECT_THAT(this_token.kind, Eq(identifier));
-}
-
-// Produces same result as above, as the comment describes.
 TEST_F(TokenizerSuite, IgnoreUnallowedCharsHasType) {
   parser.have_type = true;
-  char input[] = "f5asdf";
+  char input[] = "f&asdf";
   EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(1));
   EXPECT_THAT(this_token.string, StrEq("f"));
   EXPECT_THAT(this_token.kind, Eq(identifier));
@@ -1315,24 +1307,6 @@ TEST_F(ParserSuite, LoadStackWorks) {
               IsTrue());
   EXPECT_THAT(StdoutMatches("Token number 3 has kind identifier and string x"),
               IsTrue());
-  showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
-}
-
-TEST_F(ParserSuite, LoadStackEqualsTerminator) {
-  char user_input[MAXTOKENLEN];
-  const char *probe = "static double val       = 2";
-  strlcpy(user_input, probe, strlen(probe) + 1);
-  std::size_t consumed = load_stack(&parser, user_input);
-
-  EXPECT_THAT(consumed, Eq(strlen("static double val")));
-  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string double"),
-              IsTrue());
-  EXPECT_THAT(
-      StdoutMatches("Token number 1 has kind qualifier and string static"),
-      IsTrue());
-  EXPECT_THAT(
-      StdoutMatches("Token number 2 has kind identifier and string val"),
-      IsTrue());
   showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
 }
 

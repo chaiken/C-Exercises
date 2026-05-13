@@ -95,7 +95,6 @@ bool is_all_blanks(const char *input);
 bool has_alnum_chars(const char *input);
 bool is_numeric(const char *input);
 static bool is_type_char(const char c);
-static bool is_name_char(const char c);
 static bool has_any_name_chars(const char *s);
 bool parens_match(const char *offset_decl, size_t *pair_count);
 bool check_for_array_dimensions(struct parser_props *parser,

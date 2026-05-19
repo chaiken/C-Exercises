@@ -1018,6 +1018,55 @@ bool first_identifier_is_enumerator(const struct parser_props *parser,
 }
 
 /*
+ * Follow the convention of turning an "unsigned" qualifier which is not
+ * accompanied by another type into "unsigned int".
+ */
+bool reclassify_unsigned_qualifier(struct parser_props *parser) {
+  int cursor = 0;
+  if (!parser || !parser->stacklen) {
+    return false;
+  }
+  cursor = parser->stacklen - 1;
+  while (cursor >= 0) {
+    if ((qualifier == parser->stack[cursor].kind) &&
+        (!strcmp(parser->stack[cursor].string, "unsigned"))) {
+      parser->stack[cursor].kind = type;
+      strlcpy(parser->stack[cursor].string, "unsigned int",
+              strlen("unsigned int") + 1);
+      parser->have_type = true;
+      return true;
+    }
+    cursor--;
+  }
+  return false;
+}
+
+/* Return false is a qualifier-type combination is nonsensical. */
+bool qualifier_is_compatible_with_type(const struct parser_props *parser,
+                                       const char *type) {
+  int cursor = 0;
+  if (!parser || !parser->stacklen) {
+    return false;
+  }
+  cursor = parser->stacklen - 1;
+  while (cursor >= 0) {
+    if ((qualifier == parser->stack[cursor].kind) &&
+        (!strcmp(parser->stack[cursor].string, "unsigned"))) {
+      if (!strcmp(type, "char") || !strcmp(type, "short") ||
+          !strcmp(type, "int")) {
+        return true;
+      } else {
+        fprintf(parser->err_stream,
+                "Type %s and qualifier unsigned are incompatible.\n", type);
+        return false;
+      }
+    }
+    cursor--;
+  }
+  return true;
+}
+
+/*
  * Handle the case of an enumeration or struct instance name which follows the
  * enumeration constant or struct member list.
  */
@@ -1412,7 +1461,7 @@ bool type_is_bitfield_compatible(const struct parser_props *parser) {
   while (stacktop--) {
     if (type == parser->stack[stacktop].kind) {
       if ((!strcmp(parser->stack[stacktop].string, "int")) ||
-          (!strcmp(parser->stack[stacktop].string, "unsigned"))) {
+          (!strcmp(parser->stack[stacktop].string, "unsigned int"))) {
         if (BITS_PER_INT >= parser->bitfield_width) {
           return true;
         } else {
@@ -2021,12 +2070,16 @@ bool finish_token(struct parser_props *parser, const char *offset_decl,
          !check_for_struct_or_union_members(parser, offset_decl)) ||
         (parser->is_enum && !check_for_enum_constants(parser, offset_decl))) {
       /*
-       * The current parser is a subsidiary one.  Failing here prevents
-       * processing of trailing struct instance names. Its parent parser may
-       * have a type and identifier already.  Rely on the subsequent check in
-       * input_parsing_successful() to catch incomplete declarations.
+       * In the first case, if parser->prev is set, the current parser is a
+       * subsidiary one. Failing here would prevent processing of trailing
+       * struct instance names. The parent parser may have a type and identifier
+       * already.  Rely on the subsequent check in input_parsing_successful() to
+       * catch incomplete declarations.
+       *
+       * In the second case, reclassify_unsigned_qualifier() may set
+       * parser->have_type to true.
        */
-      if (parser->prev) {
+      if ((parser->prev) || reclassify_unsigned_qualifier(parser)) {
         break;
       }
       parser->stacklen = 0;
@@ -2053,6 +2106,11 @@ bool finish_token(struct parser_props *parser, const char *offset_decl,
       parser->start_delim = '{';
       parser->end_delim = '}';
       parser->separator = ';';
+    }
+    if (parser->have_qualifier) {
+      if (!qualifier_is_compatible_with_type(parser, this_token->string)) {
+        return false;
+      }
     }
     /*
      * The identifier which follows will be inside parens, so gettoken() will

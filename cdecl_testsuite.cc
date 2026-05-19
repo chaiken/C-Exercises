@@ -1977,7 +1977,7 @@ TEST_F(ParserSuite, LoadStackTwoFunctionPtrsInStructTrailingFunctionParam) {
               IsTrue());
   ASSERT_THAT(parser.next, Not(IsNull()));
   ASSERT_THAT(parser.next->next, Not(IsNull()));
-  EXPECT_THAT(parser.next->next->next, Not(IsNull()));
+  ASSERT_THAT(parser.next->next->next, Not(IsNull()));
   // Assure that there are no unexpected parsers producing garbage on the
   // output.
   EXPECT_THAT(parser.next->next->next->next, IsNull());
@@ -3085,18 +3085,16 @@ TEST_F(ParserSuite, ParseTypedefFunction) {
 }
 
 TEST_F(ParserSuite, ParseBitfield) {
-  char inputstr[] = "unsigned int has_32bit_inodes : 1;";
+  char inputstr[] = "int has_32bit_inodes : 1;";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(StdoutMatches(
-                  "has_32bit_inodes is a(n) unsigned int bitfield of width 1"),
+  EXPECT_THAT(StdoutMatches("has_32bit_inodes is a(n) int bitfield of width 1"),
               IsTrue());
 }
 
 TEST_F(ParserSuite, ParseBitfieldNoSpaces) {
-  char inputstr[] = "unsigned int has_32bit_inodes:1;";
+  char inputstr[] = "int has_32bit_inodes:1;";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(StdoutMatches(
-                  "has_32bit_inodes is a(n) unsigned int bitfield of width 1"),
+  EXPECT_THAT(StdoutMatches("has_32bit_inodes is a(n) int bitfield of width 1"),
               IsTrue());
 }
 
@@ -3129,4 +3127,18 @@ TEST_F(ParserSuite, ParseBitfieldTooWide) {
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
   EXPECT_THAT(StderrMatches("Bitfield width 8 too wide for integer type."),
               IsTrue());
+}
+
+TEST_F(ParserSuite, ParseUnsignedAsType) {
+  char inputstr[] = "unsigned irqchip;";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("irqchip is a(n) unsigned int"), IsTrue());
+}
+
+TEST_F(ParserSuite, ParseUnsignedIncompatibleType) {
+  char inputstr[] = "unsigned double irqchip;";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  EXPECT_THAT(
+      StderrMatches("Type double and qualifier unsigned are incompatible"),
+      IsTrue());
 }

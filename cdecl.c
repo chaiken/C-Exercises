@@ -2165,13 +2165,16 @@ bool finish_token(struct parser_props *parser, const char *offset_decl,
         parser->stacklen = 0;
         return false;
       }
-    } else if (!strcmp("extern", this_token->string) &&
+    } else if ((!strcmp("extern", this_token->string) ||
+                !strcmp("static", this_token->string)) &&
                (parser->parent && parser->parent->has_function_params)) {
       /*
        * https://en.cppreference.com/c/language/storage_duration
-       * "The extern specifier specifies static storage duration . . . It can be
-       * used with function and object declarations in both file and block scope
-       * (excluding function parameter lists)."
+       * "The extern specifier specifies static storage duration . . . It can
+       * be used with function and object declarations in both file and block
+       * scope (excluding function parameter lists)."   The same is true of
+       * "static", but not of "volatile," which may apply to function
+       * parameters per https://en.cppreference.com/c/language/volatile.
        */
       fprintf(parser->err_stream, "Function parameters cannot be %s.\n",
               this_token->string);

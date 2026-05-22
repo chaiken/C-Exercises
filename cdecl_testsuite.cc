@@ -2272,17 +2272,25 @@ TEST_F(ParserSuite, ParseFunctionOutputQualifiedParams) {
   // clang-format on
 }
 
-TEST_F(ParserSuite, ParseFunctionOutputIllegalParamQualifier) {
+TEST_F(ParserSuite, ParseFunctionOutputIllegalExternParamQualifier) {
   char inputstr[] = "double sqrt(extern double x);";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
   EXPECT_THAT(StderrMatches("Function parameters cannot be extern"), IsTrue());
   release_parser_resources(&parser);
 }
 
-TEST_F(ParserSuite, ParseFunctionOutputIllegalFunctionQualifier) {
-  char inputstr[] = "volatile double sqrt(double x);";
+TEST_F(ParserSuite, ParseFunctionOutputIllegalStaticParamQualifier) {
+  char inputstr[] = "double sqrt(static double x);";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
-  EXPECT_THAT(StderrMatches("Function return types cannot be volatile"),
+  EXPECT_THAT(StderrMatches("Function parameters cannot be static"), IsTrue());
+  release_parser_resources(&parser);
+}
+
+TEST_F(ParserSuite, ParseFunctionOutputLegalVolatileFunctionQualifier) {
+  char inputstr[] = "double sqrt(volatile double x);";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("sqrt is a(n) function which returns double and "
+                            "takes param(s) x is a(n) volatile double"),
               IsTrue());
 }
 

@@ -157,39 +157,27 @@ TEST(StringManipulateSuite, GetKindQualifiers) {
   EXPECT_THAT(get_kind("extern"), Eq(qualifier));
   EXPECT_THAT(get_kind("unsigned"), Eq(qualifier));
   EXPECT_THAT(get_kind("restrict"), Eq(qualifier));
+  EXPECT_THAT(get_kind("atomic"), Eq(qualifier));
 }
 
-TEST(StringManipulateSuite, GetKindTypes) {
-  EXPECT_THAT(get_kind("char"), Eq(type));
-  EXPECT_THAT(get_kind("short"), Eq(type));
-  EXPECT_THAT(get_kind("int"), Eq(type));
-  EXPECT_THAT(get_kind("float"), Eq(type));
-  EXPECT_THAT(get_kind("double"), Eq(type));
-  EXPECT_THAT(get_kind("long"), Eq(type));
-  EXPECT_THAT(get_kind("struct"), Eq(type));
-  EXPECT_THAT(get_kind("enum"), Eq(type));
-  EXPECT_THAT(get_kind("union"), Eq(type));
-  EXPECT_THAT(get_kind("void"), Eq(type));
-  EXPECT_THAT(get_kind("int8_t"), Eq(type));
-  EXPECT_THAT(get_kind("uint8_t"), Eq(type));
-  EXPECT_THAT(get_kind("int16_t"), Eq(type));
-  EXPECT_THAT(get_kind("uint16_t"), Eq(type));
-  EXPECT_THAT(get_kind("int32_t"), Eq(type));
-  EXPECT_THAT(get_kind("uint32_t"), Eq(type));
-  EXPECT_THAT(get_kind("int64_t"), Eq(type));
-  EXPECT_THAT(get_kind("uint64_t"), Eq(type));
-  EXPECT_THAT(get_kind("size_t"), Eq(type));
-  EXPECT_THAT(get_kind("ssize_t"), Eq(type));
-  EXPECT_THAT(get_kind("bool"), Eq(type));
-  EXPECT_THAT(get_kind("u8"), Eq(type));
-  EXPECT_THAT(get_kind("s8"), Eq(type));
-  EXPECT_THAT(get_kind("u16"), Eq(type));
-  EXPECT_THAT(get_kind("s16"), Eq(type));
-  EXPECT_THAT(get_kind("u32"), Eq(type));
-  EXPECT_THAT(get_kind("s32"), Eq(type));
-  EXPECT_THAT(get_kind("u64"), Eq(type));
-  EXPECT_THAT(get_kind("s64"), Eq(type));
+struct KindCheckerTest : public TestWithParam<std::string> {};
+
+const std::size_t typenum = sizeof(types) / sizeof(char *);
+std::vector<std::string> all_types;
+std::vector<std::string> make_all_types() {
+  for (std::size_t i = 0; i < typenum; i++) {
+    all_types.push_back(types[i]);
+  }
+  return all_types;
 }
+
+TEST_P(KindCheckerTest, GetKindTypes) {
+  std::string input = GetParam();
+  EXPECT_THAT(get_kind(input.c_str()), Eq(type));
+}
+
+INSTANTIATE_TEST_CASE_P(ProvideTypes, KindCheckerTest,
+                        testing::ValuesIn(make_all_types()));
 
 TEST(StringManipulateSuite, GetArrayLength) {
   EXPECT_THAT(get_kind("42"), Eq(length));
@@ -3121,4 +3109,11 @@ TEST_F(ParserSuite, ParseUnsignedIncompatibleType) {
   EXPECT_THAT(
       StderrMatches("Type double and qualifier unsigned are incompatible"),
       IsTrue());
+}
+
+TEST_F(ParserSuite, ParseAtomicIncompatibleType) {
+  char inputstr[] = "atomic atomic_bool flag;";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  EXPECT_THAT(StderrMatches("Type and qualifier cannot both be atomic."),
+              IsTrue());
 }

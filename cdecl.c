@@ -1045,6 +1045,7 @@ bool reclassify_unsigned_qualifier(struct parser_props *parser) {
 bool qualifier_is_compatible_with_type(const struct parser_props *parser,
                                        const char *type) {
   int cursor = 0;
+  bool type_is_atomic = strstr(type, "atomic") == NULL ? false : true;
   if (!parser || !parser->stacklen) {
     return false;
   }
@@ -1058,6 +1059,14 @@ bool qualifier_is_compatible_with_type(const struct parser_props *parser,
       } else {
         fprintf(parser->err_stream,
                 "Type %s and qualifier unsigned are incompatible.\n", type);
+        return false;
+      }
+    }
+    if (type_is_atomic) {
+      if ((qualifier == parser->stack[cursor].kind) &&
+          (!strcmp(parser->stack[cursor].string, "atomic"))) {
+        fprintf(parser->err_stream,
+                "Type and qualifier cannot both be atomic.\n");
         return false;
       }
     }
@@ -1151,8 +1160,6 @@ bool load_next_secondary_param(struct parser_props *const current_parser,
   }
   increm = load_stack(current_parser, next_param);
   if (!increm) {
-    /* Referring to one of the stack-allocated parsers triggers use-after-free.
-     */
     fprintf(head->err_stream, "Failed to load %s %s\n", err_string,
             next_param ? next_param : "");
     return false;
@@ -1665,8 +1672,10 @@ void reorder_array_identifier_and_lengths(struct parser_props *parser) {
    * dimensions.
    */
   size_t unprocessed_lengths = parser->array_lengths;
-  // Move the identifier to the stack top by swapping it with each identifier in
-  // turn.
+  /*
+   * Move the identifier to the stack top by swapping it with each identifier in
+   * turn.
+   */
   while (unprocessed_lengths) {
     struct token name = parser->stack[stacklast - unprocessed_lengths];
     struct token arraylen =
@@ -1725,7 +1734,7 @@ bool pop_stack(struct parser_props *parser, bool no_enum_instance) {
     case qualifier:
       if (!strcmp("volatile", parser->stack[stacktop].string) &&
           parser->is_function) {
-        /* Purge any  already printed messages from the output stream which are
+        /* Purge any already printed messages from the output stream which are
          * now irrelevant. */
         __fpurge(parser->out_stream);
         fprintf(parser->err_stream,
@@ -2265,7 +2274,7 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
         /*
          * Put the characters in the token and '{' back on the stack for
          * process_enum_constants().  This clumsy approach means that the parser
-         * state upon entry to process_enum_constants() does  not depend on
+         * state upon entry to process_enum_constants() does not depend on
          * whether or not the enum has an instance name.
          */
         parser->cursor -= strlen(this_token.string) + 1;

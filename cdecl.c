@@ -1458,7 +1458,11 @@ bool type_is_bitfield_compatible(const struct parser_props *parser) {
   if (!parser || !parser->stacklen || !parser->have_type) {
     return false;
   }
-  while (stacktop--) {
+  /*
+   * Decrementing the counter after the test means that it must be >0 rather
+   * than >=0, which would allow negative indices inside the loop.
+   */
+  while (stacktop-- > 0) {
     if (type == parser->stack[stacktop].kind) {
       if ((!strcmp(parser->stack[stacktop].string, "int")) ||
           (!strcmp(parser->stack[stacktop].string, "unsigned int"))) {
@@ -1617,9 +1621,16 @@ void reverse_lengths(struct parser_props *parser) {
  * and types on the stack in order to produce corector output.
  */
 void reorder_qualifier_and_type(struct parser_props *parser) {
+  size_t stacktop = parser->stacklen - 1;
+  if (!parser->stacklen) {
+    return;
+  }
   if (parser->have_type) {
-    size_t stacktop = parser->stacklen - 1;
-    while (stacktop) {
+    /*
+     * Decrementing the counter after the test means that it must be >0 rather
+     * than >=0, which would allow negative indices inside the loop.
+     */
+    while (stacktop-- > 0) {
       if ((type == parser->stack[stacktop].kind) &&
           (qualifier == parser->stack[stacktop - 1].kind) &&
           (0 != strcmp("*", parser->stack[stacktop - 1].string))) {
@@ -1635,7 +1646,6 @@ void reorder_qualifier_and_type(struct parser_props *parser) {
         parser->stack[stacktop - 1].kind = type;
         strlcpy(parser->stack[stacktop - 1].string, type_name, MAXTOKENLEN);
       }
-      stacktop -= 1;
     }
   }
 }

@@ -258,13 +258,13 @@ static bool is_type_char(const char c) {
 }
 
 /*
- * For the first character, allow only a-z, A-Z, '_' and '-'.
+ * For the first character, allow only a-z, A-Z and '_'.
  * Per https://en.cppreference.com/c/language/identifier:
  * A valid identifier must begin with a non-digit character (Latin letter,
  * underscore, or Unicode non-digit character(since C99) . . .
  */
 static bool is_first_name_char(const char c) {
-  if (isalpha(c) || ('-' == c) || ('_' == c)) {
+  if (isalpha(c) || ('_' == c)) {
     return true;
   }
   return false;
@@ -1965,10 +1965,6 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
   }
   /* Move past leading whitespace. */
   tokenoffset = trimnum;
-  /* Move past leading '-' in identifier.  Leading underscores are okay. */
-  while ('-' == *(declstring + tokenoffset)) {
-    tokenoffset++;
-  }
   /* Process array length, if any. We should already have an identifier. */
   if (parser->array_dimensions) {
     tokenoffset +=
@@ -2041,10 +2037,6 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
     tokenoffset++;
     nextchar = *(declstring + tokenoffset);
   } /* end of character-copying for-loop */
-  /* Overwrite any trailing dash with a NUL. */
-  if ('-' == this_token->string[ctr - 1]) {
-    this_token->string[ctr - 1] = '\0';
-  }
   if (!finish_token(parser, declstring + tokenoffset, this_token, ctr)) {
     parser->stacklen = 0;
     return 0;

@@ -36,13 +36,6 @@ TEST(ProcessStringInputSuite, Empty) {
   EXPECT_THAT(strlen(inputstr), Eq(0));
 }
 
-TEST(ProcesStringInputSuite, LeadingDash) {
-  char inputstr[MAXTOKENLEN];
-  const std::string dashes{"--;"};
-  EXPECT_THAT(find_input_string(dashes.c_str(), inputstr, stdin), Eq(3));
-  EXPECT_THAT(inputstr, StrEq("--;"));
-}
-
 struct ProcessInputSuite : public Test {
   ProcessInputSuite() : fake_stdin(tmpfile()) {}
   ~ProcessInputSuite() override { fclose(fake_stdin); }
@@ -302,13 +295,6 @@ TEST_F(TokenizerSuite, IsOnlyArrayLength) {
   EXPECT_THAT(this_token.kind, Eq(length));
 }
 
-TEST_F(TokenizerSuite, HasDash) {
-  char input[] = "first-val";
-  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(0));
-  EXPECT_THAT(this_token.string, StrEq("first-val"));
-  EXPECT_THAT(this_token.kind, Eq(identifier));
-}
-
 TEST_F(TokenizerSuite, HasUnderscore) {
   char input[] = "first_val";
   EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(0));
@@ -398,20 +384,6 @@ TEST_F(TokenizerSuite, IgnoreUnallowedCharsNoTypeIsArray) {
   EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(0));
   EXPECT_THAT(strlen(this_token.string), Eq(0));
   EXPECT_THAT(kind_names[this_token.kind], StrEq("invalid"));
-}
-
-TEST_F(TokenizerSuite, ElideTrailingDash) {
-  char input[] = "val-";
-  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(0));
-  EXPECT_THAT(this_token.string, StrEq("val"));
-  EXPECT_THAT(this_token.kind, Eq(identifier));
-}
-
-TEST_F(TokenizerSuite, ElideLeadingDash) {
-  char input[] = "--val";
-  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(0));
-  EXPECT_THAT(this_token.string, StrEq("val"));
-  EXPECT_THAT(this_token.kind, Eq(identifier));
 }
 
 TEST_F(TokenizerSuite, DoNotElideLeadingUnderscore) {

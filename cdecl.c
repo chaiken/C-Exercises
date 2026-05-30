@@ -91,8 +91,7 @@ void limitations() {
   printf("\t   libc, kernel extensions or compiler attributes;\n");
   printf("\tc) does not support C23 or C26 additions;\n");
   printf("\td) handles 'extern' awkwardly;\n");
-  printf("\te) does not support volatile pointers;\n");
-  printf("\tf) support \"unsigned\" only as a type, not a qualifier.\n");
+  printf("\te) does not support volatile pointers.\n");
 }
 
 /********** functions to modify the parser **********/

@@ -1641,16 +1641,12 @@ void reverse_lengths(struct parser_props *parser) {
  * and types on the stack in order to produce corector output.
  */
 void reorder_qualifier_and_type(struct parser_props *parser) {
-  size_t stacktop = parser->stacklen - 1;
+  size_t stacktop = parser->stacklen;
   if (!parser->stacklen) {
     return;
   }
   if (parser->have_type) {
-    /*
-     * Decrementing the counter after the test means that it must be >0 rather
-     * than >=0, which would allow negative indices inside the loop.
-     */
-    while (stacktop-- > 0) {
+    while (--stacktop > 0) {
       if ((type == parser->stack[stacktop].kind) &&
           (qualifier == parser->stack[stacktop - 1].kind) &&
           (0 != strcmp("*", parser->stack[stacktop - 1].string))) {

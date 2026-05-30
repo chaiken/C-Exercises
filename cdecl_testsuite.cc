@@ -3119,3 +3119,20 @@ TEST_F(ParserSuite, ParseAtomicIncompatibleType) {
   EXPECT_THAT(StderrMatches("Type and qualifier cannot both be atomic."),
               IsTrue());
 }
+
+TEST_F(ParserSuite, ParseAtomicIncompatibleType2) {
+  char inputstr[] = "atomic uint64_t hash(char *key, uint64_t seed);";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  EXPECT_THAT(
+      StderrMatches("Function return values and arrays cannot be atomic."),
+      IsTrue());
+  release_parser_resources(&parser);
+}
+
+TEST_F(ParserSuite, ParseAtomicIncompatibleType3) {
+  char inputstr[] = "atomic double val[4];";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  EXPECT_THAT(
+      StderrMatches("Function return values and arrays cannot be atomic."),
+      IsTrue());
+}

@@ -89,11 +89,10 @@ void limitations() {
          "declarations;\n");
   printf("\tb) includes only the qualifiers defined in ANSI C, not all\n");
   printf("\t   libc, kernel extensions or compiler attributes;\n");
-  printf("\tc) does not support atomic types;\n");
-  printf("\td) does not support C23 additions;\n");
-  printf("\te) handles 'extern' awkwardly;\n");
-  printf("\tf) does not support volatile pointers;\n");
-  printf("\tg) support \"unsigned\" only as a type, not a qualifier.\n");
+  printf("\tc) does not support C23 or C26 additions;\n");
+  printf("\td) handles 'extern' awkwardly;\n");
+  printf("\te) does not support volatile pointers;\n");
+  printf("\tf) support \"unsigned\" only as a type, not a qualifier.\n");
 }
 
 /********** functions to modify the parser **********/
@@ -1352,6 +1351,20 @@ size_t process_array_length(struct parser_props *parser,
   return ctr;
 }
 
+bool parser_has_atomic_qualifier(const struct parser_props *parser) {
+  size_t stacktop = parser->stacklen - 1;
+  if (!parser || !parser->stacklen) {
+    return false;
+  }
+  while (stacktop-- > 0) {
+    if ((qualifier == parser->stack[stacktop].kind) &&
+        strstr(parser->stack[stacktop].string, "atomic")) {
+      return true;
+    }
+  }
+  return false;
+}
+
 bool process_array_dimensions(struct parser_props *parser, char *user_input,
                               struct token *this_token) {
   char *next_dim;
@@ -2115,6 +2128,14 @@ bool finish_token(struct parser_props *parser, const char *offset_decl,
       if ((parser->prev) || reclassify_unsigned_qualifier(parser)) {
         break;
       }
+      parser->stacklen = 0;
+      return false;
+    }
+    if ((parser->array_dimensions || parser->is_function) &&
+        parser_has_atomic_qualifier(parser)) {
+      fprintf(parser->err_stream,
+              "Function return values and arrays cannot be atomic.\n");
+      this_token->kind = invalid;
       parser->stacklen = 0;
       return false;
     }

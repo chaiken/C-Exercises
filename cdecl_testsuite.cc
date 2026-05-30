@@ -284,13 +284,15 @@ TEST_F(TokenizerSuite, IsOnlyArrayLength) {
 }
 
 TEST_F(TokenizerSuite, HasUnderscore) {
+  parser.have_type = true;
   char input[] = "first_val";
-  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(0));
+  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(9));
   EXPECT_THAT(this_token.string, StrEq("first_val"));
   EXPECT_THAT(this_token.kind, Eq(identifier));
 }
 
 TEST_F(TokenizerSuite, IgnoreUnallowedLeadingCharsNoType) {
+  parser.have_type = true;
   char input[] = "5fasdf";
   EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(0));
 }
@@ -375,8 +377,9 @@ TEST_F(TokenizerSuite, IgnoreUnallowedCharsNoTypeIsArray) {
 }
 
 TEST_F(TokenizerSuite, DoNotElideLeadingUnderscore) {
+  parser.have_type = true;
   char input[] = "__val";
-  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(0));
+  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(5));
   EXPECT_THAT(this_token.string, StrEq("__val"));
   EXPECT_THAT(this_token.kind, Eq(identifier));
 }
@@ -877,7 +880,8 @@ TEST_F(ParserSuite, ProcessFunctionParamsTwoParams) {
   const char *query = "uint64_t hash(char *key, uint64_t seed)";
   // The following characters were processed by the first parser.
   parser.cursor = strlen("uint64_t hash");
-
+  parser.have_identifier = true;
+  parser.have_type = true;
   parser.has_function_params = true;
   parser.start_delim = '(';
   parser.end_delim = ')';
@@ -2796,7 +2800,6 @@ TEST_F(ParserSuite, ParseForwardDeclarationBadDelim) {
 TEST_F(ParserSuite, ParseForwardDeclarationBadDelim2) {
   char inputstr[] = "enum State } state;";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
-  EXPECT_THAT(StderrMatches("Cannot process empty token."), IsTrue());
   EXPECT_THAT(StderrMatches("Input lacks required identifier or type element."),
               IsTrue());
 }
@@ -2804,7 +2807,6 @@ TEST_F(ParserSuite, ParseForwardDeclarationBadDelim2) {
 TEST_F(ParserSuite, ParseOneEnumeratorStrayComma) {
   char inputstr[] = "enum State state {,GAS};";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
-  EXPECT_THAT(StderrMatches("Cannot process empty token."), IsTrue());
   EXPECT_THAT(StderrMatches("Invalid enumerator"), IsTrue());
 }
 

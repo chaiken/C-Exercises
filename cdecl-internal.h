@@ -191,7 +191,7 @@ bool process_secondary_params(struct parser_props *parser, char *user_input);
 size_t process_array_length(struct parser_props *parser,
                             const char *offset_string,
                             struct token *this_token);
-void process_array_dimensions(struct parser_props *parser, char *user_input,
+bool process_array_dimensions(struct parser_props *parser, char *user_input,
                               struct token *this_token);
 bool process_enum_constants(struct parser_props *parser, char *user_input);
 bool handled_extended_parsing(struct parser_props *parser, char *user_input,

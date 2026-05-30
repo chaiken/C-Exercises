@@ -94,7 +94,6 @@ void limitations() {
   printf("\te) handles 'extern' awkwardly;\n");
   printf("\tf) does not support volatile pointers;\n");
   printf("\tg) support \"unsigned\" only as a type, not a qualifier.\n");
-  exit(-1);
 }
 
 /********** functions to modify the parser **********/
@@ -1336,6 +1335,7 @@ size_t process_array_length(struct parser_props *parser,
   if (NULL == strstr(offset_string, "]")) {
     /* Indicate hard failure. */
     parser->stacklen = 0;
+    this_token->kind = invalid;
     return 0;
   }
   for (ctr = 0;
@@ -1346,17 +1346,21 @@ size_t process_array_length(struct parser_props *parser,
   this_token->kind = length;
   if (!finish_token(parser, offset_string, this_token, ctr)) {
     parser->stacklen = 0;
+    this_token->kind = invalid;
     return 0;
   }
   return ctr;
 }
 
-void process_array_dimensions(struct parser_props *parser, char *user_input,
+bool process_array_dimensions(struct parser_props *parser, char *user_input,
                               struct token *this_token) {
   char *next_dim;
   char *progress_ptr;
 
   do {
+    if (']' == *(user_input + parser->cursor)) {
+      parser->cursor++;
+    }
     /* Skip '['. */
     parser->cursor++;
     progress_ptr = user_input + parser->cursor;
@@ -1378,6 +1382,12 @@ void process_array_dimensions(struct parser_props *parser, char *user_input,
     parser->cursor += gettoken(parser, progress_ptr, this_token);
     if ((length == this_token->kind) && (strlen(this_token->string))) {
       push_stack(parser, this_token);
+    } else {
+      fprintf(parser->err_stream,
+              "Array declarations must be followed by (possibly empty) "
+              "lengths, not %s.\n",
+              progress_ptr);
+      return false;
     }
     next_dim = strstr(user_input + parser->cursor, "[");
     if (next_dim) {
@@ -1391,6 +1401,7 @@ void process_array_dimensions(struct parser_props *parser, char *user_input,
   if (parser->array_dimensions == parser->array_lengths) {
     parser->last_dimension_unspecified = false;
   }
+  return true;
 }
 
 bool handle_bitfield_width(struct parser_props *parser,
@@ -1587,7 +1598,9 @@ bool handled_extended_parsing(struct parser_props *parser, char *user_input,
     }
   }
   if (parser->array_dimensions) {
-    process_array_dimensions(parser, user_input, this_token);
+    if (!process_array_dimensions(parser, user_input, this_token)) {
+      return false;
+    }
   } else if (parser->has_function_params ||
              parser->has_struct_or_union_members) {
     /* Move past the already-processed characters and '('. */
@@ -1663,7 +1676,7 @@ void reorder_qualifier_and_type(struct parser_props *parser) {
  * the identifier.
  */
 void reorder_array_identifier_and_lengths(struct parser_props *parser) {
-  if (!parser->array_lengths) {
+  if (!parser->stacklen || !parser->array_lengths) {
     return;
   }
   const size_t stacklast = parser->stacklen - 1;
@@ -1958,6 +1971,7 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
    * copied into tokens.
    */
   size_t ctr = 0;
+  size_t increm = 0;
   char trimmed[MAXTOKENLEN];
   const char *startbracep = strchr(declstring, '{');
   char nextchar = '\0';
@@ -1976,9 +1990,12 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
   tokenoffset = trimnum;
   /* Process array length, if any. We should already have an identifier. */
   if (parser->array_dimensions) {
-    tokenoffset +=
-        process_array_length(parser, declstring + tokenoffset, this_token);
-    return tokenoffset;
+    increm = process_array_length(parser, declstring + tokenoffset, this_token);
+    if (!increm) {
+      fprintf(parser->err_stream, "Array-length processing failed.\n");
+      return 0;
+    }
+    return tokenoffset + increm;
   }
   /* Move past '(' enclosing the function pointer name to '*'. */
   if (parser->is_function_ptr && ('(' == *(declstring + tokenoffset))) {
@@ -1988,7 +2005,9 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
   if ('*' == *(declstring + tokenoffset)) {
     strlcpy(this_token->string, "*", 2);
     tokenoffset++;
+    ctr++;
     if (!finish_token(parser, declstring + tokenoffset, this_token, ctr)) {
+      this_token->kind = invalid;
       parser->stacklen = 0;
       return 0;
     }
@@ -2019,6 +2038,8 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
           }
           if (parser->is_struct_or_union) {
             parser->has_struct_or_union_members = true;
+            /* Account for '{'. */
+            ctr++;
           }
         } else if (('[' != nextchar) && (']' != nextchar) &&
                    (parser->array_dimensions || parser->array_lengths)) {
@@ -2047,6 +2068,7 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
     nextchar = *(declstring + tokenoffset);
   } /* end of character-copying for-loop */
   if (!finish_token(parser, declstring + tokenoffset, this_token, ctr)) {
+    this_token->kind = invalid;
     parser->stacklen = 0;
     return 0;
   }
@@ -2061,6 +2083,10 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
 bool finish_token(struct parser_props *parser, const char *offset_decl,
                   struct token *this_token, const size_t ctr) {
   this_token->string[ctr + 1] = '\0';
+  if (!ctr) {
+    parser->stacklen = 0;
+    return false;
+  }
   this_token->kind = get_kind(this_token->string);
   switch (this_token->kind) {
   case identifier:
@@ -2210,6 +2236,7 @@ bool finish_token(struct parser_props *parser, const char *offset_decl,
     } else {
       fprintf(parser->err_stream, "Cannot process invalid token %s\n",
               this_token->string);
+      return false;
     }
     break;
   default:

@@ -90,8 +90,8 @@ void limitations() {
   printf("\tb) includes only the qualifiers defined in ANSI C, not all\n");
   printf("\t   libc, kernel extensions or compiler attributes;\n");
   printf("\tc) does not support C23 or C26 additions;\n");
-  printf("\td) handles 'extern' awkwardly;\n");
-  printf("\te) does not support volatile pointers.\n");
+  printf("\t   unicode, continuation lines, comments,\n");
+  printf("\te) or 'inline'.\n");
 }
 
 /********** functions to modify the parser **********/
@@ -1649,8 +1649,11 @@ void reverse_lengths(struct parser_props *parser) {
 }
 
 /*
- * Qualifiers modify the type, not the identifier. Therefore reorder qualifiers
- * and types on the stack in order to produce corector output.
+ * Most qualifiers modify the type, not the identifier. Therefore reorder
+ * qualifiers and types on the stack in order to produce correct output.  The
+ * exceptions are "static" and "extern", which describe the storage duration and
+ * linker visibility of the identifier, and "inline", which is a compiler
+ * attribute masquerading as a keyword.
  */
 void reorder_qualifier_and_type(struct parser_props *parser) {
   size_t stacktop = parser->stacklen;
@@ -1659,6 +1662,10 @@ void reorder_qualifier_and_type(struct parser_props *parser) {
   }
   if (parser->have_type) {
     while (--stacktop > 0) {
+      if ((0 == strcmp("extern", parser->stack[stacktop - 1].string)) ||
+          (0 == strcmp("static", parser->stack[stacktop - 1].string))) {
+        continue;
+      }
       if ((type == parser->stack[stacktop].kind) &&
           (qualifier == parser->stack[stacktop - 1].kind) &&
           (0 != strcmp("*", parser->stack[stacktop - 1].string))) {
@@ -1761,6 +1768,12 @@ bool pop_stack(struct parser_props *parser, bool no_enum_instance) {
         fprintf(parser->err_stream,
                 "Function return types cannot be volatile.\n");
         return false;
+      }
+      if ((0 == strcmp("extern", parser->stack[stacktop].string)) ||
+          (0 == strcmp("static", parser->stack[stacktop].string))) {
+        fprintf(parser->out_stream, "and which has %s storage duration ",
+                parser->stack[stacktop].string);
+        break;
       }
       fprintf(parser->out_stream, "%s ", parser->stack[stacktop].string);
       break;

@@ -928,11 +928,11 @@ TEST_F(ParserSuite, LoadStackFunctionParamNoSpace) {
   EXPECT_THAT(
       StdoutMatches("Token number 1 has kind identifier and string level"),
       IsTrue());
-  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string int"),
-              IsTrue());
   EXPECT_THAT(
-      StdoutMatches("Token number 1 has kind qualifier and string extern"),
+      StdoutMatches("Token number 0 has kind qualifier and string extern"),
       IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 1 has kind type and string int"),
+              IsTrue());
   EXPECT_THAT(
       StdoutMatches("Token number 2 has kind identifier and string put_cmsg"),
       IsTrue());
@@ -2220,7 +2220,7 @@ TEST_F(ParserSuite, ParseFunctionOutputOneParamQualifier) {
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(parser.has_function_params, IsTrue());
   // clang-format off
-  EXPECT_THAT(StdoutMatches("sqrt is a(n) function which returns extern double and takes param(s) x is a(n) const double"),
+  EXPECT_THAT(StdoutMatches("sqrt is a(n) function which returns double and takes param(s) x is a(n) const double and which has extern storage duration"),
               IsTrue());
   // clang-format on
 }
@@ -2231,7 +2231,7 @@ TEST_F(ParserSuite, ParseFunctionOutputQualifiedParams) {
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(parser.has_function_params, IsTrue());
   // clang-format off
-  EXPECT_THAT(StdoutMatches("iowrite_rep is a(n) function which returns static void and takes param(s) addr is a(n) pointer to volatile void and buffer is a(n) pointer to const void and count is a(n) unsigned int"),
+  EXPECT_THAT(StdoutMatches("iowrite_rep is a(n) function which returns void and takes param(s) addr is a(n) pointer to volatile void and buffer is a(n) pointer to const void and count is a(n) unsigned int and which has static storage duration"),
               IsTrue());
   // clang-format on
 }
@@ -2495,7 +2495,7 @@ TEST_F(ParserSuite, ParseUnionForwardDeclaration) {
   char inputstr[] = "extern union msi_domain_cookie dcookie;";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
-  EXPECT_THAT(StdoutMatches("dcookie is a(n) extern union msi_domain_cookie"),
+  EXPECT_THAT(StdoutMatches("dcookie is a(n) union msi_domain_cookie and which has extern storage duration"),
               IsTrue());
   // clang-format on
 }

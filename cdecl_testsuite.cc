@@ -2220,7 +2220,7 @@ TEST_F(ParserSuite, ParseFunctionOutputOneParamQualifier) {
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(parser.has_function_params, IsTrue());
   // clang-format off
-  EXPECT_THAT(StdoutMatches("sqrt is a(n) function which returns double and takes param(s) x is a(n) const double and which has extern storage duration"),
+  EXPECT_THAT(StdoutMatches("sqrt is a(n) function which returns double and takes param(s) x is a(n) const double and which has static storage duration and external linkage"),
               IsTrue());
   // clang-format on
 }
@@ -2231,7 +2231,7 @@ TEST_F(ParserSuite, ParseFunctionOutputQualifiedParams) {
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(parser.has_function_params, IsTrue());
   // clang-format off
-  EXPECT_THAT(StdoutMatches("iowrite_rep is a(n) function which returns void and takes param(s) addr is a(n) pointer to volatile void and buffer is a(n) pointer to const void and count is a(n) unsigned int and which has static storage duration"),
+  EXPECT_THAT(StdoutMatches("iowrite_rep is a(n) function which returns void and takes param(s) addr is a(n) pointer to volatile void and buffer is a(n) pointer to const void and count is a(n) unsigned int and which has static storage duration and internal linkage"),
               IsTrue());
   // clang-format on
 }
@@ -2495,7 +2495,7 @@ TEST_F(ParserSuite, ParseUnionForwardDeclaration) {
   char inputstr[] = "extern union msi_domain_cookie dcookie;";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
-  EXPECT_THAT(StdoutMatches("dcookie is a(n) union msi_domain_cookie and which has extern storage duration"),
+  EXPECT_THAT(StdoutMatches("dcookie is a(n) union msi_domain_cookie and which has static storage duration and external linkage"),
               IsTrue());
   // clang-format on
 }

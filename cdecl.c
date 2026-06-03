@@ -1771,8 +1771,10 @@ bool pop_stack(struct parser_props *parser, bool no_enum_instance) {
       }
       if ((0 == strcmp("extern", parser->stack[stacktop].string)) ||
           (0 == strcmp("static", parser->stack[stacktop].string))) {
-        fprintf(parser->out_stream, "and which has %s storage duration ",
-                parser->stack[stacktop].string);
+        fprintf(parser->out_stream,
+                "and which has static storage duration and %s linkage",
+                !strcmp(parser->stack[stacktop].string, "extern") ? "external"
+                                                                  : "internal");
         break;
       }
       fprintf(parser->out_stream, "%s ", parser->stack[stacktop].string);

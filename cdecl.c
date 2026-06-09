@@ -1737,7 +1737,8 @@ void reorder_stacks(struct parser_props *parser) {
 }
 
 /* Return true on success. */
-bool pop_stack(struct parser_props *parser, bool no_enum_instance) {
+bool pop_stack(struct parser_props *parser, bool no_enum_instance,
+               bool is_second_pointer_qualifier) {
   size_t stacktop;
   if (!parser->stacklen) {
     fprintf(parser->err_stream, "Attempt to pop empty stack.\n");
@@ -1750,7 +1751,7 @@ bool pop_stack(struct parser_props *parser, bool no_enum_instance) {
    * object to which the pointer points.
    */
   if (!strcmp(parser->stack[stacktop].string, "*")) {
-    if (parser->is_function_ptr) {
+    if (parser->is_function_ptr && !is_second_pointer_qualifier) {
       fprintf(parser->out_stream, "pointer to a function which returns ");
     } else {
       fprintf(parser->out_stream, "pointer to ");
@@ -1920,9 +1921,25 @@ bool pop_all(struct parser_props *parser) {
    * must proceed the first call to pop_stack() and be passed to it.
    */
   const bool no_enum_instance = all_identifiers_are_enum_constants(parser);
+  bool passed_pointer_qualifier = false;
+  char save[MAXTOKENLEN] = {};
   while (parser && parser->stacklen) {
-    if (!pop_stack(parser, no_enum_instance)) {
+    /* pop_stack() erases the final token. Save its string. */
+    if (parser->stacklen) {
+      strlcpy(save, parser->stack[parser->stacklen - 1].string,
+              strlen(parser->stack[parser->stacklen - 1].string) + 1);
+    } else {
+      strlcpy(save, "", 1);
+    }
+    if (!pop_stack(parser, no_enum_instance, passed_pointer_qualifier)) {
       return false;
+    }
+    /*
+     * If the saved string is "*", notify pop_stack() on the next iteration.
+     * The point is to correctly handle two instances of "*" in a row.
+     */
+    if (!strcmp(save, "*")) {
+      passed_pointer_qualifier = true;
     }
     parser->stacklen--;
   }

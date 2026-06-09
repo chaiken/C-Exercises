@@ -1051,14 +1051,14 @@ TEST_F(ParserSuite, ProcessStructMembersOneMemberWithInstanceName) {
 }
 
 TEST_F(ParserSuite, PopEmpty) {
-  EXPECT_THAT(pop_stack(&parser, true), IsFalse());
+  EXPECT_THAT(pop_stack(&parser, true, false), IsFalse());
   EXPECT_THAT(StderrMatches("Attempt to pop empty stack."), IsTrue());
 }
 
 TEST_F(ParserSuite, PopOne) {
   struct token token0{type, "int"};
   push_stack(&parser, &token0);
-  EXPECT_THAT(pop_stack(&parser, false), IsTrue());
+  EXPECT_THAT(pop_stack(&parser, false, false), IsTrue());
   EXPECT_THAT(StdoutMatches("int"), IsTrue());
 }
 
@@ -1098,6 +1098,44 @@ TEST_F(ParserSuite, PopAllOneFunctionParam) {
   EXPECT_THAT(StdoutMatches("double"), IsTrue());
   EXPECT_THAT(StdoutMatches("val"), IsTrue());
   EXPECT_THAT(StdoutMatches("int64_t"), IsTrue());
+}
+
+TEST_F(ParserSuite, PopAllFunctionPtrReturnsPtr) {
+  // All these properties pertain to the top-level parser, since the function
+  // arguments themselves may well be simple declarations.
+  parser.is_function_ptr = true;
+  parser.is_function = true;
+  parser.has_function_params = true;
+  struct token token3{type, "struct mtd_info"};
+  push_stack(&parser, &token3);
+  struct token token4{qualifier, "*"};
+  push_stack(&parser, &token4);
+  // Yes, twice.
+  push_stack(&parser, &token4);
+  struct token token5{identifier, "panic_setup_cb"};
+  push_stack(&parser, &token5);
+
+  struct parser_props *params_parser = make_parser(&parser);
+  ASSERT_THAT(parser.next, Not(IsNull()));
+  ASSERT_THAT(parser.next->prev, Not(IsNull()));
+  ASSERT_THAT(params_parser->prev, Not(IsNull()));
+
+  struct token token0{type, "struct mtd_config"};
+  push_stack(parser.next, &token0);
+  struct token token1{qualifier, "*"};
+  push_stack(parser.next, &token1);
+  struct token token2{identifier, "mtd"};
+  push_stack(parser.next, &token2);
+
+  EXPECT_THAT(pop_all(&parser), IsTrue());
+
+  EXPECT_THAT(StdoutMatches("panic_setup_cb"), IsTrue());
+  EXPECT_THAT(StdoutMatches("struct mtd_config"), IsTrue());
+  EXPECT_THAT(StdoutMatches("mtd"), IsTrue());
+  EXPECT_THAT(StdoutMatches("struct mtd_info"), IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("pointer to a function which returns pointer to struct"),
+      IsTrue());
 }
 
 TEST_F(ParserSuite, PopAllTwoFunctionParams) {
@@ -1948,6 +1986,35 @@ TEST_F(ParserSuite, LoadStackTwoFunctionPtrsInStructTrailingFunctionParam) {
   release_parser_resources(&parser);
 }
 
+TEST_F(ParserSuite, LoadStackFunctionPtrReturnsPtr) {
+  char user_input[MAXTOKENLEN];
+  const char *probe =
+      "struct mtd_info *(*panic_setup_cb)(struct mtd_info *mtd)";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input);
+  EXPECT_THAT(consumed, Eq(strlen(probe)));
+  EXPECT_THAT(
+      StdoutMatches("Token number 0 has kind type and string struct mtd_info"),
+      IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 1 has kind qualifier and string *"),
+              IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 2 has kind identifier and string mtd"),
+      IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 0 has kind type and string struct mtd_info"),
+      IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 1 has kind qualifier and string *"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 2 has kind qualifier and string *"),
+              IsTrue());
+  EXPECT_THAT(
+      StdoutMatches(
+          "Token number 3 has kind identifier and string panic_setup_cb"),
+      IsTrue());
+  release_parser_resources(&parser);
+}
+
 TEST_F(ParserSuite, LoadStackNestedStruct) {
   char user_input[MAXTOKENLEN];
   const char *probe = "struct ethtool_hist { struct ethtool_value { u64 sum; "
@@ -2482,6 +2549,15 @@ TEST_F(ParserSuite, ParseFunctionPtrAsFunctionParamCompoundTypeParamNoSpaces) {
   // clang-format on
 }
 
+TEST_F(ParserSuite, ParseFunctionPtrWithPointerReturnValue) {
+  // clang-format off
+  char inputstr[] = "struct mtd_info *(*panic_setup_cb)(struct mtd_info *mtd);";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("panic_setup_cb is a(n) pointer to a function which returns pointer to struct mtd_info and takes param(s) mtd is a(n) pointer to struct mtd_info"),
+              IsTrue());
+  // clang-format on
+}
+
 TEST_F(ParserSuite, ParseUnionSimpleDeclaration) {
   char inputstr[] = "union msi_domain_cookie;";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
@@ -2545,7 +2621,7 @@ TEST_F(ParserSuite, ParseUnionReturnValue) {
   char inputstr[] =
       "struct fscrypt_ops { const char *legacy_key_prefix; const union fscrypt_policy *(*get_dummy_policy)(struct super_block *sb)};";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(StdoutMatches("struct fscrypt_ops has member(s) legacy_key_prefix is a(n) pointer to const char and get_dummy_policy is a(n) pointer to a function which returns pointer to a function which returns const union fscrypt_policy and takes param(s) sb is a(n) pointer to struct super_block"),
+  EXPECT_THAT(StdoutMatches("struct fscrypt_ops has member(s) legacy_key_prefix is a(n) pointer to const char and get_dummy_policy is a(n) pointer to a function which returns pointer to const union fscrypt_policy and takes param(s) sb is a(n) pointer to struct super_block"),
               IsTrue());
   // clang-format on
 }

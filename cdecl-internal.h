@@ -202,7 +202,8 @@ void reverse_lengths(struct parser_props *parser);
 void reorder_qualifier_and_type(struct parser_props *parser);
 void reorder_array_identifier_and_lengths(struct parser_props *parser);
 void reorder_stacks(struct parser_props *parser);
-bool pop_stack(struct parser_props *parser, bool no_enum_instance);
+bool pop_stack(struct parser_props *parser, bool no_enum_instance,
+               bool is_second_pointer_qualifier);
 bool pop_all(struct parser_props *parser);
 
 /* the core parser functions */

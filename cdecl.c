@@ -114,6 +114,7 @@ void reset_parser(struct parser_props *parser) {
   parser->is_function_ptr = false;
   parser->is_typedef = false;
   parser->is_bitfield = false;
+  parser->is_declarator_list = false;
   parser->has_enum_constants = false;
   parser->cursor = 0;
   parser->enumerator_list[0] = '\0';
@@ -498,6 +499,56 @@ bool check_for_enum_constants(struct parser_props *parser,
   parser->has_enum_constants = true;
   return true;
 }
+
+/*
+ * Return value of false is an error indication.
+ * Unlike functions, unions and structs, declarator lists are a property only of
+ * the top-level parser.
+ */
+void check_for_declarator_list(struct parser_props *parser,
+                               const char *user_input) {
+  _cleanup_(freep) char *input = strdup(user_input);
+  if (!input) {
+    exit(ENOMEM);
+  }
+  char *next_comma_pos = strchr(input, ',');
+  char *next_open_parens = strchr(input, '(');
+  char *next_close_parens = strchr(input, ')');
+  size_t cursor = 0;
+  /* Declarator lists are not nested and typedefs are one per line. */
+  if (parser->prev || parser->is_typedef || parser->is_enum) {
+    return;
+  }
+  while (cursor < strlen(input)) {
+    if (!next_comma_pos || !(*next_comma_pos)) {
+      return;
+    }
+    if (!next_open_parens || !(*next_open_parens)) {
+      parser->is_declarator_list = true;
+      return;
+    }
+    /* There are at least two items in the declarator list. */
+    if (next_comma_pos < next_open_parens) {
+      parser->is_declarator_list = true;
+      return;
+    }
+    /* The function is part of a declarator. */
+    if (next_comma_pos == (next_close_parens + 1)) {
+      parser->is_declarator_list = true;
+      return;
+    }
+    cursor = (next_comma_pos - input) + 1;
+    next_comma_pos = strchr(input + cursor, ',');
+    /* A series of parameters may belong to a single function, so only advance
+     * the parens pointers after considering the complete list. */
+    if (next_comma_pos > next_close_parens) {
+      next_open_parens = strchr(input + cursor, '(');
+      next_close_parens = strchr(input + cursor, ')');
+    }
+  }
+  return;
+}
+
 /********** functions which modify input **********/
 
 /*
@@ -1903,6 +1954,10 @@ bool pop_stack(struct parser_props *parser, bool no_enum_instance,
     } else {
       fprintf(parser->out_stream, "pointer to ");
     }
+    if (parser->is_declarator_list && stacktop &&
+        (identifier == parser->stack[stacktop - 1].kind)) {
+      fprintf(parser->out_stream, " and ");
+    }
   } else {
     switch (parser->stack[stacktop].kind) {
     case qualifier:
@@ -1926,8 +1981,14 @@ bool pop_stack(struct parser_props *parser, bool no_enum_instance,
       }
       break;
     case identifier:
-      fprintf(parser->out_stream, "%s is a(n) ",
-              parser->stack[stacktop].string);
+      if (parser->is_declarator_list && stacktop &&
+          (identifier == parser->stack[stacktop - 1].kind)) {
+        fprintf(parser->out_stream, "%s is a(n) and ",
+                parser->stack[stacktop].string);
+      } else {
+        fprintf(parser->out_stream, "%s is a(n) ",
+                parser->stack[stacktop].string);
+      }
       if (parser->is_typedef) {
         fprintf(parser->out_stream, "alias for ");
       }
@@ -2291,6 +2352,8 @@ bool finish_token(struct parser_props *parser, const char *offset_decl,
         !qualifier_is_compatible_with_type(parser, this_token->string)) {
       return false;
     }
+    /* Must be after enum test. */
+    check_for_declarator_list(parser, offset_decl);
     /*
      * The identifier which follows will be inside parens, so gettoken() will
      * fail unless the parsing context is adjusted first. Therefore

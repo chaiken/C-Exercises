@@ -521,18 +521,12 @@ void check_for_declarator_list(struct parser_props *parser,
     if (!next_comma_pos || !(*next_comma_pos)) {
       return;
     }
-    if (!next_open_parens || !(*next_open_parens)) {
-      parser->is_declarator_list = true;
-      return;
-    }
     /* There are at least two items in the declarator list. */
-    if (next_comma_pos < next_open_parens) {
+    if (!next_open_parens || !(*next_open_parens) ||
+        (next_comma_pos < next_open_parens) ||
+        (next_comma_pos == (next_close_parens + 1))) {
       parser->is_declarator_list = true;
-      return;
-    }
-    /* The function is part of a declarator. */
-    if (next_comma_pos == (next_close_parens + 1)) {
-      parser->is_declarator_list = true;
+      parser->separator = ',';
       return;
     }
     cursor = (next_comma_pos - input) + 1;
@@ -1239,6 +1233,9 @@ static void advance_past_separator(struct parser_props *parser,
 static void advance_past_start_delim(struct parser_props *parser,
                                      const char *input) {
   _cleanup_(freep) char *next_member = (char *)malloc(MAXTOKENLEN);
+  if (!parser->end_delim) {
+    return;
+  }
   /*
    * Function pointers need to advance past the ')' which follows the function
    * name.
@@ -1292,7 +1289,8 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
   const char *final_err_string = parser->has_function_params
                                      ? "last function parameter"
                                      : "last struct or union member";
-  if (!parser->has_function_params && !parser->has_struct_or_union_members) {
+  if (!parser->has_function_params && !parser->has_struct_or_union_members &&
+      !parser->is_declarator_list) {
     return true;
   }
   advance_past_start_delim(parser, user_input);
@@ -1677,7 +1675,8 @@ bool handled_extended_parsing(struct parser_props *parser, char *user_input,
       return false;
     }
   } else if (parser->has_function_params ||
-             parser->has_struct_or_union_members) {
+             parser->has_struct_or_union_members ||
+             parser->is_declarator_list) {
     /* Move past the already-processed characters and '('. */
     if (!process_secondary_params(parser, user_input)) {
       return false;
@@ -2164,6 +2163,9 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
                    (parser->array_dimensions || parser->array_lengths)) {
           /* Proceed past array dimension delimiters , but otherwise fail. */
           return 0;
+        } else if ((',' == nextchar) && parser->is_declarator_list) {
+          /* Effectively put the comma back. */
+          nextchar = '\0';
         }
         break; /* end of if (is_following_name_char(nextchar)) */
       } else if (((trimnum == tokenoffset) || (0 == tokenoffset)) &&
@@ -2215,7 +2217,8 @@ bool finish_token(struct parser_props *parser, const char *offset_decl,
      * Enum constants are classified as identifiers.   Otherwise, duplicate
      * identifiers is an error.
      */
-    if ((parser->have_identifier) && (!parser->has_enum_constants)) {
+    if ((parser->have_identifier) &&
+        (!parser->has_enum_constants && !parser->is_declarator_list)) {
       this_token->kind = invalid;
       parser->stacklen = 0;
       return false;
@@ -2260,6 +2263,7 @@ bool finish_token(struct parser_props *parser, const char *offset_decl,
       return false;
     }
     parser->have_type = true;
+    check_for_declarator_list(parser, offset_decl);
     if (!strcmp("enum", this_token->string)) {
       parser->is_enum = true;
       parser->start_delim = '\0';
@@ -2278,8 +2282,6 @@ bool finish_token(struct parser_props *parser, const char *offset_decl,
         return false;
       }
     }
-    /* Must be after enum test. */
-    check_for_declarator_list(parser, offset_decl);
     /*
      * The identifier which follows will be inside parens, so gettoken() will
      * fail unless the parsing context is adjusted first. Therefore the
@@ -2403,8 +2405,10 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
      * Finding the identifier terminates initial stack loading since it comes
      * last, as long as there are no function arguments or array delimiters.
      */
-    while ((this_token.kind != identifier) &&
-           strlen(parser->cursor + user_input)) {
+    while (strlen(parser->cursor + user_input)) {
+      if ((!parser->is_declarator_list) && (this_token.kind == identifier)) {
+        break;
+      }
       increm = gettoken(parser, user_input + parser->cursor, &this_token);
       /* Reached end of input, or hit an error. */
       if (!increm || (invalid == this_token.kind)) {

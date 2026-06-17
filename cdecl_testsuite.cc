@@ -272,8 +272,8 @@ TEST_F(TokenizerSuite, IsOnlyArrayLength) {
   parser.array_dimensions = 1;
   parser.have_identifier = true;
   parser.have_type = true;
-  // Parsing stops at last numeric character.
-  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(strlen(input) - 1));
+  // Parsing stops at last numeric character but tokenoffset advances past ']'.
+  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(strlen(input)));
   EXPECT_THAT(this_token.string, StrEq("5555"));
   EXPECT_THAT(this_token.kind, Eq(length));
 }
@@ -355,7 +355,8 @@ TEST_F(TokenizerSuite, IgnoreUnallowedCharsHasDelimIsArray) {
   parser.have_type = true;
   parser.array_dimensions = 1;
   char input[] = "123456]fasdf";
-  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(strlen("123456")));
+  // Parsing stops at last numeric character but tokenoffset advances past ']'.
+  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(strlen("123456]")));
   EXPECT_THAT(strlen(this_token.string), Eq(strlen("123456")));
   EXPECT_THAT(this_token.string, StrEq("123456"));
   EXPECT_THAT(kind_names[this_token.kind], StrEq("length"));
@@ -567,6 +568,46 @@ TEST(ElideAssignments, ThreeEnumConstantsWihIdentifierSpaceBeforeComma) {
   EXPECT_THAT(input, StrEq("enum State state {GAS,LIQUID,SOLID};"));
 }
 
+TEST(ElideAssignments, DeclaratorEnumListAssignmentFirst) {
+  const char *probe = "enum State fuel=LIQUID, exhaust;";
+  _cleanup_(freep) char *input = (char *)malloc(strlen(probe) + 1);
+  strlcpy(input, probe, strlen(probe) + 1);
+  elide_assignments(&input);
+  EXPECT_THAT(input, StrEq("enum State fuel, exhaust;"));
+}
+
+TEST(ElideAssignments, DeclaratorEnumListAssignmentMiddle) {
+  const char *probe = "enum State fuel, exhaust=GAS, filter;";
+  _cleanup_(freep) char *input = (char *)malloc(strlen(probe) + 1);
+  strlcpy(input, probe, strlen(probe) + 1);
+  elide_assignments(&input);
+  EXPECT_THAT(input, StrEq("enum State fuel, exhaust, filter;"));
+}
+
+TEST(ElideAssignments, DeclaratorEnumListAssignmentLast) {
+  const char *probe = "enum State fuel, exhaust=GAS;";
+  _cleanup_(freep) char *input = (char *)malloc(strlen(probe) + 1);
+  strlcpy(input, probe, strlen(probe) + 1);
+  elide_assignments(&input);
+  EXPECT_THAT(input, StrEq("enum State fuel, exhaust;"));
+}
+
+TEST(ElideAssignments, DeclaratorListIntAssignmentFirst) {
+  const char *probe = "int a=2, b;";
+  _cleanup_(freep) char *input = (char *)malloc(strlen(probe) + 1);
+  strlcpy(input, probe, strlen(probe) + 1);
+  elide_assignments(&input);
+  EXPECT_THAT(input, StrEq("int a, b;"));
+}
+
+TEST(ElideAssignments, DeclaratorListIntAssignmentLast) {
+  const char *probe = "int a, b=2;";
+  _cleanup_(freep) char *input = (char *)malloc(strlen(probe) + 1);
+  strlcpy(input, probe, strlen(probe) + 1);
+  elide_assignments(&input);
+  EXPECT_THAT(input, StrEq("int a, b;"));
+}
+
 TEST(ParensMatch, SimpleCase) {
   const char *probe = "int (*ap)[2] = &a;";
   size_t pair_count = 0;
@@ -631,6 +672,57 @@ bool reset_stream_is_ok(FILE *stream) {
     return false;
   }
   return true;
+}
+
+TEST(CheckForDeclaratorListTest, OneDeclarator) {
+  struct parser_props parser;
+  const char *user_input = "double hash[4]";
+  check_for_declarator_list(&parser, user_input);
+  EXPECT_THAT(parser.is_declarator_list, IsFalse());
+}
+
+TEST(CheckForDeclaratorListTest, TwoDeclarators) {
+  struct parser_props parser;
+  const char *user_input = "double hash[4], sum";
+  check_for_declarator_list(&parser, user_input);
+  EXPECT_THAT(parser.is_declarator_list, IsTrue());
+}
+
+TEST(CheckForDeclaratorListTest, Function) {
+  struct parser_props parser;
+  const char *user_input = "double hash(uint64_t seed, const char *key)";
+  check_for_declarator_list(&parser, user_input);
+  EXPECT_THAT(parser.is_declarator_list, IsFalse());
+}
+
+TEST(CheckForDeclaratorListTest, DeclaratorAndFunctionLast) {
+  struct parser_props parser;
+  const char *user_input =
+      "double sum, hash(uint64_t seed, const char *key, uint8_t flags)";
+  check_for_declarator_list(&parser, user_input);
+  EXPECT_THAT(parser.is_declarator_list, IsTrue());
+}
+
+TEST(CheckForDeclaratorListTest, DeclaratorAndFunctionFirst) {
+  struct parser_props parser;
+  const char *user_input =
+      "double hash(uint64_t seed, const char *key, uint8_t flags), sum";
+  check_for_declarator_list(&parser, user_input);
+  EXPECT_THAT(parser.is_declarator_list, IsTrue());
+}
+
+TEST(CheckForDeclaratorListTest, FunctionPtr) {
+  struct parser_props parser;
+  const char *user_input = "int (*open) (struct inode *blk, struct file *dir);";
+  check_for_declarator_list(&parser, user_input);
+  EXPECT_THAT(parser.is_declarator_list, IsFalse());
+}
+
+TEST(CheckForDeclaratorListTest, Enum) {
+  struct parser_props parser;
+  const char *user_input = "enum State {GAS, LIQUID}";
+  check_for_declarator_list(&parser, user_input);
+  EXPECT_THAT(parser.is_declarator_list, IsFalse());
 }
 
 struct ParserSuite : public Test {
@@ -1435,8 +1527,8 @@ TEST_F(ParserSuite, LoadStackArrayLength) {
   const char *probe = "double val[111]";
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input);
-  // In load_stack(), "]" is not consumed. */
-  EXPECT_THAT(consumed, Eq(strlen(probe) - 1));
+  // In load_stack(), "]" is consumed but not copied into output. */
+  EXPECT_THAT(consumed, Eq(strlen(probe)));
   EXPECT_THAT(parser.array_dimensions, Eq(1));
   EXPECT_THAT(parser.array_lengths, Eq(1));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string double"),
@@ -1453,11 +1545,9 @@ TEST_F(ParserSuite, LoadStackTwoDimArrayOneLength) {
   char user_input[MAXTOKENLEN];
   const char *probe = "double val[1][]";
   strlcpy(user_input, probe, strlen(probe) + 1);
-  // Only the first '[' is consumed.  "[]" terminates processing.
-  // As noted in process_array_dimension(), "return without advancing
-  // the cursor."
+  // Only the first "[]" is consumed.  "[]" terminates processing.
   EXPECT_THAT(load_stack(&parser, user_input),
-              Eq(strlen(probe) - strlen("][]")));
+              Eq(strlen(probe) - strlen("[]")));
   EXPECT_THAT(parser.array_dimensions, Eq(2));
   EXPECT_THAT(parser.array_lengths, Eq(1));
   showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
@@ -1467,7 +1557,7 @@ TEST_F(ParserSuite, LoadStackTwoDimArrayTwoLengths) {
   char user_input[MAXTOKENLEN];
   const char *probe = "double val[8][4]";
   strlcpy(user_input, probe, strlen(probe) + 1);
-  EXPECT_THAT(load_stack(&parser, user_input), Eq(strlen(probe) - 1));
+  EXPECT_THAT(load_stack(&parser, user_input), Eq(strlen(probe)));
   EXPECT_THAT(parser.array_dimensions, Eq(2));
   EXPECT_THAT(parser.array_lengths, Eq(2));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string double"),
@@ -1486,7 +1576,7 @@ TEST_F(ParserSuite, LoadStackThreeDimArrayTwoLengths) {
   char user_input[MAXTOKENLEN];
   const char *probe = "double val[8][4]";
   strlcpy(user_input, probe, strlen(probe) + 1);
-  EXPECT_THAT(load_stack(&parser, user_input), Eq(strlen(probe) - 1));
+  EXPECT_THAT(load_stack(&parser, user_input), Eq(strlen(probe)));
   EXPECT_THAT(parser.array_dimensions, Eq(2));
   EXPECT_THAT(parser.array_lengths, Eq(2));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string double"),
@@ -1505,7 +1595,7 @@ TEST_F(ParserSuite, LoadStackThreeDimArrayThreeLengths) {
   char user_input[MAXTOKENLEN];
   const char *probe = "double val[8][4]";
   strlcpy(user_input, probe, strlen(probe) + 1);
-  EXPECT_THAT(load_stack(&parser, user_input), Eq(strlen(probe) - 1));
+  EXPECT_THAT(load_stack(&parser, user_input), Eq(strlen(probe)));
   EXPECT_THAT(parser.array_dimensions, Eq(2));
   EXPECT_THAT(parser.array_lengths, Eq(2));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string double"),
@@ -2261,7 +2351,7 @@ TEST_F(ParserSuite, ParseArrayWithBadLength2) {
 TEST_F(ParserSuite, ParseArrayWithBadLength3) {
   char inputstr[] = "char val[x];";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
-  EXPECT_THAT(StderrMatches("Array-length processing failed."), IsTrue());
+  EXPECT_THAT(StderrMatches("Cannot process empty token."), IsTrue());
 }
 
 TEST_F(ParserSuite, ParseSimpleFunctionOutput) {
@@ -2827,6 +2917,7 @@ TEST_F(ParserSuite, ParseEnumNoIdentifierThreeEnumerators) {
 TEST_F(ParserSuite, ParseEnumNoIdentifierOneEnumerator) {
   char inputstr[] = "enum State {GAS};";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(parser.is_declarator_list, IsFalse());
   EXPECT_THAT(StdoutMatches("enum State has enum constant GAS"), IsTrue());
 }
 
@@ -3217,4 +3308,32 @@ TEST_F(ParserSuite, ParseAtomicIncompatibleType3) {
   EXPECT_THAT(
       StderrMatches("Function return values and arrays cannot be atomic."),
       IsTrue());
+}
+
+TEST_F(ParserSuite, ParseSimpleDeclaratorList) {
+  char inputstr[] = "const int a, b;";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("b is a(n) "), IsTrue());
+  EXPECT_THAT(StdoutMatches("and a is a(n) const int"), IsTrue());
+}
+
+TEST_F(ParserSuite, ParseDeclaratorListWithPtr) {
+  char inputstr[] = "int a, *b=NULL;";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("b is a(n) pointer to"), IsTrue());
+  EXPECT_THAT(StdoutMatches("and a is a(n) int"), IsTrue());
+}
+
+TEST_F(ParserSuite, ParseDeclaratorListWithInitializedEnumLast) {
+  char inputstr[] = "enum State fuel, exhaust = GAS;";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("exhaust is a(n) "), IsTrue());
+  EXPECT_THAT(StdoutMatches("and fuel is a(n) enum State"), IsTrue());
+}
+
+TEST_F(ParserSuite, ParseDeclaratorListWithArraySecond) {
+  char inputstr[] = "int a, b[4];";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("b is a(n) array of 4"), IsTrue());
+  EXPECT_THAT(StdoutMatches("and a is a(n) int"), IsTrue());
 }

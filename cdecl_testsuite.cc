@@ -638,6 +638,50 @@ bool reset_stream_is_ok(FILE *stream) {
   return true;
 }
 
+TEST(CheckForDeclaratorListTest, OneDeclarator) {
+  struct parser_props parser;
+  const char *user_input = "double hash[4]";
+  check_for_declarator_list(&parser, user_input);
+  EXPECT_THAT(parser.is_declarator_list, IsFalse());
+}
+
+TEST(CheckForDeclaratorListTest, TwoDeclarators) {
+  struct parser_props parser;
+  const char *user_input = "double hash[4], sum";
+  check_for_declarator_list(&parser, user_input);
+  EXPECT_THAT(parser.is_declarator_list, IsTrue());
+}
+
+TEST(CheckForDeclaratorListTest, Function) {
+  struct parser_props parser;
+  const char *user_input = "double hash(uint64_t seed, const char *key)";
+  check_for_declarator_list(&parser, user_input);
+  EXPECT_THAT(parser.is_declarator_list, IsFalse());
+}
+
+TEST(CheckForDeclaratorListTest, DeclaratorAndFunctionLast) {
+  struct parser_props parser;
+  const char *user_input =
+      "double sum, hash(uint64_t seed, const char *key, uint8_t flags)";
+  check_for_declarator_list(&parser, user_input);
+  EXPECT_THAT(parser.is_declarator_list, IsTrue());
+}
+
+TEST(CheckForDeclaratorListTest, DeclaratorAndFunctionFirst) {
+  struct parser_props parser;
+  const char *user_input =
+      "double hash(uint64_t seed, const char *key, uint8_t flags), sum";
+  check_for_declarator_list(&parser, user_input);
+  EXPECT_THAT(parser.is_declarator_list, IsTrue());
+}
+
+TEST(CheckForDeclaratorListTest, FunctionPtr) {
+  struct parser_props parser;
+  const char *user_input = "int (*open) (struct inode *blk, struct file *dir);";
+  check_for_declarator_list(&parser, user_input);
+  EXPECT_THAT(parser.is_declarator_list, IsFalse());
+}
+
 struct ParserSuite : public Test {
   ParserSuite() : fake_stdout(tmpfile()), fake_stderr(tmpfile()) {
     this_token.kind = invalid;
@@ -2839,6 +2883,7 @@ TEST_F(ParserSuite, ParseEnumNoIdentifierThreeEnumerators) {
 TEST_F(ParserSuite, ParseEnumNoIdentifierOneEnumerator) {
   char inputstr[] = "enum State {GAS};";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(parser.is_declarator_list, IsFalse());
   EXPECT_THAT(StdoutMatches("enum State has enum constant GAS"), IsTrue());
 }
 
@@ -3222,4 +3267,32 @@ TEST_F(ParserSuite, ParseAtomicIncompatibleType3) {
   EXPECT_THAT(
       StderrMatches("Function return values and arrays cannot be atomic."),
       IsTrue());
+}
+
+TEST_F(ParserSuite, ParseSimpleDeclaratorList) {
+  char inputstr[] = "const int a, b;";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("b is a(n) "), IsTrue());
+  EXPECT_THAT(StdoutMatches("and a is a(n) const int"), IsTrue());
+}
+
+TEST_F(ParserSuite, ParseDeclaratorListWithPtr) {
+  char inputstr[] = "int a, *b=NULL;";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("b is a(n) pointer to"), IsTrue());
+  EXPECT_THAT(StdoutMatches("and a is a(n) int"), IsTrue());
+}
+
+TEST_F(ParserSuite, ParseDeclaratorListWithArrayFirst) {
+  char inputstr[] = "int a[4], b;";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("b is a(n) and"), IsTrue());
+  EXPECT_THAT(StdoutMatches(" a is a(n) array of 4 int"), IsTrue());
+}
+
+TEST_F(ParserSuite, ParseDeclaratorListWithArraySecond) {
+  char inputstr[] = "int a, b[4];";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("b is a(n) array of 4"), IsTrue());
+  EXPECT_THAT(StdoutMatches("and a is a(n) int"), IsTrue());
 }

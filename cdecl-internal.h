@@ -101,6 +101,7 @@ struct parser_props {
   bool is_function_ptr;
   bool is_typedef;
   bool is_bitfield;
+  bool is_declarator_list;
   /* Enumeration, function and struct objects contain subsidiary objects. */
   bool has_enum_constants;
   bool has_function_params;
@@ -155,6 +156,8 @@ bool check_for_enum_constants(struct parser_props *parser,
                               const char *offset_decl);
 bool check_for_function_ptr(struct parser_props *parser,
                             const char *offset_decl);
+void check_for_declarator_list(struct parser_props *parser,
+                               const char *user_input);
 
 /* functions which modify input */
 size_t trim_leading_whitespace(const char *input, char *trimmed);

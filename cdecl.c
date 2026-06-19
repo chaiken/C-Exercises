@@ -312,6 +312,7 @@ bool check_for_array_dimensions(struct parser_props *parser,
     parser->array_dimensions++;
     return true;
   }
+  fprintf(parser->err_stream, "Mismatched array delimiters: %s\n", offset_decl);
   parser->stacklen = 0;
   return false;
 }
@@ -480,11 +481,12 @@ bool check_for_enum_constants(struct parser_props *parser,
     return false;
   }
   /* The declaration may be of type 0. */
-  if (NULL == startbracep) {
-    if (NULL == endbracep) {
+  if (NULL == endbracep) {
+    if (NULL == startbracep) {
       return true;
     }
-    fprintf(stderr, "\nMalformed enumerator declaration %s.\n", offset_decl);
+    fprintf(parser->err_stream, "Malformed enumerator declaration %s.\n",
+            offset_decl);
     return false;
   }
   if ((spacep > startbracep) || (startbracep > endbracep)) {
@@ -1368,7 +1370,11 @@ bool process_array_dimensions(struct parser_props *parser, char *user_input,
                               struct token *this_token) {
   char *next_dim;
   char *progress_ptr;
+  size_t increm = 0;
 
+  if (!strlen(user_input + parser->cursor)) {
+    return true;
+  }
   do {
     if (']' == *(user_input + parser->cursor)) {
       parser->cursor++;
@@ -1391,7 +1397,13 @@ bool process_array_dimensions(struct parser_props *parser, char *user_input,
       }
       break;
     }
-    parser->cursor += gettoken(parser, progress_ptr, this_token);
+    increm = gettoken(parser, progress_ptr, this_token);
+    if (!increm) {
+      parser->stacklen = 0;
+      this_token->kind = invalid;
+      return false;
+    }
+    parser->cursor += increm;
     if ((length == this_token->kind) && (strlen(this_token->string))) {
       push_stack(parser, this_token);
     } else {
@@ -2016,6 +2028,7 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
   const char *startbracep = strchr(declstring, '{');
   char nextchar = '\0';
   const size_t trimnum = trim_leading_whitespace(declstring, trimmed);
+
   memset(this_token->string, '\0', MAXTOKENLEN);
   this_token->kind = invalid;
 
@@ -2033,6 +2046,8 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
     increm = process_array_length(parser, declstring + tokenoffset, this_token);
     if (!increm) {
       fprintf(parser->err_stream, "Array-length processing failed.\n");
+      this_token->kind = invalid;
+      parser->stacklen = 0;
       return 0;
     }
     return tokenoffset + increm;
@@ -2056,6 +2071,9 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
   nextchar = *(declstring + tokenoffset);
   /* The token has multiple characters, so copy them all. */
   for (int i = 0; i < (int)tokenlen; i++) {
+    if ('\0' == nextchar) {
+      break;
+    }
     if (parser->have_type) {
       /*
        * We are looking for an identifier. Finding an identifier terminates
@@ -2086,7 +2104,7 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
           /* Proceed past array dimension delimiters , but otherwise fail. */
           return 0;
         }
-        break;
+        break; /* end of if (is_following_name_char(nextchar)) */
       } else if (((trimnum == tokenoffset) || (0 == tokenoffset)) &&
                  (!is_first_name_char(nextchar))) {
         /* The first character of a name cannot be a digit, so special-case it.
@@ -2107,10 +2125,12 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
     tokenoffset++;
     nextchar = *(declstring + tokenoffset);
   } /* end of character-copying for-loop */
-  if (!finish_token(parser, declstring + tokenoffset, this_token, ctr)) {
-    this_token->kind = invalid;
-    parser->stacklen = 0;
-    return 0;
+  if (ctr) {
+    if (!finish_token(parser, declstring + tokenoffset, this_token, ctr)) {
+      this_token->kind = invalid;
+      parser->stacklen = 0;
+      return 0;
+    }
   }
   return tokenoffset;
 }
@@ -2323,8 +2343,12 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
     while ((this_token.kind != identifier) &&
            strlen(parser->cursor + user_input)) {
       increm = gettoken(parser, user_input + parser->cursor, &this_token);
+      /* Reached end of input, or hit an error. */
       if (!increm || (invalid == this_token.kind)) {
-        /* Reached end of input, or hit an error. */
+        /* There is an error. */
+        if (!parser->stacklen && !parser->prev) {
+          return 0;
+        }
         break;
       }
       parser->cursor += increm;

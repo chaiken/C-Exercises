@@ -2260,8 +2260,20 @@ TEST_F(ParserSuite, ParseArrayWithThreeLengths) {
 TEST_F(ParserSuite, ParseArrayWithBadLength) {
   char inputstr[] = "char val[9;";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
-  EXPECT_THAT(StderrMatches("Expression ends with erroneous output: "),
+  EXPECT_THAT(StderrMatches("Mismatched array delimiters: [9"), IsTrue());
+}
+
+TEST_F(ParserSuite, ParseArrayWithBadLength2) {
+  char inputstr[] = "char val]9;";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  EXPECT_THAT(StderrMatches("Expression ends with erroneous output: ]9"),
               IsTrue());
+}
+
+TEST_F(ParserSuite, ParseArrayWithBadLength3) {
+  char inputstr[] = "char val[x];";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  EXPECT_THAT(StderrMatches("Array-length processing failed."), IsTrue());
 }
 
 TEST_F(ParserSuite, ParseSimpleFunctionOutput) {
@@ -2869,8 +2881,7 @@ TEST_F(ParserSuite, ParseEnumNoIdentifierCommaMadness) {
 TEST_F(ParserSuite, ParseForwardDeclarationBadDelim) {
   char inputstr[] = "enum State state {;";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
-  EXPECT_THAT(StderrMatches("Expression ends with erroneous output: state {"),
-              IsTrue());
+  EXPECT_THAT(StderrMatches("Malformed enumerator declaration"), IsTrue());
 }
 
 TEST_F(ParserSuite, ParseForwardDeclarationBadDelim2) {

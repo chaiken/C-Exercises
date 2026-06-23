@@ -713,6 +713,26 @@ bool tokenize_function_params(char **output, char *input, const char delim) {
   return true;
 }
 
+bool tokenize_declarator_list(char **output, char *input, const char delim) {
+  char *param_end = input + strlen(input);
+  const char *param_start;
+  size_t param_len = 0;
+
+  char *end_next_param = strchr(input, delim);
+  if (input == end_next_param) {
+    /* Point to char after the comma. */
+    param_start = input + 1;
+    param_end = strchr(param_start, delim);
+    param_len = param_end - (param_start + 1);
+  } else {
+    param_start = input;
+    param_len = strlen(input);
+  }
+  /* Copy the entire input, as otherwise there is no trailing NULL. */
+  strlcpy(*output, param_start, param_len + 1);
+  return true;
+}
+
 /*
  * tokenize_struct_params() is somewhat simpler than
  * tokenize_function_params() because every struct or union member is
@@ -1199,6 +1219,10 @@ bool load_next_secondary_param(struct parser_props *const current_parser,
               err_string, next_param ? next_param : "");
       return false;
     }
+  } else if (head->is_declarator_list) {
+    if (!tokenize_declarator_list(&next_param, progress_ptr, demarcator)) {
+      return false;
+    }
   } else {
     return true;
   }
@@ -1253,6 +1277,9 @@ static void advance_past_start_delim(struct parser_props *parser,
 
 static bool next_separator_is_inside_delims(const struct parser_props *parser,
                                             const char *input) {
+  if (!parser->start_delim) {
+    return false;
+  }
   const char *startp = strchr(input, parser->start_delim);
   const char *sepp = strchr(input, parser->separator);
   if (!sepp)
@@ -1283,16 +1310,21 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
    */
   _cleanup_(subsidiary_parsers_cleanup) struct parser_props **dummy_parserp =
       &parser;
-  const char *err_string = parser->has_function_params
-                               ? "function parameter"
-                               : "struct or union member";
-  const char *final_err_string = parser->has_function_params
-                                     ? "last function parameter"
-                                     : "last struct or union member";
-  if (!parser->has_function_params && !parser->has_struct_or_union_members &&
-      !parser->is_declarator_list) {
+  char err_string[MAXTOKENLEN];
+  char final_err_string[MAXTOKENLEN];
+
+  /* TODO: make these enums */
+  if (parser->has_function_params) {
+    strcpy(err_string, "function parameter");
+  } else if (parser->has_struct_or_union_members) {
+    strcpy(err_string, "struct or union member");
+  } else if (parser->is_declarator_list) {
+    strcpy(err_string, "declarator list item");
+  } else {
     return true;
   }
+  strcpy(final_err_string, "last ");
+  strcat(final_err_string, err_string);
   advance_past_start_delim(parser, user_input);
   progress_ptr = user_input + parser->cursor;
   while (strlen(progress_ptr)) {
@@ -1304,7 +1336,10 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
      * that it can be popped at the start of output.  Functions have no trailing
      * instance names, so the end delimiter in question is '}'.
      */
-    if ((has_any_name_chars(progress_ptr)) && ('}' != *progress_ptr)) {
+    if (has_any_name_chars(progress_ptr)) {
+      if (parser->end_delim && (parser->end_delim == *progress_ptr)) {
+        break;
+      }
       advance_past_separator(parser, user_input);
       progress_ptr = user_input + parser->cursor;
       // Freed in pop_stack().
@@ -1316,7 +1351,8 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
      * process.
      */
     if (!next_separator_is_inside_delims(parser, progress_ptr)) {
-      if (!load_next_secondary_param(params_parser, progress_ptr,
+      if (params_parser &&
+          !load_next_secondary_param(params_parser, progress_ptr,
                                      parser->separator, err_string)) {
         /*
          * Automated cleanup causes use-after-free when the parser is not the
@@ -1340,7 +1376,8 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
        * While the trailing comma in a list of function parameters is optional,
        * each struct member declaration must end with a semicolon.
        * Pass progress_ptr rather than user_input since the params parser only
-       * processes what's inside the delimiters.
+       * processes what's inside the delimiters.  Comma-separated declarator
+       * lists have no end_delim.
        */
       if (!load_next_secondary_param(params_parser, progress_ptr,
                                      parser->end_delim, final_err_string)) {
@@ -1357,7 +1394,8 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
         progress_ptr = user_input + parser->cursor;
       }
       /* The surrounding scope may yet have parameters. */
-      if (!next_separator_is_inside_delims(parser, progress_ptr)) {
+      if (!next_separator_is_inside_delims(parser, progress_ptr) ||
+          parser->is_declarator_list) {
         tail_parser = get_tail_parser(parser);
         continue;
       }

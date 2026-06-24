@@ -1206,14 +1206,17 @@ bool load_next_secondary_param(struct parser_props *const current_parser,
   const struct parser_props *head = get_head_parser(current_parser);
 
   memset(next_param, '\0', MAXTOKENLEN);
-  if (current_parser->parent && current_parser->parent->has_function_params) {
+  if ((head->is_declarator_list && current_parser->has_function_params) ||
+      (current_parser->parent && current_parser->parent->has_function_params)) {
     if (!tokenize_function_params(&next_param, progress_ptr, demarcator)) {
       fprintf(current_parser->err_stream, "Failed to process %s %s\n",
               err_string, next_param ? next_param : "");
       return false;
     }
-  } else if (current_parser->parent &&
-             current_parser->parent->has_struct_or_union_members) {
+  } else if ((head->is_declarator_list &&
+              current_parser->has_struct_or_union_members) ||
+             (current_parser->parent &&
+              current_parser->parent->has_struct_or_union_members)) {
     if (!tokenize_struct_params(&next_param, progress_ptr, demarcator)) {
       fprintf(current_parser->err_stream, "Failed to process %s %s\n",
               err_string, next_param ? next_param : "");
@@ -1351,6 +1354,32 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
      * process.
      */
     if (!next_separator_is_inside_delims(parser, progress_ptr)) {
+      if (parser->parent && parser->parent->is_declarator_list) {
+        char *firstbracep = strchr(progress_ptr, '{');
+        char *firstparensp = strchr(progress_ptr, '(');
+        char *firstcommap = strchr(progress_ptr, ',');
+        if (strstr(progress_ptr, "enum") && (firstbracep < firstcommap)) {
+          params_parser->is_enum = true;
+          parser->start_delim = '\0';
+          parser->end_delim = '\0';
+          parser->separator = '\0';
+        }
+        if ((strstr(progress_ptr, "struct") ||
+             (strstr(progress_ptr, "union"))) &&
+            (firstparensp < firstcommap)) {
+          params_parser->is_struct_or_union = true;
+          parser->start_delim = '{';
+          parser->end_delim = '}';
+          parser->separator = ';';
+        }
+        if (!check_for_array_dimensions(parser, progress_ptr)) {
+          if ((parser->prev) || !reclassify_unsigned_qualifier(parser)) {
+            break;
+          }
+          parser->stacklen = 0;
+          return false;
+        }
+      }
       if (params_parser &&
           !load_next_secondary_param(params_parser, progress_ptr,
                                      parser->separator, err_string)) {
@@ -2141,6 +2170,7 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
   tokenoffset = trimnum;
   /* Process array length, if any. We should already have an identifier. */
   if (parser->array_dimensions) {
+    if ('[' == *(declstring + tokenoffset)) { tokenoffset++;}
     increm = process_array_length(parser, declstring + tokenoffset, this_token);
     if (!increm) {
       fprintf(parser->err_stream, "Array-length processing failed.\n");

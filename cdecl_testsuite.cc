@@ -2974,6 +2974,13 @@ TEST_F(ParserSuite,
               IsTrue());
 }
 
+TEST_F(ParserSuite, ParseTwoEnumeratorsBadTrailingInstanceName) {
+  char inputstr[] = "enum State {GAS,LIQUID =2} ,x;";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  EXPECT_THAT(StderrMatches("Trailing instance name processing failed:  ,x"),
+              IsTrue());
+}
+
 TEST_F(ParserSuite, ParseStructTwoMembersWithInstanceName) {
   char inputstr[] = "struct node nodelist {int payload; struct node *next;};";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());

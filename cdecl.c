@@ -1082,6 +1082,7 @@ void handle_trailing_instance_name(struct parser_props *parser,
                                    char *user_input) {
   const char *first_end_delim = strchr(user_input, '}');
   const char *last_end_delim = strrchr(user_input, '}');
+  size_t increm = 0;
   int delim_offset = 0;
   struct token this_token;
   if (!first_end_delim) {
@@ -1114,11 +1115,15 @@ void handle_trailing_instance_name(struct parser_props *parser,
         delim_offset = (last_end_delim - (user_input + parser->cursor)) + 1;
       }
       parser->cursor += delim_offset;
-      parser->cursor +=
-          gettoken(parser, user_input + parser->cursor, &this_token);
-      if ((invalid == this_token.kind) || !strlen(this_token.string)) {
+      increm = gettoken(parser, user_input + parser->cursor, &this_token);
+      if (!increm || (invalid == this_token.kind) ||
+          !strlen(this_token.string)) {
+        fprintf(parser->err_stream,
+                "Trailing instance name processing failed: %s\n",
+                user_input + parser->cursor);
         return;
       }
+      parser->cursor += increm;
       push_stack(parser, &this_token);
       /* Check parser->separator since enums set it to NULL. */
       if (parser->separator &&

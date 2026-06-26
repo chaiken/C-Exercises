@@ -2170,7 +2170,9 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
   tokenoffset = trimnum;
   /* Process array length, if any. We should already have an identifier. */
   if (parser->array_dimensions) {
-    if ('[' == *(declstring + tokenoffset)) { tokenoffset++;}
+    if ('[' == *(declstring + tokenoffset)) {
+      tokenoffset++;
+    }
     increm = process_array_length(parser, declstring + tokenoffset, this_token);
     if (!increm) {
       fprintf(parser->err_stream, "Array-length processing failed.\n");
@@ -2178,7 +2180,25 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
       parser->stacklen = 0;
       return 0;
     }
-    return tokenoffset + increm;
+    tokenoffset += increm;
+    if (']' == *(declstring + tokenoffset)) {
+      tokenoffset++;
+    }
+    if ((parser->is_declarator_list ||
+         (parser->parent && parser->parent->is_declarator_list)) &&
+        (',' == *(declstring + tokenoffset))) {
+      tokenoffset++;
+      struct parser_props *antecedent = parser->is_declarator_list ? parser : parser->prev;
+      struct parser_props *list_parser = make_parser(antecedent);
+      antecdent->next = list_parser;
+      list_parser->prev = antecedent;
+      list_parser->have_type = true;
+      struct token this_token;
+COPY_PARENT_PARSER_TYPE_AND_QUALIFIERS() ----> make_parser_list()?
+      this_token.stack[0].kind = type;
+      strlcpy(this_token.stack[0].string, parser->parent.stack[0])
+    }
+    return tokenoffset;
   }
   /* Move past '(' enclosing the function pointer name to '*'. */
   if (parser->is_function_ptr && ('(' == *(declstring + tokenoffset))) {

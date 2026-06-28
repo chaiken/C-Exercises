@@ -791,7 +791,6 @@ TEST_F(ParserSuite, LoadStackSimpleExcessidentifier) {
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input);
   EXPECT_THAT(consumed, Eq(0));
-  EXPECT_THAT(parser.stacklen, Eq(0));
   release_parser_resources(&parser);
 }
 
@@ -801,7 +800,6 @@ TEST_F(ParserSuite, LoadStackSimpleExcessType) {
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input);
   EXPECT_THAT(consumed, Eq(0));
-  EXPECT_THAT(parser.stacklen, Eq(0));
   release_parser_resources(&parser);
 }
 
@@ -859,7 +857,6 @@ TEST_F(ParserSuite, LoadStackFunctionExcessidentifier) {
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input);
   EXPECT_THAT(consumed, Eq(0));
-  EXPECT_THAT(parser.stacklen, Eq(0));
   release_parser_resources(&parser);
 }
 
@@ -871,7 +868,6 @@ TEST_F(ParserSuite, LoadStackFunctionExcessType) {
   parser.err_stream = stderr;
   showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
   EXPECT_THAT(consumed, Eq(0));
-  EXPECT_THAT(parser.stacklen, Eq(0));
   release_parser_resources(&parser);
 }
 
@@ -1751,7 +1747,6 @@ TEST_F(ParserSuite, LoadStackStructExcessidentifier) {
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input);
   EXPECT_THAT(consumed, Eq(0));
-  EXPECT_THAT(parser.stacklen, Eq(0));
   release_parser_resources(&parser);
 }
 
@@ -1763,7 +1758,6 @@ TEST_F(ParserSuite, LoadStackStructExcessType) {
   parser.err_stream = stderr;
   showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
   EXPECT_THAT(consumed, Eq(0));
-  EXPECT_THAT(parser.stacklen, Eq(0));
   release_parser_resources(&parser);
 }
 
@@ -1774,7 +1768,6 @@ TEST_F(ParserSuite, LoadStackEnumInstanceNameMissingLeadingSpace) {
   std::size_t consumed = load_stack(&parser, user_input);
   showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
   EXPECT_THAT(consumed, Eq(0));
-  EXPECT_THAT(parser.stacklen, Eq(0));
 }
 
 TEST_F(ParserSuite, LoadStackTypedef) {

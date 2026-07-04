@@ -1017,9 +1017,10 @@ bool first_identifier_is_enumerator(const struct parser_props *parser,
 
 /*
  * Follow the convention of turning an "unsigned" qualifier which is not
- * accompanied by another type into "unsigned int".
+ * accompanied by another type into "unsigned int".  Returns true if the
+ * reclassification took place.
  */
-bool reclassify_unsigned_qualifier(struct parser_props *parser) {
+bool reclassified_unsigned_qualifier(struct parser_props *parser) {
   int cursor = 0;
   if (!parser || !parser->stacklen) {
     return false;
@@ -2129,6 +2130,18 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
   return tokenoffset;
 }
 
+bool check_for_extended_type_succeeded(struct parser_props *parser,
+                                       const char *offset_decl) {
+  if (!check_for_array_dimensions(parser, offset_decl) ||
+      !check_for_function_parameters(parser, offset_decl) ||
+      (parser->is_struct_or_union &&
+       !check_for_struct_or_union_members(parser, offset_decl)) ||
+      (parser->is_enum && !check_for_enum_constants(parser, offset_decl))) {
+    return false;
+  }
+  return true;
+}
+
 /*
  * finish token() receives an unterminated string from gettoken() which it
  * readies for pushing onto the stack.  Upon failure, it resets the parser and
@@ -2152,23 +2165,25 @@ bool finish_token(struct parser_props *parser, const char *offset_decl,
       return false;
     }
     parser->have_identifier = true;
-    if (!parser->have_type ||
-        !check_for_array_dimensions(parser, offset_decl) ||
-        !check_for_function_parameters(parser, offset_decl) ||
-        (parser->is_struct_or_union &&
-         !check_for_struct_or_union_members(parser, offset_decl)) ||
-        (parser->is_enum && !check_for_enum_constants(parser, offset_decl))) {
+    if (!parser->have_type) {
       /*
-       * In the first case, if parser->prev is set, the current parser is a
-       * subsidiary one. Failing here would prevent processing of trailing
-       * struct instance names. The parent parser may have a type and identifier
-       * already.  Rely on the subsequent check in input_parsing_successful() to
-       * catch incomplete declarations.
-       *
-       * In the second case, reclassify_unsigned_qualifier() may set
-       * parser->have_type to true.
+       * If the "unsigned" qualifier appeared without an additional type
+       * indication, turn it into a type.
        */
-      if ((parser->prev) || reclassify_unsigned_qualifier(parser)) {
+      if (reclassified_unsigned_qualifier(parser)) {
+        break;
+      } else {
+        return false;
+      }
+    }
+    if (!check_for_extended_type_succeeded(parser, offset_decl)) {
+      /*
+       * If parser->prev is set, the current parser is a  subsidiary one.
+       * The parent parser may have a type and identifier already.
+       * Failing here would prevent processing of trailing struct instance
+       * names.
+       */
+      if (parser->prev) {
         break;
       }
       return false;

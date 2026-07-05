@@ -2142,15 +2142,15 @@ bool check_for_extended_type_succeeded(struct parser_props *parser,
   return true;
 }
 
-void possibly_setup_extended_type(struct parser_props *parser, const char *token_string) {
+void possibly_setup_extended_type(struct parser_props *parser,
+                                  const char *token_string) {
   if (!strcmp("enum", token_string)) {
     parser->is_enum = true;
     parser->start_delim = '\0';
     parser->end_delim = '\0';
     parser->separator = '\0';
   }
-  if ((!strcmp("struct", token_string)) ||
-      (!strcmp("union", token_string))) {
+  if ((!strcmp("struct", token_string)) || (!strcmp("union", token_string))) {
     parser->is_struct_or_union = true;
     parser->start_delim = '{';
     parser->end_delim = '}';
@@ -2252,12 +2252,6 @@ bool finish_token(struct parser_props *parser, const char *offset_decl,
       parser->array_dimensions++;
     }
     parser->array_lengths++;
-    if (parser->array_lengths > parser->array_dimensions) {
-      /* The first dimension of an array must always have a declared length, so
-       * the number of dimensions >= the number of lengths.  This code should be
-       * unreachable since "[]" terminates the stack-loading.
-       */
-    }
     break;
   case qualifier:
     if (!strcmp("*", this_token->string)) {

@@ -2142,6 +2142,22 @@ bool check_for_extended_type_succeeded(struct parser_props *parser,
   return true;
 }
 
+void possibly_setup_extended_type(struct parser_props *parser, const char *token_string) {
+  if (!strcmp("enum", token_string)) {
+    parser->is_enum = true;
+    parser->start_delim = '\0';
+    parser->end_delim = '\0';
+    parser->separator = '\0';
+  }
+  if ((!strcmp("struct", token_string)) ||
+      (!strcmp("union", token_string))) {
+    parser->is_struct_or_union = true;
+    parser->start_delim = '{';
+    parser->end_delim = '}';
+    parser->separator = ';';
+  }
+}
+
 /*
  * finish token() receives an unterminated string from gettoken() which it
  * readies for pushing onto the stack.  Upon failure, it resets the parser and
@@ -2203,23 +2219,10 @@ bool finish_token(struct parser_props *parser, const char *offset_decl,
       return false;
     }
     parser->have_type = true;
-    if (!strcmp("enum", this_token->string)) {
-      parser->is_enum = true;
-      parser->start_delim = '\0';
-      parser->end_delim = '\0';
-      parser->separator = '\0';
-    }
-    if ((!strcmp("struct", this_token->string)) ||
-        (!strcmp("union", this_token->string))) {
-      parser->is_struct_or_union = true;
-      parser->start_delim = '{';
-      parser->end_delim = '}';
-      parser->separator = ';';
-    }
-    if (parser->have_qualifier) {
-      if (!qualifier_is_compatible_with_type(parser, this_token->string)) {
-        return false;
-      }
+    possibly_setup_extended_type(parser, this_token->string);
+    if (parser->have_qualifier &&
+        !qualifier_is_compatible_with_type(parser, this_token->string)) {
+      return false;
     }
     /*
      * The identifier which follows will be inside parens, so gettoken() will
@@ -2227,10 +2230,9 @@ bool finish_token(struct parser_props *parser, const char *offset_decl,
      * function_ptr must be detected here.  Avoid a duplicate check if the
      * parser has already identified a function or function pointer.
      */
-    if (!(parser->is_function || parser->is_function_ptr)) {
-      if (!check_for_function_ptr(parser, offset_decl)) {
-        return false;
-      }
+    if (!(parser->is_function || parser->is_function_ptr) &&
+        !check_for_function_ptr(parser, offset_decl)) {
+      return false;
     }
     break;
   case length:

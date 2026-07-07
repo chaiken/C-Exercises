@@ -2231,12 +2231,12 @@ bool finish_token(struct parser_props *parser, const char *offset_decl,
     }
     /*
      * The identifier which follows will be inside parens, so gettoken() will
-     * fail unless the parsing context is adjusted first. Therefore the
-     * function_ptr must be detected here.  Avoid a duplicate check if the
+     * fail unless the parsing context is adjusted first. Therefore
+     * function_ptrs must be detected here.  Avoid a duplicate check if the
      * parser has already identified a function or function pointer.
      */
-    if (!(parser->is_function || parser->is_function_ptr) &&
-        !check_for_function_ptr(parser, offset_decl)) {
+    if (!(parser->is_function || parser->is_function_ptr ||
+          check_for_function_ptr(parser, offset_decl))) {
       return false;
     }
     break;

@@ -2166,6 +2166,16 @@ void possibly_setup_extended_type(struct parser_props *parser,
 bool finish_token(struct parser_props *parser, const char *offset_decl,
                   struct token *this_token, const size_t ctr) {
   this_token->string[ctr + 1] = '\0';
+  /*
+   * Compound types plus anonymous structs and unions result in empty tokens,
+   * so don't print an error.
+   */
+  if (!strlen(this_token->string)) {
+    if (!parser->is_struct_or_union) {
+      fprintf(parser->err_stream, "Cannot process empty token.\n");
+    }
+    return true;
+  }
   if (!ctr) {
     return false;
   }
@@ -2288,20 +2298,9 @@ bool finish_token(struct parser_props *parser, const char *offset_decl,
     parser->is_typedef = true;
     break;
   case invalid:
-    /*
-     * Compound types plus anonymous structs and unions result in empty tokens,
-     * so don't print an error.
-     */
-    if (!(strlen(this_token->string))) {
-      if (!parser->is_struct_or_union) {
-        fprintf(parser->err_stream, "Cannot process empty token.\n");
-      }
-    } else {
-      fprintf(parser->err_stream, "Cannot process invalid token %s\n",
-              this_token->string);
-      return false;
-    }
-    break;
+    fprintf(parser->err_stream, "Cannot process invalid token %s\n",
+            this_token->string);
+    return false;
   default:
     break;
   }

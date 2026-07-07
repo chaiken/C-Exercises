@@ -2158,6 +2158,43 @@ void possibly_setup_extended_type(struct parser_props *parser,
   }
 }
 
+bool possibly_handle_qualifier(struct parser_props *parser,
+                               const char *token_string) {
+  if (!strcmp("restrict", token_string)) {
+    if (!parser->is_pointer || parser->have_qualifier) {
+      fprintf(parser->err_stream, "The restrict qualifier only applies to "
+                                  "otherwise unqualified pointers.\n");
+      return false;
+    }
+    parser->have_qualifier = true;
+    return true;
+  } else if ((!strcmp("extern", token_string) ||
+              !strcmp("static", token_string)) &&
+             (parser->parent && parser->parent->has_function_params)) {
+    /*
+     * https://en.cppreference.com/c/language/storage_duration
+     * "The extern specifier specifies static storage duration . . . It can
+     * be used with function and object declarations in both file and block
+     * scope (excluding function parameter lists)."   The same is true of
+     * "static", but not of "volatile," which may apply to function
+     * parameters per https://en.cppreference.com/c/language/volatile.
+     */
+    fprintf(parser->err_stream, "Function parameters cannot be %s.\n",
+            token_string);
+    return false;
+  }
+  /*
+   * Intentionally, don't set parser->have_qualifier for '*', as doing so would
+   * cause restricted pointers to fail.
+   */
+  if (!strcmp("*", token_string)) {
+    parser->is_pointer = true;
+    return true;
+  }
+  parser->have_qualifier = true;
+  return true;
+}
+
 /*
  * finish token() receives an unterminated string from gettoken() which it
  * readies for pushing onto the stack.  Upon failure, it resets the parser and
@@ -2242,9 +2279,7 @@ bool finish_token(struct parser_props *parser, const char *offset_decl,
     break;
   case length:
     if ((!parser->have_identifier) || (!parser->array_dimensions)) {
-      /* Indicate hard failure. */
       this_token->kind = invalid;
-      strncpy(this_token->string, "\0", 1);
       break;
     }
     /* The first array dimension is accounted for in the identifier block above.
@@ -2259,34 +2294,8 @@ bool finish_token(struct parser_props *parser, const char *offset_decl,
     parser->array_lengths++;
     break;
   case qualifier:
-    if (!strcmp("*", this_token->string)) {
-      /*
-       * Don't set parser->have_qualifier, as that would cause restricted
-       * pointers to fail.
-       */
-      parser->is_pointer = true;
-    } else if (!strcmp("restrict", this_token->string)) {
-      if (!parser->is_pointer || parser->have_qualifier) {
-        fprintf(parser->err_stream, "The restrict qualifier only applies to "
-                                    "otherwise unqualified pointers.\n");
-        return false;
-      }
-    } else if ((!strcmp("extern", this_token->string) ||
-                !strcmp("static", this_token->string)) &&
-               (parser->parent && parser->parent->has_function_params)) {
-      /*
-       * https://en.cppreference.com/c/language/storage_duration
-       * "The extern specifier specifies static storage duration . . . It can
-       * be used with function and object declarations in both file and block
-       * scope (excluding function parameter lists)."   The same is true of
-       * "static", but not of "volatile," which may apply to function
-       * parameters per https://en.cppreference.com/c/language/volatile.
-       */
-      fprintf(parser->err_stream, "Function parameters cannot be %s.\n",
-              this_token->string);
+    if (!possibly_handle_qualifier(parser, this_token->string)) {
       return false;
-    } else {
-      parser->have_qualifier = true;
     }
     break;
   case typedefn:

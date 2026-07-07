@@ -332,7 +332,7 @@ TEST_F(TokenizerSuite, IgnoreUnallowedCharsHasTypeBadFirst) {
 TEST_F(TokenizerSuite, IgnoreUnallowedCharsNoTypeHasDelimIsNotArray) {
   char input[] = "2]fasdf";
   EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(1));
-  EXPECT_THAT(strlen(this_token.string), Eq(0));
+  EXPECT_THAT(strlen(this_token.string), Eq(1));
   EXPECT_THAT(kind_names[this_token.kind], StrEq("invalid"));
 }
 

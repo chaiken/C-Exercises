@@ -71,17 +71,9 @@ const char *types[] = {"char",
                        "atomic_uintmax"};
 const char *qualifiers[] = {"const",  "volatile", "static",   "*",
                             "extern", "unsigned", "restrict", "atomic"};
-enum token_class {
-  invalid = 0,
-  type,
-  qualifier,
-  identifier,
-  length,
-  typedefn,
-  whitespace
-};
-const char *kind_names[] = {"invalid", "type",     "qualifier", "identifier",
-                            "length",  "typedefn", "whitespace"};
+enum token_class { invalid = 0, type, qualifier, identifier, length, typedefn };
+const char *kind_names[] = {"invalid",    "type",   "qualifier",
+                            "identifier", "length", "typedefn"};
 struct token {
   enum token_class kind;
   char string[MAXTOKENLEN];

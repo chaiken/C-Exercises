@@ -144,11 +144,6 @@ TEST(StringManipulateSuite, GetKindBad) {
   EXPECT_THAT(get_kind("\0"), Eq(invalid));
 }
 
-/* Tab is classified as invalid. */
-TEST(StringManipulateSuite, GetKindWhitespace) {
-  EXPECT_THAT(get_kind(" "), Eq(whitespace));
-}
-
 TEST(StringManipulateSuite, GetKindQualifiers) {
   EXPECT_THAT(get_kind("const"), Eq(qualifier));
   EXPECT_THAT(get_kind("volatile"), Eq(qualifier));

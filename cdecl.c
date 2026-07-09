@@ -1750,6 +1750,139 @@ void reorder_stacks(struct parser_props *parser) {
   }
 }
 
+bool handled_qualifiers(const struct parser_props *parser,
+                        const size_t stacktop) {
+  if (!strcmp("volatile", parser->stack[stacktop].string) &&
+      parser->is_function) {
+    /* Purge any already printed messages from the output stream which are
+     * now irrelevant. */
+    __fpurge(parser->out_stream);
+    fprintf(parser->err_stream, "Function return types cannot be volatile.\n");
+    return false;
+  } else if ((0 == strcmp("extern", parser->stack[stacktop].string)) ||
+             (0 == strcmp("static", parser->stack[stacktop].string))) {
+    fprintf(parser->out_stream,
+            "and which has static storage duration and %s linkage",
+            !strcmp(parser->stack[stacktop].string, "extern") ? "external"
+                                                              : "internal");
+  } else {
+    fprintf(parser->out_stream, "%s ", parser->stack[stacktop].string);
+  }
+  return true;
+}
+
+bool handled_function_params(const struct parser_props *parser) {
+  /*
+   * If the function is itself part of a union or struct, then
+   * parser->next could be populated without function params.
+   */
+  if (parser->has_function_params) {
+    struct parser_props *cursor = parser->next;
+    size_t depth = 0;
+    while (cursor && cursor->stacklen) {
+      if (depth) {
+        fprintf(parser->out_stream, "and ");
+      } else {
+        fprintf(parser->out_stream, "and takes param(s) ");
+      }
+      if (!pop_all(cursor)) {
+        return false;
+      }
+      depth++;
+      struct parser_props *save_next = cursor->next;
+      struct parser_props *save_prev = cursor->prev;
+#ifdef DEBUG
+      fprintf(stderr, "%s: freeing %p at %d\n", __func__, cursor, __LINE__);
+#endif
+      free(cursor);
+      save_prev->next = save_next;
+      if (save_next) {
+        save_next->prev = save_prev;
+      }
+      cursor = save_next;
+    }
+  }
+  return true;
+}
+
+void handle_enum_constants(const struct parser_props *parser,
+                           const bool no_enum_instance) {
+  if (parser->has_enum_constants) {
+    if (no_enum_instance) {
+      fprintf(parser->out_stream, "has enum constant");
+    } else {
+      fprintf(parser->out_stream, "with enum constant");
+    }
+    fprintf(parser->out_stream, " %s ", parser->enumerator_list);
+  }
+}
+
+bool handled_bitfield(const struct parser_props *parser) {
+  if (parser->is_bitfield) {
+    if (parser->bitfield_width) {
+      fprintf(parser->out_stream, "bitfield of width %ld",
+              parser->bitfield_width);
+    } else {
+      fprintf(parser->err_stream, "ERROR: bitfield has no width.\n");
+      return false;
+    }
+  }
+  return true;
+}
+
+bool handled_struct_or_union_members(const struct parser_props *parser) {
+  if (parser->has_struct_or_union_members) {
+    struct parser_props *cursor = parser->next;
+    size_t depth = 0;
+    if (parser->have_identifier) {
+      fprintf(parser->out_stream, "which ");
+    }
+    while (cursor && cursor->stacklen) {
+      if (depth) {
+        fprintf(parser->out_stream, "and ");
+      } else {
+        fprintf(parser->out_stream, "has member(s) ");
+      }
+      if (!pop_all(cursor)) {
+        return false;
+      }
+      depth++;
+      struct parser_props *save_next = cursor->next;
+      struct parser_props *save_prev = cursor->prev;
+#ifdef DEBUG
+      fprintf(stderr, "pop_stack(): freeing %p at %d\n", cursor, __LINE__);
+#endif
+      free(cursor);
+      save_prev->next = save_next;
+      if (save_next) {
+        save_next->prev = save_prev;
+      }
+      cursor = save_next;
+    }
+  }
+  return true;
+}
+
+bool handled_array_lengths(struct parser_props *parser, const size_t stacktop) {
+  if (parser->array_dimensions) {
+    fprintf(parser->out_stream, "%s", parser->stack[stacktop].string);
+    if (parser->array_lengths > 1) {
+      fprintf(parser->out_stream, "x");
+    } else {
+      if (parser->last_dimension_unspecified) {
+        fprintf(parser->out_stream, "x? ");
+      } else {
+        fprintf(parser->out_stream, " ");
+      }
+    }
+  } else {
+    fprintf(parser->err_stream, "\nError: found length without array.\n");
+    return false;
+  }
+  parser->array_lengths--;
+  return true;
+}
+
 /* Return true on success. */
 bool pop_stack(struct parser_props *parser, bool no_enum_instance,
                bool is_second_pointer_qualifier) {
@@ -1772,107 +1905,24 @@ bool pop_stack(struct parser_props *parser, bool no_enum_instance,
     }
   } else {
     switch (parser->stack[stacktop].kind) {
-    case whitespace:
-      __attribute__((fallthrough));
     case qualifier:
-      if (!strcmp("volatile", parser->stack[stacktop].string) &&
-          parser->is_function) {
-        /* Purge any already printed messages from the output stream which are
-         * now irrelevant. */
-        __fpurge(parser->out_stream);
-        fprintf(parser->err_stream,
-                "Function return types cannot be volatile.\n");
+      if (!handled_qualifiers(parser, stacktop)) {
         return false;
       }
-      if ((0 == strcmp("extern", parser->stack[stacktop].string)) ||
-          (0 == strcmp("static", parser->stack[stacktop].string))) {
-        fprintf(parser->out_stream,
-                "and which has static storage duration and %s linkage",
-                !strcmp(parser->stack[stacktop].string, "extern") ? "external"
-                                                                  : "internal");
-        break;
-      }
-      fprintf(parser->out_stream, "%s ", parser->stack[stacktop].string);
       break;
-    /* Process the function parameters right after processing the return value
-     * of a function.  */
     case type:
       fprintf(parser->out_stream, "%s ", parser->stack[stacktop].string);
-      /*
-       * If the function is itself part of a union or struct, then
-       * parser->next could be populated without function params.
-       */
-      if (parser->has_function_params) {
-        struct parser_props *cursor = parser->next;
-        size_t depth = 0;
-        while (cursor && cursor->stacklen) {
-          if (depth) {
-            fprintf(parser->out_stream, "and ");
-          } else {
-            fprintf(parser->out_stream, "and takes param(s) ");
-          }
-          if (!pop_all(cursor)) {
-            return false;
-          }
-          depth++;
-          struct parser_props *save_next = cursor->next;
-          struct parser_props *save_prev = cursor->prev;
-#ifdef DEBUG
-          fprintf(stderr, "pop_stack(): freeing %p at %d\n", cursor, __LINE__);
-#endif
-          free(cursor);
-          save_prev->next = save_next;
-          if (save_next) {
-            save_next->prev = save_prev;
-          }
-          cursor = save_next;
-        }
+      /* Process the function parameters right after processing the return value
+       * of a function.  */
+      if (!handled_function_params(parser)) {
+        return false;
       }
-      if (parser->has_struct_or_union_members) {
-        struct parser_props *cursor = parser->next;
-        size_t depth = 0;
-        if (parser->have_identifier) {
-          fprintf(parser->out_stream, "which ");
-        }
-        while (cursor && cursor->stacklen) {
-          if (depth) {
-            fprintf(parser->out_stream, "and ");
-          } else {
-            fprintf(parser->out_stream, "has member(s) ");
-          }
-          if (!pop_all(cursor)) {
-            return false;
-          }
-          depth++;
-          struct parser_props *save_next = cursor->next;
-          struct parser_props *save_prev = cursor->prev;
-#ifdef DEBUG
-          fprintf(stderr, "pop_stack(): freeing %p at %d\n", cursor, __LINE__);
-#endif
-          free(cursor);
-          save_prev->next = save_next;
-          if (save_next) {
-            save_next->prev = save_prev;
-          }
-          cursor = save_next;
-        }
+      if (!handled_struct_or_union_members(parser)) {
+        return false;
       }
-      if (parser->has_enum_constants) {
-        if (no_enum_instance) {
-          fprintf(parser->out_stream, "has enum constant");
-        } else {
-          fprintf(parser->out_stream, "with enum constant");
-        }
-        fprintf(parser->out_stream, " %s ", parser->enumerator_list);
-      }
-      if (parser->is_bitfield) {
-        if (parser->bitfield_width) {
-          fprintf(parser->out_stream, "bitfield of width %ld",
-                  parser->bitfield_width);
-        } else {
-          fprintf(parser->err_stream, "ERROR: bitfield has no width.\n");
-          return false;
-        }
+      handle_enum_constants(parser, no_enum_instance);
+      if (!handled_bitfield(parser)) {
+        return false;
       }
       break;
     case identifier:
@@ -1885,33 +1935,12 @@ bool pop_stack(struct parser_props *parser, bool no_enum_instance,
         fprintf(parser->out_stream, "array of ");
       } else if ((parser->is_function) && (!parser->is_function_ptr)) {
         fprintf(parser->out_stream, "function which returns ");
-      } else if ((parser->has_enum_constants) &&
-                 strlen(parser->enumerator_list) &&
-                 (strstr(parser->enumerator_list,
-                         parser->stack[stacktop].string))) {
-        /*
-         * If the identifier is in the enumerator_list, it is not the
-         * name of a enum instance.
-         */
-        break;
       }
       break;
     case length:
-      if (parser->array_dimensions) {
-        fprintf(parser->out_stream, "%s", parser->stack[stacktop].string);
-        if (parser->array_lengths > 1) {
-          fprintf(parser->out_stream, "x");
-        } else {
-          if (parser->last_dimension_unspecified) {
-            fprintf(parser->out_stream, "x? ");
-          } else {
-            fprintf(parser->out_stream, " ");
-          }
-        }
-      } else {
-        fprintf(parser->err_stream, "\nError: found length without array.\n");
+      if (!handled_array_lengths(parser, stacktop)) {
+        return false;
       }
-      parser->array_lengths--;
       break;
     case invalid:
       break;
@@ -1965,13 +1994,9 @@ bool pop_all(struct parser_props *parser) {
 enum token_class get_kind(const char *intoken) {
   size_t numel = 0, ctr;
 
-  if ((!intoken) || (!strlen(intoken))) {
+  if ((!intoken) || (!strlen(intoken)) || is_all_blanks(intoken)) {
     return invalid;
   }
-  if (is_all_blanks(intoken)) {
-    return whitespace;
-  }
-
   if (!strcmp(intoken, "typedef")) {
     return typedefn;
   }

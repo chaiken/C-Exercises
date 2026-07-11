@@ -20,6 +20,8 @@
 #include <assert.h>
 #include <bsd/string.h>
 #include <ctype.h>
+#include <execinfo.h>
+#include <errno.h>
 #include <stdbool.h>
 #include <stdio.h>
 /* For __fpurge() */
@@ -54,6 +56,16 @@ static inline void freep(void *p) {
     return;
   free(*(void **)p);
   *(void **)p = NULL;
+}
+
+static inline void freearr(void *p) {
+  if ((!p) || (NULL == *(void ***)p))
+    return;
+  printf("%%%%%%%%%%%%%%%% freeing %p\n", **(void ***)p);
+  printf("%%%%%%%%%%%%%%%% %s\n", (char *)**(void ***)p);
+  free(*(char ***)p);
+  *(char ***)(p) = NULL;
+  free(*(char ***)p++);
 }
 
 /*
@@ -866,6 +878,33 @@ void showstack(const struct token *stack, const size_t stacklen,
   return;
 }
 
+void dump_backtrace() {
+  _cleanup_(freearr) char **symbols;
+ //_cleanup_(freearr) char *stacks[STACK_MAX];
+  char *stacks[STACK_MAX];
+  int num_stacktraces = 0;
+  for (int i = 0; i < STACK_MAX; i++) {
+    (&stacks[i])[0] = (char *)malloc(MAXTOKENLEN);
+    if (NULL == stacks[i]) {
+      exit(ENOMEM);
+    }
+  }
+  num_stacktraces = backtrace((void **)stacks, STACK_MAX);
+  if (!num_stacktraces) {
+    fprintf(stderr, "No stacktraces found\n");
+    return;
+  }
+  symbols = backtrace_symbols((void **)stacks, STACK_MAX);
+  if (!symbols) {
+    fprintf(stderr, "Unable to read backtrace symbols: %s\n", strerror(errno));
+    return;
+  }
+  printf("backtrace() returned %d addresses\n", num_stacktraces);
+  for (int i = 0; i < num_stacktraces; i++) {
+    printf("%s\n", symbols[i]);
+  }
+}
+
 /********** parser helper functions **********/
 
 bool have_stacked_compound_type(const struct parser_props *parser) {
@@ -1287,6 +1326,7 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
         break;
       }
 #ifdef DEBUG
+      dump_backtrace();
       show_parser_list(parser, __LINE__);
 #endif
     } else if (parser->has_function_params ||
@@ -2440,6 +2480,7 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
   }
   reorder_stacks(parser);
 #ifdef DEBUG
+  dump_backtrace();
   showstack(parser->stack, parser->stacklen, parser->out_stream, __LINE__);
 #endif
   return parser->cursor;
@@ -2474,6 +2515,7 @@ bool input_parsing_successful(struct parser_props *parser, char inputstr[]) {
     return false;
   }
 #ifdef DEBUG
+  dump_backtrace();
   showstack(parser->stack, parser->stacklen, parser->out_stream, __LINE__);
 #endif
   if (!pop_all(parser)) {

@@ -10,6 +10,9 @@
 
 const size_t BITS_PER_INT = (size_t)floor(log2(8.0 * sizeof(int)));
 
+/* Number of frames in a backtrace. */
+const int STACK_MAX = 16;
+
 const char typechars[] = {'1', '2', '3', '4', '6', '8', 'a', 'b',
                           'c', 'd', 'e', 'f', 'g', 'h', 'i', 'l',
                           'n', 'o', 'r', 's', 't', 'u'};

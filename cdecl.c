@@ -311,7 +311,7 @@ bool has_any_name_chars_before(const char *s, const char delimiter) {
 /* A true return value means no errors. */
 bool check_for_array_dimensions(struct parser_props *parser,
                                 const char *offset_decl) {
-  if ('[' != *offset_decl) {
+  if (!strlen(offset_decl) || ('[' != *offset_decl)) {
     return true;
   }
   if (strstr(offset_decl, "]")) {
@@ -1452,6 +1452,9 @@ size_t process_array_length(struct parser_props *parser,
                             const char *offset_string,
                             struct token *this_token) {
   size_t ctr = 0;
+  if (!strlen(offset_string)) {
+    return 0;
+  }
   /* Check if the array is ill-formed. */
   if (NULL == strstr(offset_string, "]")) {
     /* Indicate hard failure. */
@@ -1985,18 +1988,18 @@ bool handled_array_lengths(struct parser_props *parser, const size_t stacktop) {
     fprintf(parser->out_stream, "%s", parser->stack[stacktop].string);
     if (parser->array_lengths > 1) {
       fprintf(parser->out_stream, "x");
+    } else if (parser->last_dimension_unspecified &&
+               (parser->array_dimensions > parser->array_lengths)) {
+      fprintf(parser->out_stream, "x? ");
     } else {
-      if (parser->last_dimension_unspecified) {
-        fprintf(parser->out_stream, "x? ");
-      } else {
-        fprintf(parser->out_stream, " ");
-      }
+      fprintf(parser->out_stream, " ");
     }
   } else {
     fprintf(parser->err_stream, "\nError: found length without array.\n");
     return false;
   }
   parser->array_lengths--;
+  parser->array_dimensions--;
   return true;
 }
 
@@ -2067,6 +2070,10 @@ bool pop_stack(struct parser_props *parser, bool no_enum_instance,
     case length:
       if (!handled_array_lengths(parser, stacktop)) {
         return false;
+      }
+      if (parser->is_declarator_list && stacktop &&
+          (identifier == parser->stack[stacktop - 1].kind)) {
+        fprintf(parser->out_stream, " and ");
       }
       break;
     case invalid:
@@ -2201,35 +2208,43 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
       tokenoffset++;
     }
     increm = process_array_length(parser, declstring + tokenoffset, this_token);
+    tokenoffset += increm;
     if (!increm) {
       fprintf(parser->err_stream, "Array-length processing failed.\n");
       this_token->kind = invalid;
       return 0;
+    } else {
+      if (']' == *(declstring + tokenoffset)) {
+        tokenoffset++;
+      }
+      return tokenoffset;
     }
-    tokenoffset += increm;
-    if (']' == *(declstring + tokenoffset)) {
-      tokenoffset++;
-    }
+    showstack(parser->stack, parser->stacklen, parser->out_stream, __LINE__);
     if ((parser->is_declarator_list ||
          (parser->parent && parser->parent->is_declarator_list)) &&
         (',' == *(declstring + tokenoffset))) {
-      struct parser_props *antecedent = parser->is_declarator_list ? parser : parser->prev;
+      struct parser_props *antecedent =
+          parser->is_declarator_list ? parser : parser->prev;
       struct parser_props *list_parser = make_parser(antecedent);
       list_parser->have_type = true;
       struct token new_token;
       size_t ctr = antecedent->stacklen;
       while (ctr) {
-if ((type == antecedent->stack[ctr-1].kind) || (qualifier == antecedent->stack[ctr-1].kind)) {
-	new_token.kind = antecedent->stack[ctr-1].kind;
-        strlcpy(new_token.string, antecedent->stack[ctr-1].string, strlen(antecedent->stack[ctr-1].string) + 1);
-	push_stack(list_parser, &new_token);
-showstack(list_parser->stack, list_parser->stacklen, parser->out_stream, __LINE__);
+        if ((type == antecedent->stack[ctr - 1].kind) ||
+            (qualifier == antecedent->stack[ctr - 1].kind)) {
+          new_token.kind = antecedent->stack[ctr - 1].kind;
+          strlcpy(new_token.string, antecedent->stack[ctr - 1].string,
+                  strlen(antecedent->stack[ctr - 1].string) + 1);
+          push_stack(list_parser, &new_token);
+          showstack(list_parser->stack, list_parser->stacklen,
+                    parser->out_stream, __LINE__);
         }
         ctr--;
       }
-      /* go past comma */
-      tokenoffset++;
-      load_stack(list_parser, inputstr+tokenoffset);
+      if (',' == *(inputstr + tokenoffset)) {
+        tokenoffset++;
+      }
+      load_stack(list_parser, inputstr + tokenoffset);
     }
     return tokenoffset;
   }
@@ -2282,7 +2297,8 @@ showstack(list_parser->stack, list_parser->stacklen, parser->out_stream, __LINE_
           return 0;
         } else if ((',' == nextchar) && parser->is_declarator_list) {
           /* Effectively put the comma back. */
-          nextchar = '\0';
+          //          nextchar = '\0';
+          tokenoffset++;
         }
         break; /* end of if (is_following_name_char(nextchar)) */
       } else if (((trimnum == tokenoffset) || (0 == tokenoffset)) &&

@@ -2209,43 +2209,14 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
     }
     increm = process_array_length(parser, declstring + tokenoffset, this_token);
     tokenoffset += increm;
-    if (!increm) {
-      fprintf(parser->err_stream, "Array-length processing failed.\n");
-      this_token->kind = invalid;
-      return 0;
-    } else {
-      if (']' == *(declstring + tokenoffset)) {
+    if (increm &&  (']' == *(declstring + tokenoffset))) {
         tokenoffset++;
-      }
       return tokenoffset;
     }
     showstack(parser->stack, parser->stacklen, parser->out_stream, __LINE__);
-    if ((parser->is_declarator_list ||
-         (parser->parent && parser->parent->is_declarator_list)) &&
-        (',' == *(declstring + tokenoffset))) {
-      struct parser_props *antecedent =
-          parser->is_declarator_list ? parser : parser->prev;
-      struct parser_props *list_parser = make_parser(antecedent);
-      list_parser->have_type = true;
-      struct token new_token;
-      size_t ctr = antecedent->stacklen;
-      while (ctr) {
-        if ((type == antecedent->stack[ctr - 1].kind) ||
-            (qualifier == antecedent->stack[ctr - 1].kind)) {
-          new_token.kind = antecedent->stack[ctr - 1].kind;
-          strlcpy(new_token.string, antecedent->stack[ctr - 1].string,
-                  strlen(antecedent->stack[ctr - 1].string) + 1);
-          push_stack(list_parser, &new_token);
-          showstack(list_parser->stack, list_parser->stacklen,
-                    parser->out_stream, __LINE__);
-        }
-        ctr--;
-      }
       if (',' == *(inputstr + tokenoffset)) {
         tokenoffset++;
       }
-      load_stack(list_parser, inputstr + tokenoffset);
-    }
     return tokenoffset;
   }
   /* Move past '(' enclosing the function pointer name to '*'. */

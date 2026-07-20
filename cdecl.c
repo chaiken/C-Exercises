@@ -514,6 +514,8 @@ void check_for_declarator_list(struct parser_props *parser,
   char *next_comma_pos = strchr(input, ',');
   char *next_open_parens = strchr(input, '(');
   char *next_close_parens = strchr(input, ')');
+  char *next_open_braces = strchr(input, '{');
+  char *next_close_braces = strchr(input, '}');
   size_t cursor = 0;
   /* Declarator lists are not nested and typedefs are one per line. */
   if (parser->prev || parser->is_typedef || parser->is_enum) {
@@ -524,9 +526,12 @@ void check_for_declarator_list(struct parser_props *parser,
       return;
     }
     /* There are at least two items in the declarator list. */
-    if (!next_open_parens || !(*next_open_parens) ||
-        (next_comma_pos < next_open_parens) ||
-        (next_comma_pos == (next_close_parens + 1))) {
+    if ((!next_open_parens || !(*next_open_parens) ||
+         (next_comma_pos < next_open_parens) ||
+         (next_comma_pos == (next_close_parens + 1))) &&
+        (!next_open_braces || !(*next_open_braces) ||
+         (next_comma_pos < next_open_braces) ||
+         (next_comma_pos == (next_close_braces + 1)))) {
       parser->is_declarator_list = true;
       parser->separator = ',';
       return;
@@ -2209,14 +2214,14 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
     }
     increm = process_array_length(parser, declstring + tokenoffset, this_token);
     tokenoffset += increm;
-    if (increm &&  (']' == *(declstring + tokenoffset))) {
-        tokenoffset++;
+    if (increm && (']' == *(declstring + tokenoffset))) {
+      tokenoffset++;
       return tokenoffset;
     }
     showstack(parser->stack, parser->stacklen, parser->out_stream, __LINE__);
-      if (',' == *(inputstr + tokenoffset)) {
-        tokenoffset++;
-      }
+    if (',' == *(inputstr + tokenoffset)) {
+      tokenoffset++;
+    }
     return tokenoffset;
   }
   /* Move past '(' enclosing the function pointer name to '*'. */

@@ -311,7 +311,15 @@ bool has_any_name_chars_before(const char *s, const char delimiter) {
 /* A true return value means no errors. */
 bool check_for_array_dimensions(struct parser_props *parser,
                                 const char *offset_decl) {
-  if (!strlen(offset_decl) || ('[' != *offset_decl)) {
+  if (!strlen(offset_decl)) {
+    return true;
+  }
+  if ('[' != *offset_decl) {
+    /* Mismatched delimiters. */
+    if (strchr(offset_decl, ']')) {
+      return false;
+    }
+    /* Simply not an array. */
     return true;
   }
   if (strstr(offset_decl, "]")) {

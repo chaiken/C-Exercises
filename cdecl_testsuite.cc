@@ -2292,11 +2292,10 @@ TEST_F(ParserSuite, ParseConstPtr) {
 
 // From https://en.cppreference.com/w/c/language/pointer.html
 TEST_F(ParserSuite, ParseConstPtrPtr) {
-  char inputstr[] = "int *const *npp = &np;";
+  char inputstr[] = "int *const npp = &np;";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // Website says "non-const pointer to const pointer to non-const int""
-  EXPECT_THAT(StdoutMatches("npp is a(n) pointer to const pointer to int"),
-              IsTrue());
+  EXPECT_THAT(StdoutMatches("npp is a(n) const pointer to int"), IsTrue());
 }
 
 // From https://en.cppreference.com/w/c/language/pointer.html

@@ -628,14 +628,18 @@ size_t trim_trailing_whitespace(const char *input, char *trimmed) {
  */
 void elide_assignments(char **input) {
   size_t equals_offset = strcspn(*input, "=");
+  size_t comma_pos = 0;
   size_t prefix_len = 0;
   bool has_enumerations = (NULL != strstr(*input, "enum"));
   char *second;
+  char *first_opening_brace = strchr(*input, '{');
+  char *first_closing_brace = strchr(*input, '}');
   while (strchr(*input, '=')) {
     if (strlen(*input) == equals_offset) {
       return;
     }
     second = *input + equals_offset + 1;
+    /* Go past numeric initializers. */
     while (isdigit(*second) || isblank(*second)) {
       second++;
     }
@@ -644,10 +648,29 @@ void elide_assignments(char **input) {
         second++;
       }
     }
+    /* Overwrite any whitespace before '='.   Otherwise it will appear before a
+     * possible comma in the output. */
+    while (isblank(*(*input + (equals_offset - 1)))) {
+      equals_offset--;
+    }
     *(*input + equals_offset) = '\0';
     if (('&' == *second) || ('{' == *second) || ('*' == *second) ||
         !strcmp("NULL", second) || !strcmp("NUL", second)) {
-      return;
+      comma_pos = strcspn(second, ",");
+      /* There are no more initializations, so omit the rest of the expression.
+       * A comma between a pair of braces is internal to an array
+       * initialization, which we want to omit its entirety.
+       */
+      if ((strlen(second) == comma_pos) ||
+          (first_opening_brace && first_closing_brace &&
+           ((second + comma_pos) > first_opening_brace) &&
+           ((second + comma_pos) < first_closing_brace))) {
+        return;
+      }
+      if (('&' == *second) || ('*' == *second) || !strcmp("NULL", second) ||
+          !strcmp("NUL", second)) {
+        second += comma_pos;
+      }
     }
     prefix_len = strlen(*input);
     /*

@@ -3,6 +3,7 @@
 
 #define MAXTOKENLEN 128
 #define MAXTOKENS 256
+#define MAXIDENTIFIERS 4
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 #define _cleanup_(x) __attribute__((__cleanup__(x)))
 
@@ -80,6 +81,16 @@ struct token {
 };
 
 /*
+ * Store the identifier info in a struct of arrays since an array of structs is
+ * too horrible an antipattern even for a fun project.
+ */
+struct identifier_props {
+  size_t array_dimensions[MAXIDENTIFIERS];
+  size_t array_lengths[MAXIDENTIFIERS];
+  bool last_dimension_unspecified[MAXIDENTIFIERS];
+};
+
+/*
  * A well-formed declaration must have exactly one of each of the following:
  * a type;
  * an identifier;
@@ -89,10 +100,8 @@ struct parser_props {
   /* These latching bools keep track of which elements the parser has
    * encountered.  The output stage makes use of them.
    */
-  bool have_identifier;
   bool have_type;
   bool have_qualifier;
-  bool last_dimension_unspecified;
   /* These bools describe the high-level identity of the parsed object. */
   bool is_function;
   bool is_enum;
@@ -107,8 +116,7 @@ struct parser_props {
   bool has_function_params;
   bool has_struct_or_union_members;
   char enumerator_list[MAXTOKENLEN];
-  size_t array_dimensions;
-  size_t array_lengths;
+  size_t num_identifiers;
   size_t bitfield_width;
   /* These parameters describe the internal parser state. */
   size_t cursor;
@@ -117,6 +125,7 @@ struct parser_props {
   char end_delim;
   char separator;
   struct token stack[MAXTOKENS];
+  struct identifier_props ident;
   struct parser_props *prev;
   struct parser_props *next;
   struct parser_props *parent;

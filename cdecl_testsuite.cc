@@ -195,9 +195,9 @@ TEST_F(TokenizerSuite, Empty) {
   EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(0));
   EXPECT_THAT(this_token.string, IsEmpty());
   EXPECT_THAT(this_token.kind, Eq(invalid));
-  EXPECT_THAT(parser.have_identifier, IsFalse());
+  EXPECT_THAT(parser.num_identifiers, Eq(0));
   EXPECT_THAT(parser.have_type, IsFalse());
-  EXPECT_THAT(parser.array_dimensions, Eq(0));
+  EXPECT_THAT(parser.ident.array_dimensions[0], Eq(0));
 }
 
 TEST_F(TokenizerSuite, SimpleType) {
@@ -223,7 +223,7 @@ TEST_F(TokenizerSuite, SimpleQualifier) {
   EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(5));
   EXPECT_THAT(this_token.string, StrEq("const"));
   EXPECT_THAT(this_token.kind, Eq(qualifier));
-  EXPECT_THAT(parser.have_identifier, IsFalse());
+  EXPECT_THAT(parser.num_identifiers, Eq(0));
 }
 
 // Since the parser does not move past the initial space, it not included in the
@@ -253,7 +253,7 @@ TEST_F(TokenizerSuite, IsArray) {
   EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(3));
   EXPECT_THAT(this_token.string, StrEq("val"));
   EXPECT_THAT(this_token.kind, Eq(identifier));
-  EXPECT_THAT(parser.array_dimensions, Eq(1));
+  EXPECT_THAT(parser.ident.array_dimensions[0], Eq(1));
 }
 
 TEST_F(TokenizerSuite, IsArrayWithLength) {
@@ -263,14 +263,17 @@ TEST_F(TokenizerSuite, IsArrayWithLength) {
   EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(3));
   EXPECT_THAT(this_token.string, StrEq("val"));
   EXPECT_THAT(this_token.kind, Eq(identifier));
-  EXPECT_THAT(parser.array_dimensions, Eq(1));
+  EXPECT_THAT(parser.ident.array_dimensions[0], Eq(1));
 }
 
 TEST_F(TokenizerSuite, IsOnlyArrayLength) {
   // load_stack() skips over leading '['.
   char input[] = "5555]";
-  parser.array_dimensions = 1;
-  parser.have_identifier = true;
+  struct identifier_props ident;
+  initialize_identifier(&ident);
+  ident.array_dimensions[0] = 1;
+  parser.ident = ident;
+  parser.num_identifiers = 1;
   parser.have_type = true;
   // Parsing stops at last numeric character but tokenoffset advances past ']'.
   EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(strlen(input)));
@@ -343,7 +346,7 @@ TEST_F(TokenizerSuite, IgnoreUnallowedCharsHasTypeHasDelimIsNotArray) {
 // Without ']', if we have a type, ']' is unallowed.
 TEST_F(TokenizerSuite, IgnoreUnallowedCharsNoDelimIsArray) {
   parser.have_type = true;
-  parser.array_dimensions = 1;
+  parser.ident.array_dimensions[0] = 1;
   char input[] = "2fasdf";
   EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(0));
   EXPECT_THAT(strlen(this_token.string), Eq(0));
@@ -351,9 +354,12 @@ TEST_F(TokenizerSuite, IgnoreUnallowedCharsNoDelimIsArray) {
 }
 
 TEST_F(TokenizerSuite, IgnoreUnallowedCharsHasDelimIsArray) {
-  parser.have_identifier = true;
+  struct identifier_props ident;
+  initialize_identifier(&ident);
+  ident.array_dimensions[0] = 1;
+  parser.ident = ident;
   parser.have_type = true;
-  parser.array_dimensions = 1;
+  parser.num_identifiers = 1;
   char input[] = "123456]fasdf";
   // Parsing stops at last numeric character but tokenoffset advances past ']'.
   EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(strlen("123456]")));
@@ -365,7 +371,11 @@ TEST_F(TokenizerSuite, IgnoreUnallowedCharsHasDelimIsArray) {
 // An expression which has no type when processing encounters the identifier is
 // ill-formed.
 TEST_F(TokenizerSuite, IgnoreUnallowedCharsNoTypeIsArray) {
-  parser.array_dimensions = 1;
+  struct identifier_props ident;
+  initialize_identifier(&ident);
+  ident.array_dimensions[0] = 1;
+  parser.ident = ident;
+  parser.num_identifiers = 1;
   char input[] = "2fasdf";
   EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(0));
   EXPECT_THAT(strlen(this_token.string), Eq(0));
@@ -979,7 +989,10 @@ TEST_F(ParserSuite, ProcessFunctionParamsTwoParams) {
   const char *query = "uint64_t hash(char *key, uint64_t seed)";
   // The following characters were processed by the first parser.
   parser.cursor = strlen("uint64_t hash");
-  parser.have_identifier = true;
+  struct identifier_props ident;
+  initialize_identifier(&ident);
+  ident.array_dimensions[0] = 1;
+  parser.ident = ident;
   parser.have_type = true;
   parser.has_function_params = true;
   parser.start_delim = '(';
@@ -1528,8 +1541,8 @@ TEST_F(ParserSuite, LoadStackArrayNoLength) {
   std::size_t consumed = load_stack(&parser, user_input);
   //  First '[' is consumed; "]" is not. */
   EXPECT_THAT(consumed, Eq(strlen(probe) - 1));
-  EXPECT_THAT(parser.array_dimensions, Eq(1));
-  EXPECT_THAT(parser.array_lengths, Eq(0));
+  EXPECT_THAT(parser.ident.array_dimensions[0], Eq(1));
+  EXPECT_THAT(parser.ident.array_lengths[0], Eq(0));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string double"),
               IsTrue());
   EXPECT_THAT(
@@ -1545,8 +1558,8 @@ TEST_F(ParserSuite, LoadStackArrayLength) {
   std::size_t consumed = load_stack(&parser, user_input);
   // In load_stack(), "]" is consumed but not copied into output. */
   EXPECT_THAT(consumed, Eq(strlen(probe)));
-  EXPECT_THAT(parser.array_dimensions, Eq(1));
-  EXPECT_THAT(parser.array_lengths, Eq(1));
+  EXPECT_THAT(parser.ident.array_dimensions[0], Eq(1));
+  EXPECT_THAT(parser.ident.array_lengths[0], Eq(1));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string double"),
               IsTrue());
   EXPECT_THAT(StdoutMatches("Token number 1 has kind length and string 111"),
@@ -1564,8 +1577,8 @@ TEST_F(ParserSuite, LoadStackTwoDimArrayOneLength) {
   // Only the first "[]" is consumed.  "[]" terminates processing.
   EXPECT_THAT(load_stack(&parser, user_input),
               Eq(strlen(probe) - strlen("[]")));
-  EXPECT_THAT(parser.array_dimensions, Eq(2));
-  EXPECT_THAT(parser.array_lengths, Eq(1));
+  EXPECT_THAT(parser.ident.array_dimensions[0], Eq(2));
+  EXPECT_THAT(parser.ident.array_lengths[0], Eq(1));
   showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
 }
 
@@ -1574,8 +1587,8 @@ TEST_F(ParserSuite, LoadStackTwoDimArrayTwoLengths) {
   const char *probe = "double val[8][4]";
   strlcpy(user_input, probe, strlen(probe) + 1);
   EXPECT_THAT(load_stack(&parser, user_input), Eq(strlen(probe)));
-  EXPECT_THAT(parser.array_dimensions, Eq(2));
-  EXPECT_THAT(parser.array_lengths, Eq(2));
+  EXPECT_THAT(parser.ident.array_dimensions[0], Eq(2));
+  EXPECT_THAT(parser.ident.array_lengths[0], Eq(2));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string double"),
               IsTrue());
   EXPECT_THAT(StdoutMatches("Token number 1 has kind length and string 4"),
@@ -1593,8 +1606,8 @@ TEST_F(ParserSuite, LoadStackThreeDimArrayTwoLengths) {
   const char *probe = "double val[8][4]";
   strlcpy(user_input, probe, strlen(probe) + 1);
   EXPECT_THAT(load_stack(&parser, user_input), Eq(strlen(probe)));
-  EXPECT_THAT(parser.array_dimensions, Eq(2));
-  EXPECT_THAT(parser.array_lengths, Eq(2));
+  EXPECT_THAT(parser.ident.array_dimensions[0], Eq(2));
+  EXPECT_THAT(parser.ident.array_lengths[0], Eq(2));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string double"),
               IsTrue());
   EXPECT_THAT(StdoutMatches("Token number 1 has kind length and string 4"),
@@ -1612,8 +1625,8 @@ TEST_F(ParserSuite, LoadStackThreeDimArrayThreeLengths) {
   const char *probe = "double val[8][4]";
   strlcpy(user_input, probe, strlen(probe) + 1);
   EXPECT_THAT(load_stack(&parser, user_input), Eq(strlen(probe)));
-  EXPECT_THAT(parser.array_dimensions, Eq(2));
-  EXPECT_THAT(parser.array_lengths, Eq(2));
+  EXPECT_THAT(parser.ident.array_dimensions[0], Eq(2));
+  EXPECT_THAT(parser.ident.array_lengths[0], Eq(2));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string double"),
               IsTrue());
   EXPECT_THAT(StdoutMatches("Token number 1 has kind length and string 4"),
@@ -2258,7 +2271,7 @@ TEST_F(ParserSuite, ParseRestrictedPtrExpression) {
   char inputstr[] = "int * restrict x;";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(parser.is_pointer, IsTrue());
-  EXPECT_THAT(parser.have_identifier, IsTrue());
+  EXPECT_THAT(parser.num_identifiers, Eq(1));
   EXPECT_THAT(StdoutMatches("x is a(n) restrict pointer to int "), IsTrue());
 }
 
@@ -2266,7 +2279,7 @@ TEST_F(ParserSuite, ParseVolatilePtrExpression) {
   char inputstr[] = "int * volatile x;";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(parser.is_pointer, IsTrue());
-  EXPECT_THAT(parser.have_identifier, IsTrue());
+  EXPECT_THAT(parser.num_identifiers, Eq(1));
   EXPECT_THAT(StdoutMatches("x is a(n) volatile pointer to int "), IsTrue());
 }
 
@@ -2309,7 +2322,7 @@ TEST_F(ParserSuite, ParsePtrArray) {
 TEST_F(ParserSuite, ParseSimpleArray) {
   char inputstr[] = "const double x[];";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(parser.array_lengths, Eq(0));
+  EXPECT_THAT(parser.ident.array_lengths[0], Eq(0));
   EXPECT_THAT(StdoutMatches("x is a(n) array of const double "), IsTrue());
 }
 
@@ -2317,28 +2330,28 @@ TEST_F(ParserSuite, ParseArrayWithLength) {
   char inputstr[] = "char val[9];";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // pop_stack() decrements array_lengths.
-  EXPECT_THAT(parser.array_lengths, Eq(0));
+  EXPECT_THAT(parser.ident.array_lengths[0], Eq(0));
   EXPECT_THAT(StdoutMatches("val is a(n) array of 9 char"), IsTrue());
 }
 
 TEST_F(ParserSuite, ParseArrayWithTwoDimsOneLength) {
   char inputstr[] = "char val[9][];";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(parser.array_lengths, Eq(0));
+  EXPECT_THAT(parser.ident.array_lengths[0], Eq(0));
   EXPECT_THAT(StdoutMatches("val is a(n) array of 9x? char"), IsTrue());
 }
 
 TEST_F(ParserSuite, ParseArrayWithTwoLengths) {
   char inputstr[] = "char val[9][11];";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(parser.array_lengths, Eq(0));
+  EXPECT_THAT(parser.ident.array_lengths[0], Eq(0));
   EXPECT_THAT(StdoutMatches("val is a(n) array of 9x11 char"), IsTrue());
 }
 
 TEST_F(ParserSuite, ParseArrayWithThreeDimTwoLengths) {
   char inputstr[] = "char val[9][11][];";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(parser.array_lengths, Eq(0));
+  EXPECT_THAT(parser.ident.array_lengths[0], Eq(0));
   EXPECT_THAT(StdoutMatches("val is a(n) array of 9x11x? char"), IsTrue());
 }
 
@@ -2346,7 +2359,7 @@ TEST_F(ParserSuite, ParseArrayWithThreeLengths) {
   char inputstr[] = "char val[9][11][6];";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
 
-  EXPECT_THAT(parser.array_lengths, Eq(0));
+  EXPECT_THAT(parser.ident.array_lengths[0], Eq(0));
   EXPECT_THAT(StdoutMatches("val is a(n) array of 9x11x6 char"), IsTrue());
 }
 
@@ -3218,7 +3231,7 @@ TEST_F(ParserSuite, ParseTypedef) {
 }
 
 TEST_F(ParserSuite, ParseTypedefArray) {
-  char inputstr[] = "typedef int A[]];";
+  char inputstr[] = "typedef int A[];";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("A is a(n) alias for array of int"), IsTrue());
 }

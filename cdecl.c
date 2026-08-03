@@ -98,6 +98,14 @@ void limitations() {
 
 /********** functions to modify the parser **********/
 
+void initialize_identifier(struct identifier_props *ident) {
+  for (size_t i = 0; i < MAXIDENTIFIERS; i++) {
+    ident->array_dimensions[i] = 0;
+    ident->array_lengths[i] = 0;
+    ident->last_dimension_unspecified[i] = true;
+  }
+}
+
 void initialize_parser(struct parser_props *parser) {
   reset_parser(parser);
   parser->out_stream = stdout;
@@ -105,10 +113,8 @@ void initialize_parser(struct parser_props *parser) {
 }
 
 void reset_parser(struct parser_props *parser) {
-  parser->have_identifier = false;
   parser->have_type = false;
   parser->have_qualifier = false;
-  parser->last_dimension_unspecified = true;
   parser->is_function = false;
   parser->is_enum = false;
   parser->is_struct_or_union = false;
@@ -120,9 +126,8 @@ void reset_parser(struct parser_props *parser) {
   parser->has_enum_constants = false;
   parser->cursor = 0;
   parser->enumerator_list[0] = '\0';
-  parser->array_dimensions = 0;
-  parser->array_lengths = 0;
   parser->bitfield_width = 0;
+  parser->num_identifiers = 0;
   parser->has_function_params = false;
   parser->has_struct_or_union_members = false;
   parser->stacklen = 0;
@@ -133,6 +138,7 @@ void reset_parser(struct parser_props *parser) {
   parser->prev = NULL;
   parser->next = NULL;
   parser->parent = NULL;
+  initialize_identifier(&parser->ident);
 }
 
 void initialize_token(struct token *this_token) {
@@ -317,7 +323,7 @@ bool check_for_array_dimensions(struct parser_props *parser,
     return true;
   }
   if (strstr(offset_decl, "]")) {
-    parser->array_dimensions++;
+    parser->ident.array_dimensions[parser->num_identifiers - 1]++;
     return true;
   }
   fprintf(parser->err_stream, "Mismatched array delimiters: %s\n", offset_decl);
@@ -1174,7 +1180,7 @@ void handle_trailing_instance_name(struct parser_props *parser,
   if (parser->cursor < strlen(user_input)) {
     if ((parser->is_enum &&
          first_identifier_is_enumerator(parser, user_input)) ||
-        (!parser->have_identifier && parser->has_struct_or_union_members)) {
+        (!parser->num_identifiers && parser->has_struct_or_union_members)) {
       initialize_token(&this_token);
       /*
        * Advance processing to the char after the brace which closes the
@@ -1465,8 +1471,9 @@ bool process_array_dimensions(struct parser_props *parser, char *user_input,
   char *next_dim = NULL;
   char *progress_ptr = NULL;
   size_t increm = 0;
+  const size_t top_ident = parser->num_identifiers - 1;
 
-  if (!strlen(user_input + parser->cursor)) {
+  if (!strlen(user_input + parser->cursor) || !parser->num_identifiers) {
     return true;
   }
   do {
@@ -1486,8 +1493,8 @@ bool process_array_dimensions(struct parser_props *parser, char *user_input,
        * The first dimension must have a length.  If we've observed a length,
        * the dimension is not the first, so the counter should be incremented.
        */
-      if (parser->array_lengths) {
-        parser->array_dimensions++;
+      if (parser->ident.array_lengths[top_ident]) {
+        parser->ident.array_dimensions[top_ident]++;
       }
       break;
     }
@@ -1510,13 +1517,14 @@ bool process_array_dimensions(struct parser_props *parser, char *user_input,
     if (next_dim) {
       if (2 >= strlen(next_dim)) {
         /* No array length; return without incrementing offset. */
-        parser->array_dimensions++;
+        parser->ident.array_dimensions[top_ident]++;
         break;
       }
     }
   } while ((NULL != next_dim) && (parser->cursor <= strlen(user_input)));
-  if (parser->array_dimensions == parser->array_lengths) {
-    parser->last_dimension_unspecified = false;
+  if (parser->ident.array_dimensions[top_ident] ==
+      parser->ident.array_lengths[top_ident]) {
+    parser->ident.last_dimension_unspecified[top_ident] = false;
   }
   return true;
 }
@@ -1714,7 +1722,8 @@ bool handled_extended_parsing(struct parser_props *parser, char *user_input,
       return false;
     }
   }
-  if (parser->array_dimensions) {
+  if (parser->num_identifiers &&
+      parser->ident.array_dimensions[parser->num_identifiers - 1]) {
     if (!process_array_dimensions(parser, user_input, this_token)) {
       return false;
     }
@@ -1734,13 +1743,21 @@ bool handled_extended_parsing(struct parser_props *parser, char *user_input,
 
 /********** output functions **********/
 
+/* The token at parser->stacklen-1 is the identifier. */
 void reverse_lengths(struct parser_props *parser) {
+  size_t num_pairs = 0;
+  size_t top_len_idx = 0;
+  size_t bottom_len_idx = 0;
+  const size_t top_ident = parser->num_identifiers - 1;
+
+  if (!parser->num_identifiers || !parser->stacklen ||
+      !parser->ident.array_lengths[top_ident]) {
+    return;
+  }
   // Intentionally truncate in the case of an odd number of lengths.
-  const size_t num_pairs = (size_t)parser->array_lengths / 2;
-  // The token at parser->stacklen-1 is the identifier.
-  const size_t top_len_idx = parser->stacklen - 2;
-  size_t bottom_len_idx;
-  if (parser->array_lengths % 2) {
+  num_pairs = (size_t)parser->ident.array_lengths[top_ident] / 2;
+  top_len_idx = parser->stacklen - 2;
+  if (parser->ident.array_lengths[top_ident] % 2) {
     bottom_len_idx = (top_len_idx - num_pairs) - 1;
   } else {
     bottom_len_idx = top_len_idx - num_pairs;
@@ -1796,7 +1813,8 @@ void reorder_qualifier_and_type(struct parser_props *parser) {
  * the identifier.
  */
 void reorder_array_identifier_and_lengths(struct parser_props *parser) {
-  if (!parser->stacklen || !parser->array_lengths) {
+  if (!parser->stacklen || !parser->num_identifiers ||
+      !parser->ident.array_lengths[parser->num_identifiers - 1]) {
     return;
   }
   const size_t stacklast = parser->stacklen - 1;
@@ -1804,7 +1822,8 @@ void reorder_array_identifier_and_lengths(struct parser_props *parser) {
    * The identifier name starts at the top.  We want it below the array
    * dimensions.
    */
-  size_t unprocessed_lengths = parser->array_lengths;
+  size_t unprocessed_lengths =
+      parser->ident.array_lengths[parser->num_identifiers - 1];
   /*
    * Move the identifier to the stack top by swapping it with each identifier in
    * turn.
@@ -1824,7 +1843,7 @@ void reorder_array_identifier_and_lengths(struct parser_props *parser) {
     parser->stack[stacklast - unprocessed_lengths].kind = length;
     unprocessed_lengths--;
   }
-  if (parser->array_lengths > 1) {
+  if (parser->ident.array_lengths[parser->num_identifiers - 1] > 1) {
     reverse_lengths(parser);
   }
 }
@@ -1925,7 +1944,7 @@ bool handled_struct_or_union_members(const struct parser_props *parser) {
   if (parser->has_struct_or_union_members) {
     struct parser_props *cursor = parser->next;
     size_t depth = 0;
-    if (parser->have_identifier) {
+    if (parser->num_identifiers) {
       fprintf(parser->out_stream, "which ");
     }
     while (cursor && cursor->stacklen) {
@@ -1955,12 +1974,18 @@ bool handled_struct_or_union_members(const struct parser_props *parser) {
 }
 
 bool handled_array_lengths(struct parser_props *parser, const size_t stacktop) {
-  if (parser->array_dimensions) {
+  size_t top_ident;
+  if (!parser->num_identifiers) {
+    return true;
+  }
+  top_ident = parser->num_identifiers - 1;
+  if (parser->ident.array_dimensions[top_ident]) {
     fprintf(parser->out_stream, "%s", parser->stack[stacktop].string);
-    if (parser->array_lengths > 1) {
+    if (parser->ident.array_lengths[top_ident] > 1) {
       fprintf(parser->out_stream, "x");
-    } else if (parser->last_dimension_unspecified &&
-               (parser->array_dimensions > parser->array_lengths)) {
+    } else if (parser->ident.last_dimension_unspecified[top_ident] &&
+               (parser->ident.array_dimensions[top_ident] >
+                parser->ident.array_lengths[top_ident])) {
       fprintf(parser->out_stream, "x? ");
     } else {
       fprintf(parser->out_stream, " ");
@@ -1970,14 +1995,14 @@ bool handled_array_lengths(struct parser_props *parser, const size_t stacktop) {
     return false;
   }
   /* Allow unit tests to make sure that there are no unprocessed lengths. */
-  parser->array_lengths--;
+  parser->ident.array_lengths[top_ident]--;
   /*
    * When one of the first elements of a declarator list is an array, clue the
    * output stage that the trailing declarators are not arrays. This approach
    * will fail if the first and last elements of a list are arrays and the
    * middle is not, so a new approach is needed.
    */
-  parser->array_dimensions--;
+  parser->ident.array_dimensions[top_ident]--;
   return true;
 }
 
@@ -2039,7 +2064,8 @@ bool pop_stack(struct parser_props *parser, bool no_enum_instance,
       if (parser->is_typedef) {
         fprintf(parser->out_stream, "alias for ");
       }
-      if (parser->array_dimensions) {
+      if (parser->num_identifiers &&
+          parser->ident.array_dimensions[parser->num_identifiers - 1]) {
         fprintf(parser->out_stream, "array of ");
       } else if ((parser->is_function) && (!parser->is_function_ptr)) {
         fprintf(parser->out_stream, "function which returns ");
@@ -2181,7 +2207,8 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
   /* Move past leading whitespace. */
   tokenoffset = trimnum;
   /* Process array length, if any. We should already have an identifier. */
-  if (parser->array_dimensions) {
+  if (parser->num_identifiers &&
+      parser->ident.array_dimensions[parser->num_identifiers - 1]) {
     if ('[' == *(declstring + tokenoffset)) {
       tokenoffset++;
     }
@@ -2240,7 +2267,9 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
             parser->has_struct_or_union_members = true;
           }
         } else if (('[' != nextchar) && (']' != nextchar) &&
-                   parser->array_dimensions) {
+                   parser->num_identifiers &&
+                   parser->ident
+                       .array_dimensions[parser->num_identifiers - 1]) {
           /* Proceed past array dimension delimiters , but otherwise fail. */
           return 0;
         } else if ((',' == nextchar) && parser->is_declarator_list) {
@@ -2348,6 +2377,7 @@ bool possibly_handle_qualifier(struct parser_props *parser,
  */
 bool finish_token(struct parser_props *parser, const char *offset_decl,
                   struct token *this_token, const size_t ctr) {
+  size_t top_ident;
   this_token->string[ctr + 1] = '\0';
   if (!strlen(this_token->string)) {
     fprintf(parser->err_stream, "Cannot process empty token.\n");
@@ -2364,12 +2394,13 @@ bool finish_token(struct parser_props *parser, const char *offset_decl,
      * Enum constants are classified as identifiers.   Otherwise, duplicate
      * identifiers is an error.
      */
-    if ((parser->have_identifier) &&
+    if ((parser->num_identifiers) &&
         (!parser->has_enum_constants && !parser->is_declarator_list)) {
       this_token->kind = invalid;
       return false;
     }
-    parser->have_identifier = true;
+    parser->num_identifiers++;
+    top_ident = parser->num_identifiers - 1;
     if (!parser->have_type) {
       /*
        * If the "unsigned" qualifier appeared without an additional type
@@ -2393,7 +2424,9 @@ bool finish_token(struct parser_props *parser, const char *offset_decl,
       }
       return false;
     }
-    if ((parser->array_dimensions || parser->is_function) &&
+    if (((parser->num_identifiers &&
+          parser->ident.array_dimensions[top_ident]) ||
+         parser->is_function) &&
         parser_has_atomic_qualifier(parser)) {
       fprintf(parser->err_stream,
               "Function return values and arrays cannot be atomic.\n");
@@ -2426,7 +2459,12 @@ bool finish_token(struct parser_props *parser, const char *offset_decl,
     }
     break;
   case length:
-    if ((!parser->have_identifier) || (!parser->array_dimensions)) {
+    if (!parser->num_identifiers) {
+      this_token->kind = invalid;
+      break;
+    }
+    top_ident = parser->num_identifiers - 1;
+    if (!parser->ident.array_dimensions[top_ident]) {
       this_token->kind = invalid;
       break;
     }
@@ -2436,10 +2474,10 @@ bool finish_token(struct parser_props *parser, const char *offset_decl,
      * handling all this counting in the delimiter case below would have been
      * wiser.
      */
-    if (parser->array_lengths) {
-      parser->array_dimensions++;
+    if (parser->ident.array_lengths[top_ident]) {
+      parser->ident.array_dimensions[top_ident]++;
     }
-    parser->array_lengths++;
+    parser->ident.array_lengths[top_ident]++;
     break;
   case qualifier:
     if (!possibly_handle_qualifier(parser, this_token->string)) {
@@ -2515,7 +2553,7 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
       /*
        * If there is no enum instance name, only a type declaration, then do not
        * place the encountered enumerator on the stack. Set
-       * parser->have_identifier true so that pop_stack() doesn't fail.
+       * parser->num_identifiers true so that pop_stack() doesn't fail.
        */
       if ((identifier == this_token.kind) &&
           (first_identifier_is_enumerator(parser, user_input))) {
@@ -2529,10 +2567,10 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
         break;
       }
       push_stack(parser, &this_token);
-    } /* while !parser->have_identifier */
+    } /* while !parser->num_identifiers */
     break;
   } /* while parser->cursor <= strlen(user_input) */
-  if (!parser->have_identifier) {
+  if (!parser->num_identifiers) {
     /*
      * As with enumerators, the instance name of a struct is optional.
      * While a function pointer itself must be named, the function

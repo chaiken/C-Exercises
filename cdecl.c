@@ -1516,8 +1516,12 @@ bool process_array_dimensions(struct parser_props *parser, char *user_input,
     next_dim = strstr(user_input + parser->cursor, "[");
     if (next_dim) {
       if (2 >= strlen(next_dim)) {
-        /* No array length; return without incrementing offset. */
         parser->ident.array_dimensions[top_ident]++;
+        /*
+         * Advancing past an empty dimension length matters only for declarator
+         * lists.
+         */
+        parser->cursor += 2;
         break;
       }
     }
@@ -2188,7 +2192,6 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
    * copied into tokens.
    */
   size_t ctr = 0;
-  size_t increm = 0;
   char trimmed[MAXTOKENLEN];
   const char *startbracep = strchr(declstring, '{');
   char nextchar = '\0';
@@ -2212,9 +2215,9 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
     if ('[' == *(declstring + tokenoffset)) {
       tokenoffset++;
     }
-    increm = process_array_length(parser, declstring + tokenoffset, this_token);
-    tokenoffset += increm;
-    if (increm && (']' == *(declstring + tokenoffset))) {
+    tokenoffset +=
+        process_array_length(parser, declstring + tokenoffset, this_token);
+    if (']' == *(declstring + tokenoffset)) {
       tokenoffset++;
       return tokenoffset;
     }

@@ -751,6 +751,104 @@ TEST(CheckForDeclaratorListTest, Enum) {
   EXPECT_THAT(parser.is_declarator_list, IsFalse());
 }
 
+/*
+ * Insure that an array length which appears above its associated identifier on
+ * the stack is reordered below it.
+ * Here, the input is "uint64_t *entry[7][]";
+ */
+TEST(ReorderArrayLengthsTest, SimpleCase) {
+  struct parser_props parser;
+  initialize_parser(&parser);
+  parser.num_identifiers = 1;
+  parser.ident.array_dimensions[0] = 2;
+  parser.ident.array_lengths[0] = 1;
+  parser.ident.last_dimension_unspecified[0] = true;
+  parser.stacklen = 4;
+  parser.stack[0].kind = type;
+  strlcpy(parser.stack[0].string, "uint64_t", strlen("uint64_t") + 1);
+  parser.stack[1].kind = qualifier;
+  strlcpy(parser.stack[1].string, "*", 2);
+  parser.stack[2].kind = identifier;
+  strlcpy(parser.stack[2].string, "entry", strlen("entry") + 1);
+  parser.stack[3].kind = length;
+  strlcpy(parser.stack[3].string, "7", 2);
+  reorder_array_identifier_and_lengths(&parser);
+  ASSERT_THAT(parser.num_identifiers, Eq(1));
+  EXPECT_THAT(parser.stacklen, Eq(4));
+  EXPECT_THAT(parser.stack[2].kind, Eq(length));
+  EXPECT_THAT(parser.stack[2].string, StrEq("7"));
+  EXPECT_THAT(parser.stack[3].kind, Eq(identifier));
+  EXPECT_THAT(parser.stack[3].string, StrEq("entry"));
+}
+
+/*
+ * Here, the input is "uint64_t *index, entry[7][]";
+ */
+TEST(ReorderArrayLengthsTest, DeclaratorListWithArrayLast) {
+  struct parser_props parser;
+  initialize_parser(&parser);
+  parser.num_identifiers = 2;
+  parser.ident.array_dimensions[1] = 2;
+  parser.ident.array_lengths[1] = 1;
+  parser.ident.last_dimension_unspecified[1] = true;
+  parser.stacklen = 5;
+  parser.stack[0].kind = type;
+  strlcpy(parser.stack[0].string, "uint64_t", strlen("uint64_t") + 1);
+  parser.stack[1].kind = identifier;
+  strlcpy(parser.stack[1].string, "index", strlen("index") + 1);
+  parser.stack[2].kind = qualifier;
+  strlcpy(parser.stack[2].string, "*", 2);
+  parser.stack[3].kind = identifier;
+  strlcpy(parser.stack[3].string, "entry", strlen("entry") + 1);
+  parser.stack[4].kind = length;
+  strlcpy(parser.stack[4].string, "7", 2);
+  std::cout << "Before reorder_array_identifier_and_lengths()" << std::endl;
+  showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
+  reorder_array_identifier_and_lengths(&parser);
+  std::cout << "After reorder_array_identifier_and_lengths()" << std::endl;
+  showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
+  ASSERT_THAT(parser.num_identifiers, Eq(2));
+  EXPECT_THAT(parser.stacklen, Eq(5));
+  EXPECT_THAT(parser.stack[3].kind, Eq(length));
+  EXPECT_THAT(parser.stack[3].string, StrEq("7"));
+  EXPECT_THAT(parser.stack[4].kind, Eq(identifier));
+  EXPECT_THAT(parser.stack[4].string, StrEq("entry"));
+}
+
+/*
+ * Here, the input is "uint64_t entry[7][], *index";
+ */
+TEST(ReorderArrayLengthsTest, DeclaratorListWithArrayFirst) {
+  struct parser_props parser;
+  initialize_parser(&parser);
+  parser.num_identifiers = 2;
+  parser.ident.array_dimensions[0] = 2;
+  parser.ident.array_lengths[0] = 1;
+  parser.ident.last_dimension_unspecified[1] = true;
+  parser.stacklen = 5;
+  parser.stack[0].kind = type;
+  strlcpy(parser.stack[0].string, "uint64_t", strlen("uint64_t") + 1);
+  parser.stack[1].kind = identifier;
+  strlcpy(parser.stack[1].string, "entry", strlen("entry") + 1);
+  parser.stack[2].kind = length;
+  strlcpy(parser.stack[2].string, "7", 2);
+  parser.stack[3].kind = qualifier;
+  strlcpy(parser.stack[3].string, "*", 2);
+  parser.stack[4].kind = identifier;
+  strlcpy(parser.stack[4].string, "index", strlen("index") + 1);
+  std::cout << "Before reorder_array_identifier_and_lengths()" << std::endl;
+  showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
+  reorder_array_identifier_and_lengths(&parser);
+  std::cout << "After reorder_array_identifier_and_lengths()" << std::endl;
+  showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
+  ASSERT_THAT(parser.num_identifiers, Eq(2));
+  EXPECT_THAT(parser.stacklen, Eq(5));
+  EXPECT_THAT(parser.stack[1].kind, Eq(length));
+  EXPECT_THAT(parser.stack[1].string, StrEq("7"));
+  EXPECT_THAT(parser.stack[2].kind, Eq(identifier));
+  EXPECT_THAT(parser.stack[2].string, StrEq("entry"));
+}
+
 struct ParserSuite : public Test {
   ParserSuite() : fake_stdout(tmpfile()), fake_stderr(tmpfile()) {
     this_token.kind = invalid;
@@ -1574,9 +1672,7 @@ TEST_F(ParserSuite, LoadStackTwoDimArrayOneLength) {
   char user_input[MAXTOKENLEN];
   const char *probe = "double val[1][]";
   strlcpy(user_input, probe, strlen(probe) + 1);
-  // Only the first "[]" is consumed.  "[]" terminates processing.
-  EXPECT_THAT(load_stack(&parser, user_input),
-              Eq(strlen(probe) - strlen("[]")));
+  EXPECT_THAT(load_stack(&parser, user_input), Eq(strlen(probe)));
   EXPECT_THAT(parser.ident.array_dimensions[0], Eq(2));
   EXPECT_THAT(parser.ident.array_lengths[0], Eq(1));
   showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
@@ -2228,6 +2324,25 @@ TEST_F(ParserSuite, LoadStackReorder) {
       IsTrue());
   EXPECT_THAT(StdoutMatches("Token number 2 has kind identifier and string x"),
               IsTrue());
+}
+
+TEST_F(ParserSuite, LoadStackReorderArrayLengths) {
+  char user_input[MAXTOKENLEN];
+  const char *probe = "const int x[8][]";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input);
+  EXPECT_THAT(consumed, Eq(strlen(probe)));
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string int"),
+              IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 1 has kind qualifier and string const"),
+      IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 2 has kind length and string 8"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 3 has kind identifier and string x"),
+              IsTrue());
+  EXPECT_THAT(parser.stacklen, Eq(4));
+  showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
 }
 
 TEST_F(ParserSuite, ParseSimpleExpression) {

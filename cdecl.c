@@ -85,15 +85,12 @@ void limitations() {
   printf("Input must be shorter than %u characters, not including quotation "
          "marks and semicolon.\n",
          MAXTOKENLEN);
-  printf("Known deficiencies:\n\ta) doesn't handle multiple comma-separated "
-         "declarations;\n");
-  printf("\tb) includes only the qualifiers defined in ANSI C, not all\n");
+  printf("Known deficiencies:\n\ta) includes only the qualifiers defined in "
+         "ANSI C, not all\n");
   printf("\t   libc, kernel extensions or compiler attributes;\n");
   printf("\tc) does not support C23 or C26 additions;\n");
   printf("\t   unicode, continuation lines, comments,\n");
   printf("\t   or 'inline'.\n");
-  printf("\td) Support for comma-separated lists with functions, arrays or\n");
-  printf("\t   initializations is limited.\n");
 }
 
 /********** functions to modify the parser **********/
@@ -131,13 +128,16 @@ void reset_parser(struct parser_props *parser) {
   parser->has_function_params = false;
   parser->has_struct_or_union_members = false;
   parser->stacklen = 0;
-  parser->stack[0].kind = invalid;
   parser->start_delim = '\0';
   parser->end_delim = '\0';
   parser->separator = '\0';
   parser->prev = NULL;
   parser->next = NULL;
   parser->parent = NULL;
+  for (int i = 0; i < MAXTOKENS; i++) {
+    parser->stack[i].kind = invalid;
+    memset(parser->stack[i].string, '\0', MAXTOKENLEN);
+  }
   initialize_identifier(&parser->ident);
 }
 
@@ -1477,10 +1477,25 @@ bool process_array_dimensions(struct parser_props *parser, char *user_input,
     return true;
   }
   do {
+    /*
+     * If the previous identifier is an array, the logic must find the new
+     * identifier before considering whether it is an array.
+     */
+    if (((',' == *(user_input + parser->cursor)) &&
+         parser->is_declarator_list) ||
+        !parser->ident.array_dimensions[top_ident]) {
+      return true;
+    }
     if (']' == *(user_input + parser->cursor)) {
       parser->cursor++;
     }
     /* Skip '['. */
+    if (!('[' == *(user_input + parser->cursor))) {
+      fprintf(parser->err_stream,
+              "%s: array-dimension parsing failed due to indeterminate state\n",
+              __func__);
+      return false;
+    }
     parser->cursor++;
     progress_ptr = user_input + parser->cursor;
     /* We've encountered "[]", which always terminates C array-length
@@ -1754,8 +1769,11 @@ void reverse_lengths(struct parser_props *parser) {
   size_t bottom_len_idx = 0;
   const size_t top_ident = parser->num_identifiers - 1;
 
+  /* Return if there's nothing to reverse. */
   if (!parser->num_identifiers || !parser->stacklen ||
-      !parser->ident.array_lengths[top_ident]) {
+      (parser->ident.array_lengths[top_ident] < 2) ||
+      (parser->ident.last_dimension_unspecified[top_ident] &&
+       (parser->ident.array_dimensions[top_ident] < 3))) {
     return;
   }
   // Intentionally truncate in the case of an odd number of lengths.
@@ -1811,44 +1829,64 @@ void reorder_qualifier_and_type(struct parser_props *parser) {
   }
 }
 
+int find_array_length_in_stack(const struct parser_props *parser) {
+  int candidate = parser->stacklen - 1;
+  while (candidate >= 0) {
+    if (length == parser->stack[candidate].kind) {
+      break;
+    } else {
+      candidate--;
+    }
+  }
+  return candidate;
+}
+
 /*
  * If the declaration describes a 1-dimensional array with a specified length,
  * the top of the stack holds the array lengths and the element below them is
  * the identifier.
  */
 void reorder_array_identifier_and_lengths(struct parser_props *parser) {
-  if (!parser->stacklen || !parser->num_identifiers ||
-      !parser->ident.array_lengths[parser->num_identifiers - 1]) {
+  if (!parser->stacklen || !parser->num_identifiers) {
     return;
   }
-  const size_t stacklast = parser->stacklen - 1;
-  /*
-   * The identifier name starts at the top.  We want it below the array
-   * dimensions.
-   */
-  size_t unprocessed_lengths =
-      parser->ident.array_lengths[parser->num_identifiers - 1];
-  /*
-   * Move the identifier to the stack top by swapping it with each identifier in
-   * turn.
-   */
-  while (unprocessed_lengths) {
-    struct token name = parser->stack[stacklast - unprocessed_lengths];
-    struct token arraylen =
-        parser->stack[(stacklast - unprocessed_lengths) + 1];
-    if ((length != arraylen.kind) || (identifier != name.kind)) {
-      return;
-    }
-    strlcpy(parser->stack[(stacklast - unprocessed_lengths) + 1].string,
-            name.string, MAXTOKENLEN);
-    strlcpy(parser->stack[stacklast - unprocessed_lengths].string,
-            arraylen.string, MAXTOKENLEN);
-    parser->stack[(stacklast - unprocessed_lengths) + 1].kind = identifier;
-    parser->stack[stacklast - unprocessed_lengths].kind = length;
-    unprocessed_lengths--;
+  int stacklast = find_array_length_in_stack(parser);
+  if (0 > stacklast) {
+    return;
   }
-  if (parser->ident.array_lengths[parser->num_identifiers - 1] > 1) {
-    reverse_lengths(parser);
+  /* Process each identifier in a declarator list in turn. */
+  for (int this_ident = parser->num_identifiers - 1; this_ident >= 0;
+       this_ident--) {
+    /*
+     * The identifier name starts at the top.  We want it below the array
+     * dimensions.
+     */
+    size_t unprocessed_lengths = parser->ident.array_lengths[this_ident];
+    /*
+     * Move the identifier to the stack top by swapping it with each array
+     * length in turn.
+     */
+    while (unprocessed_lengths) {
+      /* If there's no work to do, return. */
+      if ((identifier != parser->stack[stacklast - unprocessed_lengths].kind) ||
+          (length !=
+           parser->stack[(stacklast - unprocessed_lengths) + 1].kind)) {
+        return;
+      }
+      struct token name = parser->stack[stacklast - unprocessed_lengths];
+      struct token arraylen =
+          parser->stack[(stacklast - unprocessed_lengths) + 1];
+      strlcpy(parser->stack[(stacklast - unprocessed_lengths) + 1].string,
+              name.string, MAXTOKENLEN);
+      strlcpy(parser->stack[stacklast - unprocessed_lengths].string,
+              arraylen.string, MAXTOKENLEN);
+      parser->stack[(stacklast - unprocessed_lengths) + 1].kind = identifier;
+      parser->stack[stacklast - unprocessed_lengths].kind = length;
+      unprocessed_lengths--;
+    }
+    if (parser->ident.array_lengths[this_ident] > 1) {
+      reverse_lengths(parser);
+    }
   }
 }
 
@@ -1964,7 +2002,8 @@ bool handled_struct_or_union_members(const struct parser_props *parser) {
       struct parser_props *save_next = cursor->next;
       struct parser_props *save_prev = cursor->prev;
 #ifdef DEBUG
-      fprintf(stderr, "pop_stack(): freeing %p at %d\n", cursor, __LINE__);
+      fprintf(stderr, "handled_struct_or_union_members(): freeing %p at %d\n",
+              cursor, __LINE__);
 #endif
       free(cursor);
       save_prev->next = save_next;
@@ -2147,17 +2186,14 @@ enum token_class get_kind(const char *intoken) {
     if (!strcmp(intoken, types[ctr]))
       return type;
   }
-
   numel = ARRAY_SIZE(qualifiers);
   for (ctr = 0; ctr < numel; ctr++) {
     if (!strcmp(intoken, qualifiers[ctr]))
       return qualifier;
   }
-
   if (is_numeric(intoken)) {
     return length;
   }
-
   /*
    * A string without alphanumeric chars must be whitespace, a delimiter, or
    * garbage.
@@ -2165,7 +2201,6 @@ enum token_class get_kind(const char *intoken) {
   if (!has_alnum_chars(intoken)) {
     return invalid;
   }
-
   return identifier;
 }
 
@@ -2207,11 +2242,14 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
     fprintf(stderr, "\nToken too long %s.\n", declstring);
     return 0;
   }
-  /* Move past leading whitespace. */
+  /* Move past leading whitespace plus any commas in a declarator list. */
   tokenoffset = trimnum;
-  /* Process array length, if any. We should already have an identifier. */
-  if (parser->num_identifiers &&
-      parser->ident.array_dimensions[parser->num_identifiers - 1]) {
+  if (parser->is_declarator_list && ',' == *(declstring + tokenoffset)) {
+    tokenoffset++;
+    tokenoffset += trim_leading_whitespace(declstring + tokenoffset, trimmed);
+  } else if (parser->num_identifiers &&
+             parser->ident.array_dimensions[parser->num_identifiers - 1]) {
+    /* Process array length, if any. We should already have an identifier. */
     if ('[' == *(declstring + tokenoffset)) {
       tokenoffset++;
     }

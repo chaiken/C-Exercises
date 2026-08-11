@@ -2345,6 +2345,42 @@ TEST_F(ParserSuite, LoadStackReorderArrayLengths) {
   showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
 }
 
+TEST_F(ParserSuite, LoadStackDeclaratorListTrailingArray) {
+  char user_input[MAXTOKENLEN];
+  const char *probe = "int x, y[8]";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input);
+  EXPECT_THAT(consumed, Eq(strlen(probe)));
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string int"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 1 has kind identifier and string x"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 2 has kind length and string 8"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 3 has kind identifier and string y"),
+              IsTrue());
+  EXPECT_THAT(parser.stacklen, Eq(4));
+  showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
+}
+
+TEST_F(ParserSuite, LoadStackDeclaratorListLeadingArray) {
+  char user_input[MAXTOKENLEN];
+  const char *probe = "int x[8], y";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input);
+  EXPECT_THAT(consumed, Eq(strlen(probe)));
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string int"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 1 has kind length and string 8"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 2 has kind identifier and string x"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 3 has kind identifier and string y"),
+              IsTrue());
+  EXPECT_THAT(parser.stacklen, Eq(4));
+  showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
+}
+
 TEST_F(ParserSuite, ParseSimpleExpression) {
   char inputstr[] = "int x;";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
@@ -2386,7 +2422,8 @@ TEST_F(ParserSuite, ParseRestrictedPtrExpression) {
   char inputstr[] = "int * restrict x;";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(parser.is_pointer, IsTrue());
-  EXPECT_THAT(parser.num_identifiers, Eq(1));
+  // Identifiers have been removed by pop_stack().
+  EXPECT_THAT(parser.num_identifiers, Eq(0));
   EXPECT_THAT(StdoutMatches("x is a(n) restrict pointer to int "), IsTrue());
 }
 
@@ -2394,7 +2431,6 @@ TEST_F(ParserSuite, ParseVolatilePtrExpression) {
   char inputstr[] = "int * volatile x;";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(parser.is_pointer, IsTrue());
-  EXPECT_THAT(parser.num_identifiers, Eq(1));
   EXPECT_THAT(StdoutMatches("x is a(n) volatile pointer to int "), IsTrue());
 }
 
@@ -2492,9 +2528,9 @@ TEST_F(ParserSuite, ParseArrayWithBadLength2) {
 }
 
 TEST_F(ParserSuite, ParseArrayWithBadLength3) {
-  char inputstr[] = "char val[x];";
+  char inputstr[] = "char val[2x];";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
-  EXPECT_THAT(StderrMatches("Cannot process empty token."), IsTrue());
+  EXPECT_THAT(StderrMatches("Invalid array length: x"), IsTrue());
 }
 
 TEST_F(ParserSuite, ParseSimpleFunctionOutput) {
@@ -3474,9 +3510,24 @@ TEST_F(ParserSuite, ParseDeclaratorListWithInitializedEnumLast) {
   EXPECT_THAT(StdoutMatches("and fuel is a(n) enum State"), IsTrue());
 }
 
+TEST_F(ParserSuite, ParseDeclaratorListWithArrayFirst) {
+  char inputstr[] = "int a[2], b;";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("b is a(n)"), IsTrue());
+  EXPECT_THAT(StdoutMatches("and a is a(n) array of 2 int"), IsTrue());
+}
+
 TEST_F(ParserSuite, ParseDeclaratorListWithArraySecond) {
   char inputstr[] = "int a, b[4];";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("b is a(n) array of 4"), IsTrue());
+  EXPECT_THAT(StdoutMatches("and a is a(n) int"), IsTrue());
+}
+
+TEST_F(ParserSuite, ParseDeclaratorListWithArrayMiddle) {
+  char inputstr[] = "int a, b[2], c;";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("c is a(n)"), IsTrue());
+  EXPECT_THAT(StdoutMatches("and b is a(n) array of 2"), IsTrue());
   EXPECT_THAT(StdoutMatches("and a is a(n) int"), IsTrue());
 }

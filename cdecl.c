@@ -1433,12 +1433,26 @@ size_t process_array_length(struct parser_props *parser,
     this_token->kind = invalid;
     return 0;
   }
-  for (ctr = 0;
-       offset_string && isdigit(*(offset_string + ctr)) && ctr < MAXTOKENLEN;
-       ctr++) {
-    this_token->string[ctr] = *(offset_string + ctr);
+  for (ctr = 0; offset_string && ctr < strlen(offset_string); ctr++) {
+    if (isdigit(*(offset_string + ctr))) {
+      this_token->string[ctr] = *(offset_string + ctr);
+    } else if (']' == *(offset_string + ctr)) {
+      ctr++;
+      break;
+    } else {
+      fprintf(parser->err_stream, "Invalid array length: %c\n",
+              *(offset_string + ctr));
+      return 0;
+    }
   }
-  this_token->kind = length;
+  /*
+   * If there are no digits, the last dimensions is unspecified, and there is no
+   * new token.
+   */
+  if (1 == ctr) {
+    parser->ident.last_dimension[parser->num_identifiers - 1] = UNSPECIFIED;
+    return ctr;
+  }
   if (!finish_token(parser, offset_string, this_token, ctr)) {
     this_token->kind = invalid;
     return 0;
@@ -1483,13 +1497,13 @@ bool process_array_dimensions(struct parser_props *parser, char *user_input,
     if (']' == *(user_input + parser->cursor)) {
       parser->cursor++;
     }
-    /* Skip '['. */
     if (!('[' == *(user_input + parser->cursor))) {
       fprintf(parser->err_stream,
               "%s: array-dimension parsing failed due to indeterminate state\n",
               __func__);
       return false;
     }
+    /* Skip '['. */
     parser->cursor++;
     progress_ptr = user_input + parser->cursor;
     /* We've encountered "[]", which always terminates C array-length
@@ -1508,7 +1522,7 @@ bool process_array_dimensions(struct parser_props *parser, char *user_input,
       break;
     }
     increm = gettoken(parser, progress_ptr, this_token);
-    if (!increm) {
+    if (!increm || (invalid == this_token->kind)) {
       this_token->kind = invalid;
       return false;
     }
@@ -1975,12 +1989,17 @@ bool handled_bitfield(const struct parser_props *parser) {
   return true;
 }
 
-bool handled_struct_or_union_members(const struct parser_props *parser) {
+bool handled_struct_or_union_members(struct parser_props *parser) {
   if (parser->has_struct_or_union_members) {
     struct parser_props *cursor = parser->next;
     size_t depth = 0;
     if (parser->num_identifiers) {
       fprintf(parser->out_stream, "which ");
+      /*
+       * Perform the decrement which pop_stack() deferred for the sake of
+       * "which".
+       */
+      parser->num_identifiers--;
     }
     while (cursor && cursor->stacklen) {
       if (depth) {
@@ -2099,8 +2118,20 @@ bool pop_stack(struct parser_props *parser, bool no_enum_instance,
       if (parser->num_identifiers &&
           parser->ident.array_dimensions[parser->num_identifiers - 1]) {
         fprintf(parser->out_stream, "array of ");
+        /*
+         * Jump out of the block to avoid decrementing identifier count, which
+         * for arrays occurs in the length processing.
+         */
+        break;
       } else if ((parser->is_function) && (!parser->is_function_ptr)) {
         fprintf(parser->out_stream, "function which returns ");
+      }
+      /*
+       * In order to generate proper output for structs and unions, decrement
+       * identifier number in handled_struct_or_union_members().
+       */
+      if (!parser->has_struct_or_union_members) {
+        parser->num_identifiers--;
       }
       break;
     case length:
@@ -2238,7 +2269,8 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
     tokenoffset += trim_leading_whitespace(declstring + tokenoffset, trimmed);
   } else if (parser->num_identifiers &&
              parser->ident.array_dimensions[parser->num_identifiers - 1]) {
-    /* Process array length, if any. We should already have an identifier. */
+    /* Process as-yet-unprocessed array lengths, if any. We should already have
+     * an identifier. */
     if ('[' == *(declstring + tokenoffset)) {
       tokenoffset++;
     }
@@ -2252,9 +2284,6 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
       parser->ident.last_dimension[parser->num_identifiers - 1] = SPECIFIED;
     } else {
       parser->ident.last_dimension[parser->num_identifiers - 1] = UNSPECIFIED;
-    }
-    if (',' == *(inputstr + tokenoffset)) {
-      tokenoffset++;
     }
     return tokenoffset;
   }
@@ -2301,11 +2330,12 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
           if (parser->is_struct_or_union) {
             parser->has_struct_or_union_members = true;
           }
-        } else if (('[' != nextchar) && (']' != nextchar) &&
+        } else if ((('[' != nextchar) || (']' != nextchar)) &&
                    parser->num_identifiers &&
                    parser->ident
                        .array_dimensions[parser->num_identifiers - 1]) {
           /* Proceed past array dimension delimiters , but otherwise fail. */
+          parser->cursor++;
           return 0;
         } else if ((',' == nextchar) && parser->is_declarator_list) {
           tokenoffset++;
@@ -2337,6 +2367,9 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
       return 0;
     }
   }
+#ifdef DEBUG
+  showstack(parser->stack, parser->stacklen, parser->out_stream, __LINE__);
+#endif
   return tokenoffset;
 }
 
@@ -2570,9 +2603,19 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
       if (!parser->stacklen && !parser->prev) {
         return 0;
       }
+      if ((',' == *(parser->cursor + user_input)) &&
+          (parser->is_declarator_list)) {
+        parser->cursor++;
+        continue;
+      }
       break;
     }
     parser->cursor += increm;
+    if ((invalid == this_token.kind) &&
+        (UNSPECIFIED ==
+         parser->ident.last_dimension[parser->num_identifiers - 1])) {
+      continue;
+    }
     /* Don't place "typedef" or ":" on the stack. */
     if (!strcmp("typedef", this_token.string)) {
       continue;

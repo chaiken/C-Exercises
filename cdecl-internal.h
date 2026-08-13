@@ -73,6 +73,7 @@ const char *types[] = {"char",
 const char *qualifiers[] = {"const",  "volatile", "static",   "*",
                             "extern", "unsigned", "restrict", "atomic"};
 enum token_class { invalid = 0, type, qualifier, identifier, length, typedefn };
+enum specifier_state { UNKNOWN, UNSPECIFIED, SPECIFIED };
 const char *kind_names[] = {"invalid",    "type",   "qualifier",
                             "identifier", "length", "typedefn"};
 struct token {
@@ -87,7 +88,7 @@ struct token {
 struct identifier_props {
   size_t array_dimensions[MAXIDENTIFIERS];
   size_t array_lengths[MAXIDENTIFIERS];
-  bool last_dimension_unspecified[MAXIDENTIFIERS];
+  enum specifier_state last_dimension[MAXIDENTIFIERS];
 };
 
 /*

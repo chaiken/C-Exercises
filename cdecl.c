@@ -99,7 +99,7 @@ void initialize_identifier(struct identifier_props *ident) {
   for (size_t i = 0; i < MAXIDENTIFIERS; i++) {
     ident->array_dimensions[i] = 0;
     ident->array_lengths[i] = 0;
-    ident->last_dimension_unspecified[i] = true;
+    ident->last_dimension[i] = UNKNOWN;
   }
 }
 
@@ -1543,7 +1543,9 @@ bool process_array_dimensions(struct parser_props *parser, char *user_input,
   } while ((NULL != next_dim) && (parser->cursor <= strlen(user_input)));
   if (parser->ident.array_dimensions[top_ident] ==
       parser->ident.array_lengths[top_ident]) {
-    parser->ident.last_dimension_unspecified[top_ident] = false;
+    parser->ident.last_dimension[top_ident] = SPECIFIED;
+  } else {
+    parser->ident.last_dimension[top_ident] = UNSPECIFIED;
   }
   return true;
 }
@@ -1772,7 +1774,7 @@ void reverse_lengths(struct parser_props *parser) {
   /* Return if there's nothing to reverse. */
   if (!parser->num_identifiers || !parser->stacklen ||
       (parser->ident.array_lengths[top_ident] < 2) ||
-      (parser->ident.last_dimension_unspecified[top_ident] &&
+      ((UNSPECIFIED == parser->ident.last_dimension[top_ident]) &&
        (parser->ident.array_dimensions[top_ident] < 3))) {
     return;
   }
@@ -2026,7 +2028,7 @@ bool handled_array_lengths(struct parser_props *parser, const size_t stacktop) {
     fprintf(parser->out_stream, "%s", parser->stack[stacktop].string);
     if (parser->ident.array_lengths[top_ident] > 1) {
       fprintf(parser->out_stream, "x");
-    } else if (parser->ident.last_dimension_unspecified[top_ident] &&
+    } else if ((UNSPECIFIED == parser->ident.last_dimension[top_ident]) &&
                (parser->ident.array_dimensions[top_ident] >
                 parser->ident.array_lengths[top_ident])) {
       fprintf(parser->out_stream, "x? ");
@@ -2257,7 +2259,12 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
         process_array_length(parser, declstring + tokenoffset, this_token);
     if (']' == *(declstring + tokenoffset)) {
       tokenoffset++;
-      return tokenoffset;
+    }
+    if (parser->ident.array_dimensions[parser->num_identifiers - 1] ==
+        parser->ident.array_lengths[parser->num_identifiers - 1]) {
+      parser->ident.last_dimension[parser->num_identifiers - 1] = SPECIFIED;
+    } else {
+      parser->ident.last_dimension[parser->num_identifiers - 1] = UNSPECIFIED;
     }
     if (',' == *(inputstr + tokenoffset)) {
       tokenoffset++;

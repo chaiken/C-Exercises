@@ -762,7 +762,7 @@ TEST(ReorderArrayLengthsTest, SimpleCase) {
   parser.num_identifiers = 1;
   parser.ident.array_dimensions[0] = 2;
   parser.ident.array_lengths[0] = 1;
-  parser.ident.last_dimension_unspecified[0] = true;
+  parser.ident.last_dimension[0] = UNSPECIFIED;
   parser.stacklen = 4;
   parser.stack[0].kind = type;
   strlcpy(parser.stack[0].string, "uint64_t", strlen("uint64_t") + 1);
@@ -790,7 +790,7 @@ TEST(ReorderArrayLengthsTest, DeclaratorListWithArrayLast) {
   parser.num_identifiers = 2;
   parser.ident.array_dimensions[1] = 2;
   parser.ident.array_lengths[1] = 1;
-  parser.ident.last_dimension_unspecified[1] = true;
+  parser.ident.last_dimension[1] = UNSPECIFIED;
   parser.stacklen = 5;
   parser.stack[0].kind = type;
   strlcpy(parser.stack[0].string, "uint64_t", strlen("uint64_t") + 1);
@@ -824,7 +824,7 @@ TEST(ReorderArrayLengthsTest, DeclaratorListWithArrayFirst) {
   parser.num_identifiers = 2;
   parser.ident.array_dimensions[0] = 2;
   parser.ident.array_lengths[0] = 1;
-  parser.ident.last_dimension_unspecified[1] = true;
+  parser.ident.last_dimension[1] = UNSPECIFIED;
   parser.stacklen = 5;
   parser.stack[0].kind = type;
   strlcpy(parser.stack[0].string, "uint64_t", strlen("uint64_t") + 1);

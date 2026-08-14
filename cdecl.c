@@ -175,9 +175,6 @@ static void _free_all_parsers(struct parser_props *parser) {
   struct parser_props *tail = get_tail_parser(parser);
   while (tail->prev) {
     struct parser_props *save = tail->prev;
-#ifdef DEBUG
-    fprintf(stderr, "free_all_parsers(): freeing %p\n", tail);
-#endif
     free(tail);
     save->next = 0;
     tail = save;
@@ -195,9 +192,6 @@ void release_parser_resources(struct parser_props *parser) {
 struct parser_props *make_parser(struct parser_props *const parser) {
   struct parser_props *new_parser =
       (struct parser_props *)malloc(sizeof(struct parser_props));
-#ifdef DEBUG
-  fprintf(stderr, "Allocated %p\n", new_parser);
-#endif
   if (!new_parser) {
     exit(ENOMEM);
   }
@@ -1945,9 +1939,6 @@ bool handled_function_params(const struct parser_props *parser) {
       depth++;
       struct parser_props *save_next = cursor->next;
       struct parser_props *save_prev = cursor->prev;
-#ifdef DEBUG
-      fprintf(stderr, "%s: freeing %p at %d\n", __func__, cursor, __LINE__);
-#endif
       free(cursor);
       save_prev->next = save_next;
       if (save_next) {
@@ -2003,10 +1994,6 @@ bool handled_struct_or_union_members(const struct parser_props *parser) {
       depth++;
       struct parser_props *save_next = cursor->next;
       struct parser_props *save_prev = cursor->prev;
-#ifdef DEBUG
-      fprintf(stderr, "handled_struct_or_union_members(): freeing %p at %d\n",
-              cursor, __LINE__);
-#endif
       free(cursor);
       save_prev->next = save_next;
       if (save_next) {

@@ -2560,50 +2560,47 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
      * last, as long as there are no function arguments or array delimiters and
      * the expression is not a declarator list.
      */
-    while (strlen(parser->cursor + user_input)) {
-      if ((!parser->is_declarator_list) && (this_token.kind == identifier)) {
-        break;
+    if ((!parser->is_declarator_list) && (this_token.kind == identifier)) {
+      break;
+    }
+    increm = gettoken(parser, user_input + parser->cursor, &this_token);
+    /* Reached end of input, or hit an error. */
+    if (!increm || (invalid == this_token.kind)) {
+      /* There is an error. */
+      if (!parser->stacklen && !parser->prev) {
+        return 0;
       }
-      increm = gettoken(parser, user_input + parser->cursor, &this_token);
-      /* Reached end of input, or hit an error. */
-      if (!increm || (invalid == this_token.kind)) {
-        /* There is an error. */
-        if (!parser->stacklen && !parser->prev) {
-          return 0;
-        }
-        break;
+      break;
+    }
+    parser->cursor += increm;
+    /* Don't place "typedef" or ":" on the stack. */
+    if (!strcmp("typedef", this_token.string)) {
+      continue;
+    }
+    if ((type == this_token.kind) && (!strcmp("union", this_token.string) ||
+                                      !strcmp("struct", this_token.string) ||
+                                      !strcmp("enum", this_token.string))) {
+      if (!handled_compound_type(parser, user_input, &this_token)) {
+        return 0;
       }
-      parser->cursor += increm;
-      /* Don't place "typedef" or ":" on the stack. */
-      if (!strcmp("typedef", this_token.string)) {
-        continue;
-      }
-      if ((type == this_token.kind) && (!strcmp("union", this_token.string) ||
-                                        !strcmp("struct", this_token.string) ||
-                                        !strcmp("enum", this_token.string))) {
-        if (!handled_compound_type(parser, user_input, &this_token)) {
-          return 0;
-        }
-      }
+    }
+    /*
+     * If there is no enum instance name, only a type declaration, then do not
+     * place the encountered enumerator on the stack. Set
+     * parser->num_identifiers true so that pop_stack() doesn't fail.
+     */
+    if ((identifier == this_token.kind) &&
+        (first_identifier_is_enumerator(parser, user_input))) {
       /*
-       * If there is no enum instance name, only a type declaration, then do not
-       * place the encountered enumerator on the stack. Set
-       * parser->num_identifiers true so that pop_stack() doesn't fail.
+       * Put the characters in the token and '{' back on the stack for
+       * process_enum_constants().  This clumsy approach means that the parser
+       * state upon entry to process_enum_constants() does not depend on
+       * whether or not the enum has an instance name.
        */
-      if ((identifier == this_token.kind) &&
-          (first_identifier_is_enumerator(parser, user_input))) {
-        /*
-         * Put the characters in the token and '{' back on the stack for
-         * process_enum_constants().  This clumsy approach means that the parser
-         * state upon entry to process_enum_constants() does not depend on
-         * whether or not the enum has an instance name.
-         */
-        parser->cursor -= strlen(this_token.string) + 1;
-        break;
-      }
-      push_stack(parser, &this_token);
-    } /* while !parser->num_identifiers */
-    break;
+      parser->cursor -= strlen(this_token.string) + 1;
+      break;
+    }
+    push_stack(parser, &this_token);
   } /* while parser->cursor <= strlen(user_input) */
   if (!parser->num_identifiers) {
     /*

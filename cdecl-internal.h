@@ -203,7 +203,8 @@ bool handled_extended_parsing(struct parser_props *parser, char *user_input,
                               struct token *this_token);
 
 /* output functions */
-void reverse_lengths(struct parser_props *parser);
+void reverse_lengths(struct parser_props *parser, const size_t top_ident,
+                     const size_t current_stack_top);
 void reorder_qualifier_and_type(struct parser_props *parser);
 void reorder_array_identifier_and_lengths(struct parser_props *parser);
 void reorder_stacks(struct parser_props *parser);

@@ -1453,6 +1453,12 @@ size_t process_array_length(struct parser_props *parser,
     parser->ident.last_dimension[parser->num_identifiers - 1] = UNSPECIFIED;
     return ctr;
   }
+  /* Account for "[]" now rather than making another tokenizer call. */
+  if (('[' == *(offset_string + ctr)) && (']' == *(offset_string + ctr + 1))) {
+    parser->ident.array_dimensions[parser->num_identifiers - 1]++;
+    parser->ident.last_dimension[parser->num_identifiers - 1] = UNSPECIFIED;
+    ctr += 2;
+  }
   if (!finish_token(parser, offset_string, this_token, ctr)) {
     this_token->kind = invalid;
     return 0;
@@ -1772,23 +1778,39 @@ bool handled_extended_parsing(struct parser_props *parser, char *user_input,
 
 /********** output functions **********/
 
-/* The token at parser->stacklen-1 is the identifier. */
-void reverse_lengths(struct parser_props *parser) {
+int found_array_length_in_remaining_stack(const struct parser_props *parser,
+                                          int current_top) {
+  while (current_top >= 0) {
+    if (length == parser->stack[current_top].kind) {
+      break;
+    }
+    current_top--;
+  }
+  return current_top;
+}
+
+/*
+ * The token at parser->stacklen-1 is the identifier.
+ * Declarator lists may contain several arrays, so find the top length
+ * token for each in turn by passing in the current stack top.
+ */
+void reverse_lengths(struct parser_props *parser, const size_t top_ident,
+                     const size_t current_stack_top) {
   size_t num_pairs = 0;
   size_t top_len_idx = 0;
   size_t bottom_len_idx = 0;
-  const size_t top_ident = parser->num_identifiers - 1;
 
   /* Return if there's nothing to reverse. */
   if (!parser->num_identifiers || !parser->stacklen ||
       (parser->ident.array_lengths[top_ident] < 2) ||
-      ((UNSPECIFIED == parser->ident.last_dimension[top_ident]) &&
+      ((SPECIFIED != parser->ident.last_dimension[top_ident]) &&
        (parser->ident.array_dimensions[top_ident] < 3))) {
     return;
   }
   // Intentionally truncate in the case of an odd number of lengths.
   num_pairs = (size_t)parser->ident.array_lengths[top_ident] / 2;
-  top_len_idx = parser->stacklen - 2;
+  top_len_idx =
+      found_array_length_in_remaining_stack(parser, current_stack_top);
   if (parser->ident.array_lengths[top_ident] % 2) {
     bottom_len_idx = (top_len_idx - num_pairs) - 1;
   } else {
@@ -1839,65 +1861,81 @@ void reorder_qualifier_and_type(struct parser_props *parser) {
   }
 }
 
-int find_array_length_in_stack(const struct parser_props *parser) {
-  int candidate = parser->stacklen - 1;
-  while (candidate >= 0) {
-    if (length == parser->stack[candidate].kind) {
-      break;
-    } else {
-      candidate--;
-    }
-  }
-  return candidate;
-}
-
 /*
  * If the declaration describes a 1-dimensional array with a specified length,
  * the top of the stack holds the array lengths and the element below them is
- * the identifier.
+ * the identifier.  The output stage needs the identifier above the length.
  */
 void reorder_array_identifier_and_lengths(struct parser_props *parser) {
+  int top_length;
+  int current_stack_top = parser->stacklen - 1;
   if (!parser->stacklen || !parser->num_identifiers) {
-    return;
-  }
-  int stacklast = find_array_length_in_stack(parser);
-  if (0 > stacklast) {
     return;
   }
   /* Process each identifier in a declarator list in turn. */
   for (int this_ident = parser->num_identifiers - 1; this_ident >= 0;
        this_ident--) {
-    /*
-     * The identifier name starts at the top.  We want it below the array
-     * dimensions.
-     */
+    top_length =
+        found_array_length_in_remaining_stack(parser, current_stack_top);
+    if (0 > top_length) {
+      return;
+    }
     size_t unprocessed_lengths = parser->ident.array_lengths[this_ident];
+    /* The current identifier has no array lengths, so proceed to the next. */
+    if (!unprocessed_lengths) {
+      current_stack_top--;
+      continue;
+    }
     /*
      * Move the identifier to the stack top by swapping it with each array
      * length in turn.
      */
     while (unprocessed_lengths) {
-      /* If there's no work to do, return. */
-      if ((identifier != parser->stack[stacklast - unprocessed_lengths].kind) ||
+      if ((identifier !=
+           parser->stack[top_length - unprocessed_lengths].kind) ||
           (length !=
-           parser->stack[(stacklast - unprocessed_lengths) + 1].kind)) {
+           parser->stack[(top_length - unprocessed_lengths) + 1].kind)) {
+        fprintf(parser->err_stream, "Logic error in %s\n", __func__);
         return;
       }
-      struct token name = parser->stack[stacklast - unprocessed_lengths];
+      struct token name = parser->stack[top_length - unprocessed_lengths];
       struct token arraylen =
-          parser->stack[(stacklast - unprocessed_lengths) + 1];
-      strlcpy(parser->stack[(stacklast - unprocessed_lengths) + 1].string,
+          parser->stack[(top_length - unprocessed_lengths) + 1];
+      /*
+       * Without memset(), overwriting a long string with a short one leaves
+       * junk on the stack.
+       */
+      memset(parser->stack[(top_length - unprocessed_lengths) + 1].string, '\0',
+             MAXTOKENLEN);
+      memset(parser->stack[(top_length - unprocessed_lengths)].string, '\0',
+             MAXTOKENLEN);
+      strlcpy(parser->stack[(top_length - unprocessed_lengths) + 1].string,
               name.string, MAXTOKENLEN);
-      strlcpy(parser->stack[stacklast - unprocessed_lengths].string,
+      strlcpy(parser->stack[top_length - unprocessed_lengths].string,
               arraylen.string, MAXTOKENLEN);
-      parser->stack[(stacklast - unprocessed_lengths) + 1].kind = identifier;
-      parser->stack[stacklast - unprocessed_lengths].kind = length;
+      parser->stack[(top_length - unprocessed_lengths) + 1].kind = identifier;
+      parser->stack[top_length - unprocessed_lengths].kind = length;
       unprocessed_lengths--;
     }
     if (parser->ident.array_lengths[this_ident] > 1) {
-      reverse_lengths(parser);
+#ifdef DEBUG
+      printf("Before reversing array lengths:\n");
+      showstack((const token *)&parser->stack[0], parser->stacklen, stdout,
+                __LINE__);
+#endif
+      reverse_lengths(parser, this_ident, current_stack_top);
+#ifdef DEBUG
+      printf("After reversing array lengths:\n");
+      showstack((const token *)&parser->stack[0], parser->stacklen, stdout,
+                __LINE__);
+#endif
     }
-  }
+    /* Move past just-processed identifier in a daeclarator list. */
+    current_stack_top =
+        (top_length -
+         (parser->ident.array_lengths[parser->num_identifiers - 1])) -
+        1;
+  } /* end of loop over identifiers in a declarator list */
 }
 
 /* Order the stacked token for the convenience of the pop_stack() function. */
@@ -2057,6 +2095,19 @@ bool handled_array_lengths(struct parser_props *parser, const size_t stacktop) {
   return true;
 }
 
+bool identifier_is_last(const struct parser_props *parser) {
+  /*
+   * Minus 2 since -1 is the top of the stack and is the already known
+   * identifier.
+   */
+  for (int i = parser->stacklen - 2; i >= 0; i--) {
+    if (identifier == parser->stack[i].kind) {
+      return false;
+    }
+  }
+  return true;
+}
+
 /* Return true on success. */
 bool pop_stack(struct parser_props *parser, bool no_enum_instance,
                bool is_second_pointer_qualifier) {
@@ -2104,8 +2155,11 @@ bool pop_stack(struct parser_props *parser, bool no_enum_instance,
       }
       break;
     case identifier:
+      /* Delay printing "and" until after "array of" when applicable. */
       if (parser->is_declarator_list && stacktop &&
-          (identifier == parser->stack[stacktop - 1].kind)) {
+          (identifier == parser->stack[stacktop - 1].kind) &&
+          (!(parser->num_identifiers &&
+             parser->ident.array_dimensions[parser->num_identifiers - 1]))) {
         fprintf(parser->out_stream, "%s is a(n) and ",
                 parser->stack[stacktop].string);
       } else {
@@ -2118,11 +2172,17 @@ bool pop_stack(struct parser_props *parser, bool no_enum_instance,
       if (parser->num_identifiers &&
           parser->ident.array_dimensions[parser->num_identifiers - 1]) {
         fprintf(parser->out_stream, "array of ");
-        /*
-         * Jump out of the block to avoid decrementing identifier count, which
-         * for arrays occurs in the length processing.
-         */
-        break;
+        if (parser->is_declarator_list &&
+            !(identifier_is_last(parser) ||
+              parser->ident.array_lengths[parser->num_identifiers - 1])) {
+          fprintf(parser->out_stream, "and ");
+        } else {
+          /*
+           * Jump out of the block to avoid decrementing identifier count, which
+           * for arrays occurs in the length processing.
+           */
+          break;
+        }
       } else if ((parser->is_function) && (!parser->is_function_ptr)) {
         fprintf(parser->out_stream, "function which returns ");
       }
@@ -2138,9 +2198,14 @@ bool pop_stack(struct parser_props *parser, bool no_enum_instance,
       if (!handled_array_lengths(parser, stacktop)) {
         return false;
       }
+      /*
+       * Now that the identifier's array lengths are printed, effectively remove
+       * the identifier by decrementing the count.
+       */
       if (parser->is_declarator_list && stacktop &&
-          (identifier == parser->stack[stacktop - 1].kind)) {
+          (parser->num_identifiers > 1)) {
         fprintf(parser->out_stream, " and ");
+        parser->num_identifiers--;
       }
       break;
     case invalid:
@@ -2249,6 +2314,8 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
   size_t ctr = 0;
   char trimmed[MAXTOKENLEN];
   const char *startbracep = strchr(declstring, '{');
+  const char *endbracket = strchr(declstring, ']');
+  const char *firstcomma = strchr(declstring, ',');
   char nextchar = '\0';
   const size_t trimnum = trim_leading_whitespace(declstring, trimmed);
   _cleanup_(freep) char *inputstr = strdup(declstring);
@@ -2267,25 +2334,31 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
   if (parser->is_declarator_list && ',' == *(declstring + tokenoffset)) {
     tokenoffset++;
     tokenoffset += trim_leading_whitespace(declstring + tokenoffset, trimmed);
-  } else if (parser->num_identifiers &&
-             parser->ident.array_dimensions[parser->num_identifiers - 1]) {
-    /* Process as-yet-unprocessed array lengths, if any. We should already have
-     * an identifier. */
-    if ('[' == *(declstring + tokenoffset)) {
-      tokenoffset++;
+  }
+  /*
+   * Make sure not to go past commas separating declarator-list items when
+   * considering array dimensions.
+   */
+  if (!is_first_name_char(*(declstring + tokenoffset)) &&
+      parser->num_identifiers &&
+      parser->ident.array_dimensions[parser->num_identifiers - 1] &&
+      endbracket) {
+    if (!firstcomma || (endbracket < firstcomma)) {
+      /* Process as-yet-unprocessed array lengths, if any. We should already
+       * have an identifier. */
+      if ('[' == *(declstring + tokenoffset)) {
+        tokenoffset++;
+      }
+      tokenoffset +=
+          process_array_length(parser, declstring + tokenoffset, this_token);
+      if (parser->ident.array_dimensions[parser->num_identifiers - 1] ==
+          parser->ident.array_lengths[parser->num_identifiers - 1]) {
+        parser->ident.last_dimension[parser->num_identifiers - 1] = SPECIFIED;
+      } else {
+        parser->ident.last_dimension[parser->num_identifiers - 1] = UNSPECIFIED;
+      }
+      return tokenoffset;
     }
-    tokenoffset +=
-        process_array_length(parser, declstring + tokenoffset, this_token);
-    if (']' == *(declstring + tokenoffset)) {
-      tokenoffset++;
-    }
-    if (parser->ident.array_dimensions[parser->num_identifiers - 1] ==
-        parser->ident.array_lengths[parser->num_identifiers - 1]) {
-      parser->ident.last_dimension[parser->num_identifiers - 1] = SPECIFIED;
-    } else {
-      parser->ident.last_dimension[parser->num_identifiers - 1] = UNSPECIFIED;
-    }
-    return tokenoffset;
   }
   /* Move past '(' enclosing the function pointer name to '*'. */
   if (parser->is_function_ptr && ('(' == *(declstring + tokenoffset))) {
@@ -2304,7 +2377,8 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
   }
   nextchar = *(declstring + tokenoffset);
   /* The token has multiple characters, so copy them all. */
-  for (int i = 0; i < (int)(num_remaining_chars - trimnum); i++) {
+  for (int copied_ctr = 0; copied_ctr < (int)(num_remaining_chars - trimnum);
+       copied_ctr++) {
     if ('\0' == nextchar) {
       break;
     }
@@ -2334,8 +2408,13 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
                    parser->num_identifiers &&
                    parser->ident
                        .array_dimensions[parser->num_identifiers - 1]) {
-          /* Proceed past array dimension delimiters , but otherwise fail. */
+          /* Proceed past array dimension delimiters. */
           parser->cursor++;
+          /* The copied chars are likely an identifier. */
+          if (copied_ctr) {
+            break;
+          }
+          /* There are array delimiters without an identifier. */
           return 0;
         } else if ((',' == nextchar) && parser->is_declarator_list) {
           tokenoffset++;
@@ -2463,8 +2542,9 @@ bool finish_token(struct parser_props *parser, const char *offset_decl,
      * identifiers is an error.
      */
     if ((parser->num_identifiers) &&
-        (!parser->has_enum_constants && !parser->is_declarator_list)) {
+        (!(parser->has_enum_constants || parser->is_declarator_list))) {
       this_token->kind = invalid;
+      memset(this_token->string, '\0', strlen(this_token->string));
       return false;
     }
     parser->num_identifiers++;
@@ -2596,7 +2676,12 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
     if ((!parser->is_declarator_list) && (this_token.kind == identifier)) {
       break;
     }
+    if (',' == *(parser->cursor + user_input)) {
+      parser->cursor++;
+    }
     increm = gettoken(parser, user_input + parser->cursor, &this_token);
+    /* Advance parser->cursor before the comma-check below. */
+    parser->cursor += increm;
     /* Reached end of input, or hit an error. */
     if (!increm || (invalid == this_token.kind)) {
       /* There is an error. */
@@ -2610,7 +2695,6 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
       }
       break;
     }
-    parser->cursor += increm;
     if ((invalid == this_token.kind) &&
         (UNSPECIFIED ==
          parser->ident.last_dimension[parser->num_identifiers - 1])) {

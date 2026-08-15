@@ -849,6 +849,177 @@ TEST(ReorderArrayLengthsTest, DeclaratorListWithArrayFirst) {
   EXPECT_THAT(parser.stack[2].string, StrEq("entry"));
 }
 
+/*
+ * Here, the input is "uint64_t target, entry[7][], *index";
+ */
+TEST(ReorderArrayLengthsTest, DeclaratorListWithArrayMiddle) {
+  struct parser_props parser;
+  initialize_parser(&parser);
+  parser.num_identifiers = 3;
+  parser.ident.array_dimensions[1] = 2;
+  parser.ident.array_lengths[1] = 1;
+  parser.ident.last_dimension[1] = UNSPECIFIED;
+  parser.stacklen = 6;
+  parser.stack[0].kind = type;
+  strlcpy(parser.stack[0].string, "uint64_t", strlen("uint64_t") + 1);
+  parser.stack[1].kind = identifier;
+  strlcpy(parser.stack[1].string, "target", strlen("target") + 1);
+  parser.stack[2].kind = identifier;
+  strlcpy(parser.stack[2].string, "entry", strlen("entry") + 1);
+  parser.stack[3].kind = length;
+  strlcpy(parser.stack[3].string, "7", 2);
+  parser.stack[4].kind = qualifier;
+  strlcpy(parser.stack[4].string, "*", 2);
+  parser.stack[5].kind = identifier;
+  strlcpy(parser.stack[5].string, "index", strlen("index") + 1);
+  std::cout << "Before reorder_array_identifier_and_lengths()" << std::endl;
+  showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
+  reorder_array_identifier_and_lengths(&parser);
+  std::cout << "After reorder_array_identifier_and_lengths()" << std::endl;
+  showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
+  ASSERT_THAT(parser.num_identifiers, Eq(3));
+  EXPECT_THAT(parser.stacklen, Eq(6));
+  EXPECT_THAT(parser.stack[2].kind, Eq(length));
+  EXPECT_THAT(parser.stack[2].string, StrEq("7"));
+  EXPECT_THAT(parser.stack[3].kind, Eq(identifier));
+  EXPECT_THAT(parser.stack[3].string, StrEq("entry"));
+}
+
+/*
+ * Here, the input is "uint64_t target, entry[7][4], *index";
+ */
+TEST(ReorderArrayLengthsTest, DeclaratorListWithArrayMiddleMultipleLengths) {
+  struct parser_props parser;
+  initialize_parser(&parser);
+  parser.num_identifiers = 3;
+  parser.ident.array_dimensions[1] = 2;
+  parser.ident.array_lengths[1] = 2;
+  parser.ident.last_dimension[1] = SPECIFIED;
+  parser.stacklen = 7;
+  parser.stack[0].kind = type;
+  strlcpy(parser.stack[0].string, "uint64_t", strlen("uint64_t") + 1);
+  parser.stack[1].kind = identifier;
+  strlcpy(parser.stack[1].string, "target", strlen("target") + 1);
+  parser.stack[2].kind = identifier;
+  strlcpy(parser.stack[2].string, "entry", strlen("entry") + 1);
+  parser.stack[3].kind = length;
+  strlcpy(parser.stack[3].string, "7", 2);
+  parser.stack[4].kind = length;
+  strlcpy(parser.stack[4].string, "4", 2);
+  parser.stack[5].kind = qualifier;
+  strlcpy(parser.stack[5].string, "*", 2);
+  parser.stack[6].kind = identifier;
+  strlcpy(parser.stack[6].string, "index", strlen("index") + 1);
+  std::cout << "Before reorder_array_identifier_and_lengths()" << std::endl;
+  showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
+  reorder_array_identifier_and_lengths(&parser);
+  std::cout << "After reorder_array_identifier_and_lengths()" << std::endl;
+  showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
+  ASSERT_THAT(parser.num_identifiers, Eq(3));
+  EXPECT_THAT(parser.stacklen, Eq(7));
+  EXPECT_THAT(parser.stack[2].kind, Eq(length));
+  EXPECT_THAT(parser.stack[2].string, StrEq("4"));
+  EXPECT_THAT(parser.stack[3].kind, Eq(length));
+  EXPECT_THAT(parser.stack[3].string, StrEq("7"));
+  EXPECT_THAT(parser.stack[4].kind, Eq(identifier));
+  EXPECT_THAT(parser.stack[4].string, StrEq("entry"));
+}
+
+/*
+ * Here, the input is "uint64_t target[1], entry, *index[2]";
+ */
+TEST(ReorderArrayLengthsTest, DeclaratorListWithArrayFirstAndLast) {
+  struct parser_props parser;
+  initialize_parser(&parser);
+  parser.num_identifiers = 3;
+  parser.ident.array_dimensions[0] = 1;
+  parser.ident.array_lengths[0] = 1;
+  parser.ident.last_dimension[0] = SPECIFIED;
+  parser.ident.array_dimensions[2] = 1;
+  parser.ident.array_lengths[2] = 1;
+  parser.ident.last_dimension[2] = SPECIFIED;
+  parser.stacklen = 7;
+  parser.stack[0].kind = type;
+  strlcpy(parser.stack[0].string, "uint64_t", strlen("uint64_t") + 1);
+  parser.stack[1].kind = identifier;
+  strlcpy(parser.stack[1].string, "target", strlen("target") + 1);
+  parser.stack[2].kind = length;
+  strlcpy(parser.stack[2].string, "1", 2);
+  parser.stack[3].kind = identifier;
+  strlcpy(parser.stack[3].string, "entry", strlen("entry") + 1);
+  parser.stack[4].kind = qualifier;
+  strlcpy(parser.stack[4].string, "*", 2);
+  parser.stack[5].kind = identifier;
+  strlcpy(parser.stack[5].string, "index", strlen("index") + 1);
+  parser.stack[6].kind = length;
+  strlcpy(parser.stack[6].string, "2", 2);
+  std::cout << "Before reorder_array_identifier_and_lengths()" << std::endl;
+  showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
+  reorder_array_identifier_and_lengths(&parser);
+  std::cout << "After reorder_array_identifier_and_lengths()" << std::endl;
+  showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
+  ASSERT_THAT(parser.num_identifiers, Eq(3));
+  EXPECT_THAT(parser.stacklen, Eq(7));
+  EXPECT_THAT(parser.stack[1].kind, Eq(length));
+  EXPECT_THAT(parser.stack[1].string, StrEq("1"));
+  EXPECT_THAT(parser.stack[2].kind, Eq(identifier));
+  EXPECT_THAT(parser.stack[2].string, StrEq("target"));
+  EXPECT_THAT(parser.stack[5].kind, Eq(length));
+  EXPECT_THAT(parser.stack[5].string, StrEq("2"));
+  EXPECT_THAT(parser.stack[6].kind, Eq(identifier));
+  EXPECT_THAT(parser.stack[6].string, StrEq("index"));
+}
+
+/*
+ * Here, the input is "uint64_t target[1][], entry, *index[2][3]";
+ */
+TEST(ReorderArrayLengthsTest,
+     DeclaratorListWithArrayFirstAndLastMultipleLengths) {
+  struct parser_props parser;
+  initialize_parser(&parser);
+  parser.num_identifiers = 3;
+  parser.ident.array_dimensions[0] = 2;
+  parser.ident.array_lengths[0] = 1;
+  parser.ident.last_dimension[0] = UNSPECIFIED;
+  parser.ident.array_dimensions[2] = 2;
+  parser.ident.array_lengths[2] = 2;
+  parser.ident.last_dimension[2] = SPECIFIED;
+  parser.stacklen = 8;
+  parser.stack[0].kind = type;
+  strlcpy(parser.stack[0].string, "uint64_t", strlen("uint64_t") + 1);
+  parser.stack[1].kind = identifier;
+  strlcpy(parser.stack[1].string, "target", strlen("target") + 1);
+  parser.stack[2].kind = length;
+  strlcpy(parser.stack[2].string, "1", 2);
+  parser.stack[3].kind = identifier;
+  strlcpy(parser.stack[3].string, "entry", strlen("entry") + 1);
+  parser.stack[4].kind = qualifier;
+  strlcpy(parser.stack[4].string, "*", 2);
+  parser.stack[5].kind = identifier;
+  strlcpy(parser.stack[5].string, "index", strlen("index") + 1);
+  parser.stack[6].kind = length;
+  strlcpy(parser.stack[6].string, "2", 2);
+  parser.stack[7].kind = length;
+  strlcpy(parser.stack[7].string, "3", 2);
+  std::cout << "Before reorder_array_identifier_and_lengths()" << std::endl;
+  showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
+  reorder_array_identifier_and_lengths(&parser);
+  std::cout << "After reorder_array_identifier_and_lengths()" << std::endl;
+  showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
+  ASSERT_THAT(parser.num_identifiers, Eq(3));
+  EXPECT_THAT(parser.stacklen, Eq(8));
+  EXPECT_THAT(parser.stack[1].kind, Eq(length));
+  EXPECT_THAT(parser.stack[1].string, StrEq("1"));
+  EXPECT_THAT(parser.stack[2].kind, Eq(identifier));
+  EXPECT_THAT(parser.stack[2].string, StrEq("target"));
+  EXPECT_THAT(parser.stack[5].kind, Eq(length));
+  EXPECT_THAT(parser.stack[5].string, StrEq("3"));
+  EXPECT_THAT(parser.stack[6].kind, Eq(length));
+  EXPECT_THAT(parser.stack[6].string, StrEq("2"));
+  EXPECT_THAT(parser.stack[7].kind, Eq(identifier));
+  EXPECT_THAT(parser.stack[7].string, StrEq("index"));
+}
+
 struct ParserSuite : public Test {
   ParserSuite() : fake_stdout(tmpfile()), fake_stderr(tmpfile()) {
     this_token.kind = invalid;
@@ -1387,6 +1558,121 @@ TEST_F(ParserSuite, PopAllTwoFunctionParams) {
   EXPECT_THAT(StdoutMatches("int64_t"), IsTrue());
 }
 
+/* "float msg[3][4];" */
+TEST_F(ParserSuite, PopSpecifiedArrayLengths) {
+  parser.num_identifiers = 1;
+  parser.ident.array_dimensions[0] = 2;
+  parser.ident.array_lengths[0] = 2;
+  parser.ident.last_dimension[0] = SPECIFIED;
+  struct token token0{type, "float"};
+  push_stack(&parser, &token0);
+  struct token token1{length, "4"};
+  push_stack(&parser, &token1);
+  struct token token2{length, "3"};
+  push_stack(&parser, &token2);
+  struct token token3{identifier, "msg"};
+  push_stack(&parser, &token3);
+  ASSERT_THAT(parser.stacklen, Eq(4));
+
+  ASSERT_THAT(pop_all(&parser), IsTrue());
+  EXPECT_THAT(StdoutMatches("msg"), IsTrue());
+  EXPECT_THAT(StdoutMatches("array of"), IsTrue());
+  EXPECT_THAT(StdoutMatches("3x4"), IsTrue());
+  EXPECT_THAT(StdoutMatches("float"), IsTrue());
+}
+
+/* "float msg[];" */
+TEST_F(ParserSuite, PopUnspecifiedArrayLength) {
+  parser.num_identifiers = 1;
+  parser.ident.array_dimensions[0] = 1;
+  parser.ident.array_lengths[0] = 0;
+  parser.ident.last_dimension[0] = UNSPECIFIED;
+  struct token token0{type, "float"};
+  push_stack(&parser, &token0);
+  struct token token1{identifier, "msg"};
+  push_stack(&parser, &token1);
+  ASSERT_THAT(parser.stacklen, Eq(2));
+
+  ASSERT_THAT(pop_all(&parser), IsTrue());
+  EXPECT_THAT(StdoutMatches("msg"), IsTrue());
+  EXPECT_THAT(StdoutMatches("array of"), IsTrue());
+  EXPECT_THAT(StdoutMatches("float"), IsTrue());
+  EXPECT_THAT(StdoutMatches("x"), IsFalse());
+}
+
+/* "float msg[4][];" */
+TEST_F(ParserSuite, PopPartiallyUnspecifiedArrayLengths) {
+  parser.num_identifiers = 1;
+  parser.ident.array_dimensions[0] = 2;
+  parser.ident.array_lengths[0] = 1;
+  parser.ident.last_dimension[0] = UNSPECIFIED;
+  struct token token0{type, "float"};
+  push_stack(&parser, &token0);
+  struct token token1{length, "4"};
+  push_stack(&parser, &token1);
+  struct token token2{identifier, "msg"};
+  push_stack(&parser, &token2);
+  ASSERT_THAT(parser.stacklen, Eq(3));
+
+  ASSERT_THAT(pop_all(&parser), IsTrue());
+  EXPECT_THAT(StdoutMatches("msg"), IsTrue());
+  EXPECT_THAT(StdoutMatches("array of"), IsTrue());
+  EXPECT_THAT(StdoutMatches("4x?"), IsTrue());
+  EXPECT_THAT(StdoutMatches("float"), IsTrue());
+}
+
+/* "float msg[4][], y;" */
+TEST_F(ParserSuite, PopDeclaratorListPartiallyUnspecifiedArrayLengthsFirst) {
+  parser.is_declarator_list = true;
+  parser.num_identifiers = 2;
+  parser.ident.array_dimensions[0] = 2;
+  parser.ident.array_lengths[0] = 1;
+  parser.ident.last_dimension[0] = UNSPECIFIED;
+  struct token token0{type, "float"};
+  push_stack(&parser, &token0);
+  struct token token1{length, "4"};
+  push_stack(&parser, &token1);
+  struct token token2{identifier, "msg"};
+  push_stack(&parser, &token2);
+  struct token token3{identifier, "y"};
+  push_stack(&parser, &token3);
+  ASSERT_THAT(parser.stacklen, Eq(4));
+
+  ASSERT_THAT(pop_all(&parser), IsTrue());
+  EXPECT_THAT(StdoutMatches("y is a(n)"), IsTrue());
+  EXPECT_THAT(StdoutMatches("and"), IsTrue());
+  EXPECT_THAT(StdoutMatches("msg is a(n)"), IsTrue());
+  EXPECT_THAT(StdoutMatches("array of"), IsTrue());
+  EXPECT_THAT(StdoutMatches("4x?"), IsTrue());
+  EXPECT_THAT(StdoutMatches("float"), IsTrue());
+}
+
+/* "float y, msg[4][];" */
+TEST_F(ParserSuite, PopDeclaratorListPartiallyUnspecifiedArrayLengthsLast) {
+  parser.is_declarator_list = true;
+  parser.num_identifiers = 2;
+  parser.ident.array_dimensions[1] = 2;
+  parser.ident.array_lengths[1] = 1;
+  parser.ident.last_dimension[1] = UNSPECIFIED;
+  struct token token0{type, "float"};
+  push_stack(&parser, &token0);
+  struct token token1{identifier, "y"};
+  push_stack(&parser, &token1);
+  struct token token2{length, "4"};
+  push_stack(&parser, &token2);
+  struct token token3{identifier, "msg"};
+  push_stack(&parser, &token3);
+  ASSERT_THAT(parser.stacklen, Eq(4));
+
+  ASSERT_THAT(pop_all(&parser), IsTrue());
+  EXPECT_THAT(StdoutMatches("msg is a(n)"), IsTrue());
+  EXPECT_THAT(StdoutMatches("array of"), IsTrue());
+  EXPECT_THAT(StdoutMatches("4x?"), IsTrue());
+  EXPECT_THAT(StdoutMatches("and"), IsTrue());
+  EXPECT_THAT(StdoutMatches("y is a(n)"), IsTrue());
+  EXPECT_THAT(StdoutMatches("float"), IsTrue());
+}
+
 TEST_F(ParserSuite, Showstack) {
   struct token token0{type, "int"};
   push_stack(&parser, &token0);
@@ -1637,6 +1923,7 @@ TEST_F(ParserSuite, LoadStackArrayNoLength) {
   const char *probe = "double val[]";
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input);
+  EXPECT_THAT(parser.stacklen, Eq(2));
   //  First '[' is consumed; "]" is not. */
   EXPECT_THAT(consumed, Eq(strlen(probe) - 1));
   EXPECT_THAT(parser.ident.array_dimensions[0], Eq(1));
@@ -1656,8 +1943,10 @@ TEST_F(ParserSuite, LoadStackArrayLength) {
   std::size_t consumed = load_stack(&parser, user_input);
   // In load_stack(), "]" is consumed but not copied into output. */
   EXPECT_THAT(consumed, Eq(strlen(probe)));
+  EXPECT_THAT(parser.stacklen, Eq(3));
   EXPECT_THAT(parser.ident.array_dimensions[0], Eq(1));
   EXPECT_THAT(parser.ident.array_lengths[0], Eq(1));
+  EXPECT_THAT(parser.ident.last_dimension[0], Eq(SPECIFIED));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string double"),
               IsTrue());
   EXPECT_THAT(StdoutMatches("Token number 1 has kind length and string 111"),
@@ -1673,8 +1962,10 @@ TEST_F(ParserSuite, LoadStackTwoDimArrayOneLength) {
   const char *probe = "double val[1][]";
   strlcpy(user_input, probe, strlen(probe) + 1);
   EXPECT_THAT(load_stack(&parser, user_input), Eq(strlen(probe)));
+  EXPECT_THAT(parser.stacklen, Eq(3));
   EXPECT_THAT(parser.ident.array_dimensions[0], Eq(2));
   EXPECT_THAT(parser.ident.array_lengths[0], Eq(1));
+  EXPECT_THAT(parser.ident.last_dimension[0], Eq(UNSPECIFIED));
   showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
 }
 
@@ -1683,8 +1974,10 @@ TEST_F(ParserSuite, LoadStackTwoDimArrayTwoLengths) {
   const char *probe = "double val[8][4]";
   strlcpy(user_input, probe, strlen(probe) + 1);
   EXPECT_THAT(load_stack(&parser, user_input), Eq(strlen(probe)));
+  EXPECT_THAT(parser.stacklen, Eq(4));
   EXPECT_THAT(parser.ident.array_dimensions[0], Eq(2));
   EXPECT_THAT(parser.ident.array_lengths[0], Eq(2));
+  EXPECT_THAT(parser.ident.last_dimension[0], Eq(SPECIFIED));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string double"),
               IsTrue());
   EXPECT_THAT(StdoutMatches("Token number 1 has kind length and string 4"),
@@ -1699,11 +1992,13 @@ TEST_F(ParserSuite, LoadStackTwoDimArrayTwoLengths) {
 
 TEST_F(ParserSuite, LoadStackThreeDimArrayTwoLengths) {
   char user_input[MAXTOKENLEN];
-  const char *probe = "double val[8][4]";
+  const char *probe = "double val[8][4][]";
   strlcpy(user_input, probe, strlen(probe) + 1);
   EXPECT_THAT(load_stack(&parser, user_input), Eq(strlen(probe)));
-  EXPECT_THAT(parser.ident.array_dimensions[0], Eq(2));
+  EXPECT_THAT(parser.stacklen, Eq(4));
+  EXPECT_THAT(parser.ident.array_dimensions[0], Eq(3));
   EXPECT_THAT(parser.ident.array_lengths[0], Eq(2));
+  EXPECT_THAT(parser.ident.last_dimension[0], Eq(UNSPECIFIED));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string double"),
               IsTrue());
   EXPECT_THAT(StdoutMatches("Token number 1 has kind length and string 4"),
@@ -1718,21 +2013,24 @@ TEST_F(ParserSuite, LoadStackThreeDimArrayTwoLengths) {
 
 TEST_F(ParserSuite, LoadStackThreeDimArrayThreeLengths) {
   char user_input[MAXTOKENLEN];
-  const char *probe = "double val[8][4]";
+  const char *probe = "double val[8][4][11]";
   strlcpy(user_input, probe, strlen(probe) + 1);
   EXPECT_THAT(load_stack(&parser, user_input), Eq(strlen(probe)));
-  EXPECT_THAT(parser.ident.array_dimensions[0], Eq(2));
-  EXPECT_THAT(parser.ident.array_lengths[0], Eq(2));
+  EXPECT_THAT(parser.stacklen, Eq(5));
+  EXPECT_THAT(parser.ident.array_dimensions[0], Eq(3));
+  EXPECT_THAT(parser.ident.array_lengths[0], Eq(3));
+  EXPECT_THAT(parser.ident.last_dimension[0], Eq(SPECIFIED));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string double"),
               IsTrue());
-  EXPECT_THAT(StdoutMatches("Token number 1 has kind length and string 4"),
+  EXPECT_THAT(StdoutMatches("Token number 1 has kind length and string 11"),
               IsTrue());
-  EXPECT_THAT(StdoutMatches("Token number 2 has kind length and string 8"),
+  EXPECT_THAT(StdoutMatches("Token number 2 has kind length and string 4"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 3 has kind length and string 8"),
               IsTrue());
   EXPECT_THAT(
-      StdoutMatches("Token number 3 has kind identifier and string val"),
+      StdoutMatches("Token number 4 has kind identifier and string val"),
       IsTrue());
-  showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
 }
 
 TEST_F(ParserSuite, LoadStackBadArray) {
@@ -2360,6 +2658,12 @@ TEST_F(ParserSuite, LoadStackDeclaratorListTrailingArray) {
   EXPECT_THAT(StdoutMatches("Token number 3 has kind identifier and string y"),
               IsTrue());
   EXPECT_THAT(parser.stacklen, Eq(4));
+  EXPECT_THAT(parser.ident.last_dimension[0], Eq(UNKNOWN));
+  EXPECT_THAT(parser.ident.array_dimensions[0], Eq(0));
+  EXPECT_THAT(parser.ident.array_lengths[0], Eq(0));
+  EXPECT_THAT(parser.ident.last_dimension[1], Eq(SPECIFIED));
+  EXPECT_THAT(parser.ident.array_dimensions[1], Eq(1));
+  EXPECT_THAT(parser.ident.array_lengths[1], Eq(1));
   showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
 }
 
@@ -2378,6 +2682,96 @@ TEST_F(ParserSuite, LoadStackDeclaratorListLeadingArray) {
   EXPECT_THAT(StdoutMatches("Token number 3 has kind identifier and string y"),
               IsTrue());
   EXPECT_THAT(parser.stacklen, Eq(4));
+  EXPECT_THAT(parser.ident.last_dimension[0], Eq(SPECIFIED));
+  EXPECT_THAT(parser.ident.array_dimensions[0], Eq(1));
+  EXPECT_THAT(parser.ident.array_lengths[0], Eq(1));
+  EXPECT_THAT(parser.ident.last_dimension[1], Eq(UNKNOWN));
+  EXPECT_THAT(parser.ident.array_dimensions[1], Eq(0));
+  EXPECT_THAT(parser.ident.array_lengths[1], Eq(0));
+  showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
+}
+
+TEST_F(ParserSuite, LoadStackDeclaratorListTrailingUnspecifiedDimension) {
+  char user_input[MAXTOKENLEN];
+  const char *probe = "int x, y[8][]";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input);
+  EXPECT_THAT(consumed, Eq(strlen(probe)));
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string int"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 1 has kind identifier and string x"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 2 has kind length and string 8"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 3 has kind identifier and string y"),
+              IsTrue());
+  EXPECT_THAT(parser.stacklen, Eq(4));
+  EXPECT_THAT(parser.ident.array_dimensions[0], Eq(0));
+  EXPECT_THAT(parser.ident.array_lengths[0], Eq(0));
+  EXPECT_THAT(parser.ident.array_dimensions[1], Eq(2));
+  EXPECT_THAT(parser.ident.array_lengths[1], Eq(1));
+  EXPECT_THAT(parser.ident.last_dimension[1], Eq(UNSPECIFIED));
+  showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
+}
+
+TEST_F(ParserSuite, LoadStackDeclaratorListLeadingUnspecifiedLength) {
+  char user_input[MAXTOKENLEN];
+  const char *probe = "int x[8][], y";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input);
+  EXPECT_THAT(consumed, Eq(strlen(probe)));
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string int"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 1 has kind length and string 8"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 2 has kind identifier and string x"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 3 has kind identifier and string y"),
+              IsTrue());
+  EXPECT_THAT(parser.stacklen, Eq(4));
+  EXPECT_THAT(parser.ident.array_dimensions[0], Eq(2));
+  EXPECT_THAT(parser.ident.array_lengths[0], Eq(1));
+  EXPECT_THAT(parser.ident.last_dimension[0], Eq(UNSPECIFIED));
+  EXPECT_THAT(parser.ident.array_dimensions[1], Eq(0));
+  EXPECT_THAT(parser.ident.array_lengths[1], Eq(0));
+  showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
+}
+
+TEST_F(ParserSuite, LoadStackDeclaratorListTrailingOnlyUnspecifiedDimension) {
+  char user_input[MAXTOKENLEN];
+  const char *probe = "int x, y[]";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input);
+  EXPECT_THAT(consumed, Eq(strlen(probe)));
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string int"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 1 has kind identifier and string x"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 2 has kind identifier and string y"),
+              IsTrue());
+  EXPECT_THAT(parser.stacklen, Eq(3));
+  EXPECT_THAT(parser.ident.last_dimension[1], Eq(UNSPECIFIED));
+  EXPECT_THAT(parser.ident.array_dimensions[1], Eq(1));
+  EXPECT_THAT(parser.ident.array_lengths[1], Eq(0));
+  showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
+}
+
+TEST_F(ParserSuite, LoadStackDeclaratorListLeadingOnlyUnspecifiedDimension) {
+  char user_input[MAXTOKENLEN];
+  const char *probe = "int x[], y";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input);
+  EXPECT_THAT(consumed, Eq(strlen(probe)));
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string int"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 1 has kind identifier and string x"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("Token number 2 has kind identifier and string y"),
+              IsTrue());
+  EXPECT_THAT(parser.stacklen, Eq(3));
+  EXPECT_THAT(parser.ident.last_dimension[0], Eq(UNSPECIFIED));
+  EXPECT_THAT(parser.ident.array_dimensions[0], Eq(1));
+  EXPECT_THAT(parser.ident.array_lengths[0], Eq(0));
   showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
 }
 
@@ -2475,6 +2869,8 @@ TEST_F(ParserSuite, ParseSimpleArray) {
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(parser.ident.array_lengths[0], Eq(0));
   EXPECT_THAT(StdoutMatches("x is a(n) array of const double "), IsTrue());
+  EXPECT_THAT(parser.ident.array_dimensions[0], Eq(1));
+  EXPECT_THAT(parser.ident.last_dimension[0], Eq(UNSPECIFIED));
 }
 
 TEST_F(ParserSuite, ParseArrayWithLength) {
@@ -2509,7 +2905,6 @@ TEST_F(ParserSuite, ParseArrayWithThreeDimTwoLengths) {
 TEST_F(ParserSuite, ParseArrayWithThreeLengths) {
   char inputstr[] = "char val[9][11][6];";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-
   EXPECT_THAT(parser.ident.array_lengths[0], Eq(0));
   EXPECT_THAT(StdoutMatches("val is a(n) array of 9x11x6 char"), IsTrue());
 }
@@ -3517,10 +3912,24 @@ TEST_F(ParserSuite, ParseDeclaratorListWithArrayFirst) {
   EXPECT_THAT(StdoutMatches("and a is a(n) array of 2 int"), IsTrue());
 }
 
+TEST_F(ParserSuite, ParseDeclaratorListWithUnspecifiedDimensionFirst) {
+  char inputstr[] = "int a[], b;";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("b is a(n)"), IsTrue());
+  EXPECT_THAT(StdoutMatches("and a is a(n) array of int"), IsTrue());
+}
+
 TEST_F(ParserSuite, ParseDeclaratorListWithArraySecond) {
   char inputstr[] = "int a, b[4];";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("b is a(n) array of 4"), IsTrue());
+  EXPECT_THAT(StdoutMatches("and a is a(n) int"), IsTrue());
+}
+
+TEST_F(ParserSuite, ParseDeclaratorListWithUnspecifiedDimensionSecond) {
+  char inputstr[] = "int a, b[];";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("b is a(n) array of"), IsTrue());
   EXPECT_THAT(StdoutMatches("and a is a(n) int"), IsTrue());
 }
 
@@ -3530,4 +3939,25 @@ TEST_F(ParserSuite, ParseDeclaratorListWithArrayMiddle) {
   EXPECT_THAT(StdoutMatches("c is a(n)"), IsTrue());
   EXPECT_THAT(StdoutMatches("and b is a(n) array of 2"), IsTrue());
   EXPECT_THAT(StdoutMatches("and a is a(n) int"), IsTrue());
+}
+
+TEST_F(ParserSuite, ParseDeclaratorListWithUnspecifiedAndSpecifiedFirst) {
+  char inputstr[] = "int a[2][], b;";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("b is a(n)"), IsTrue());
+  EXPECT_THAT(StdoutMatches("and a is a(n) array of 2x? int"), IsTrue());
+}
+
+TEST_F(ParserSuite, ParseDeclaratorListWithUnspecifiedAndSpecifiedLast) {
+  char inputstr[] = "int a, b[2][];";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("b is a(n) array of 2x?"), IsTrue());
+  EXPECT_THAT(StdoutMatches("and a is a(n) int"), IsTrue());
+}
+
+TEST_F(ParserSuite, ParseDeclaratorListBothUnspecified) {
+  char inputstr[] = "int a[], b[];";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("b is a(n) array of"), IsTrue());
+  EXPECT_THAT(StdoutMatches("and a is a(n) array of int"), IsTrue());
 }

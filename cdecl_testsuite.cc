@@ -153,6 +153,7 @@ TEST(StringManipulateSuite, GetKindQualifiers) {
   EXPECT_THAT(get_kind("unsigned"), Eq(qualifier));
   EXPECT_THAT(get_kind("restrict"), Eq(qualifier));
   EXPECT_THAT(get_kind("atomic"), Eq(qualifier));
+  EXPECT_THAT(get_kind("inline"), Eq(qualifier));
 }
 
 struct KindCheckerTest : public TestWithParam<std::string> {};
@@ -2987,6 +2988,25 @@ TEST_F(ParserSuite, ParseFunctionOutputLegalVolatileFunctionQualifier) {
   EXPECT_THAT(StdoutMatches("sqrt is a(n) function which returns double and "
                             "takes param(s) x is a(n) volatile double"),
               IsTrue());
+}
+
+TEST_F(ParserSuite, ParseFunctionOutputLegalInlineFunctionQualifier) {
+  char inputstr[] = "inline double sqrt(double x);";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  // clang-format off
+  EXPECT_THAT(StdoutMatches("sqrt is a(n) inline function which returns double and takes param(s) x is a(n) double"),
+              IsTrue());
+  // clang-format on
+}
+
+TEST_F(ParserSuite, ParseFunctionOutputIllegalInlineFunctionParameter) {
+  char inputstr[] = "double sqrt(inline double x);";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  EXPECT_THAT(
+      StderrMatches("Functions which are themselves function parameters or are "
+                    "members of structs or unions cannot be inline."),
+      IsTrue());
+  release_parser_resources(&parser);
 }
 
 TEST_F(ParserSuite, ParseFunctionOutputTwoParams) {

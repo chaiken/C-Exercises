@@ -70,8 +70,8 @@ const char *types[] = {"char",
                        "atomic_ptrdiff",
                        "atomic_intmax",
                        "atomic_uintmax"};
-const char *qualifiers[] = {"const",  "volatile", "static",   "*",
-                            "extern", "unsigned", "restrict", "atomic"};
+const char *qualifiers[] = {"const",    "volatile", "static", "*",     "extern",
+                            "unsigned", "restrict", "atomic", "inline"};
 enum token_class { invalid = 0, type, qualifier, identifier, length, typedefn };
 enum specifier_state { UNKNOWN, UNSPECIFIED, SPECIFIED };
 const char *kind_names[] = {"invalid",    "type",   "qualifier",
@@ -112,6 +112,7 @@ struct parser_props {
   bool is_typedef;
   bool is_bitfield;
   bool is_declarator_list;
+  bool is_inline;
   /* Enumeration, function and struct objects contain subsidiary objects. */
   bool has_enum_constants;
   bool has_function_params;

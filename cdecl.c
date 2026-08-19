@@ -89,8 +89,7 @@ void limitations() {
          "ANSI C, not all\n");
   printf("\t   libc, kernel extensions or compiler attributes;\n");
   printf("\tc) does not support C23 or C26 additions;\n");
-  printf("\t   unicode, continuation lines, comments,\n");
-  printf("\t   or 'inline'.\n");
+  printf("\t   unicode, continuation lines, or comments.\n");
 }
 
 /********** functions to modify the parser **********/
@@ -120,6 +119,7 @@ void reset_parser(struct parser_props *parser) {
   parser->is_typedef = false;
   parser->is_bitfield = false;
   parser->is_declarator_list = false;
+  parser->is_inline = false;
   parser->has_enum_constants = false;
   parser->cursor = 0;
   parser->enumerator_list[0] = '\0';
@@ -1119,25 +1119,32 @@ bool reclassified_unsigned_qualifier(struct parser_props *parser) {
 bool qualifier_is_compatible_with_type(const struct parser_props *parser,
                                        const char *type) {
   int cursor = 0;
-  bool type_is_atomic = strstr(type, "atomic") == NULL ? false : true;
   if (!parser || !parser->stacklen) {
+    /*
+     * "inline" is not pushed onto the stack, but only triggers setting of the
+     * is_line state.
+     */
+    if (parser->is_inline) {
+      return true;
+    }
+    fprintf(parser->err_stream,
+            "Stack has no qualifier to evaluate with type %s.\n", type);
     return false;
   }
   cursor = parser->stacklen - 1;
   while (cursor >= 0) {
-    if ((qualifier == parser->stack[cursor].kind) &&
-        (!strcmp(parser->stack[cursor].string, "unsigned"))) {
-      if (!strcmp(type, "char") || !strcmp(type, "short") ||
-          !strcmp(type, "int")) {
-        return true;
-      } else {
-        fprintf(parser->err_stream,
-                "Type %s and qualifier unsigned are incompatible.\n", type);
-        return false;
+    if (qualifier == parser->stack[cursor].kind) {
+      if (!strcmp(parser->stack[cursor].string, "unsigned")) {
+        if ((!strcmp(type, "char") || !strcmp(type, "short")) ||
+            !strcmp(type, "int")) {
+          return true;
+        } else {
+          fprintf(parser->err_stream,
+                  "Type %s and qualifier unsigned are incompatible.\n", type);
+          return false;
+        }
       }
-    }
-    if (type_is_atomic) {
-      if ((qualifier == parser->stack[cursor].kind) &&
+      if ((strstr(type, "atomic") != NULL) &&
           (!strcmp(parser->stack[cursor].string, "atomic"))) {
         fprintf(parser->err_stream,
                 "Type and qualifier cannot both be atomic.\n");
@@ -1145,7 +1152,7 @@ bool qualifier_is_compatible_with_type(const struct parser_props *parser,
       }
     }
     cursor--;
-  }
+  } /* if qualifier */
   return true;
 }
 
@@ -2183,7 +2190,16 @@ bool pop_stack(struct parser_props *parser, bool no_enum_instance,
            */
           break;
         }
-      } else if ((parser->is_function) && (!parser->is_function_ptr)) {
+      } else if (parser->is_inline) {
+        if (!parser->is_function) {
+          __fpurge(parser->out_stream);
+          fprintf(parser->err_stream,
+                  "The 'inline' keyword applies only to functions.\n");
+          return false;
+        }
+        fprintf(parser->out_stream, "inline ");
+      }
+      if (parser->is_function && (!parser->is_function_ptr)) {
         fprintf(parser->out_stream, "function which returns ");
       }
       /*
@@ -2480,6 +2496,31 @@ void possibly_setup_extended_type(struct parser_props *parser,
   }
 }
 
+bool qualifiers_are_incompatible(const struct parser_props *parser,
+                                 const char *qualifier_name) {
+  size_t stacktop = parser->stacklen;
+  if (!parser->stacklen) {
+    return false;
+  }
+  while (--stacktop > 0) {
+    if (qualifier == parser->stack[stacktop - 1].kind) {
+      if (!strcmp(qualifier_name, "inline")) {
+        if ((0 == strcmp("extern", parser->stack[stacktop - 1].string)) ||
+            (0 == strcmp("static", parser->stack[stacktop - 1].string))) {
+          return false;
+        } else {
+          fprintf(parser->err_stream,
+                  "Qualifiers %s and %s are incompatible.\n", qualifier_name,
+                  parser->stack[stacktop - 1].string);
+          return true;
+        }
+      } /* if inline */
+    } /* if qualifier */
+    stacktop--;
+  }
+  return false;
+}
+
 bool possibly_handle_qualifier(struct parser_props *parser,
                                const char *token_string) {
   if (!strcmp("restrict", token_string)) {
@@ -2505,8 +2546,18 @@ bool possibly_handle_qualifier(struct parser_props *parser,
             token_string);
     return false;
   }
+  if (!strcmp("inline", token_string)) {
+    if (!parser->prev) {
+      parser->is_inline = true;
+    } else {
+      fprintf(parser->err_stream,
+              "Functions which are themselves function parameters or are "
+              "members of structs or unions cannot be inline.\n");
+      return false;
+    }
+  }
   /*
-   * Intentionally, don't set parser->have_qualifier for '*', as doing so would
+   * Intentionally don't set parser->have_qualifier for '*', as doing so would
    * cause restricted pointers to fail.
    */
   if (!strcmp("*", token_string)) {
@@ -2629,6 +2680,7 @@ bool finish_token(struct parser_props *parser, const char *offset_decl,
     break;
   case qualifier:
     if (!possibly_handle_qualifier(parser, this_token->string)) {
+      this_token->kind = invalid;
       return false;
     }
     break;
@@ -2700,8 +2752,9 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
          parser->ident.last_dimension[parser->num_identifiers - 1])) {
       continue;
     }
-    /* Don't place "typedef" or ":" on the stack. */
-    if (!strcmp("typedef", this_token.string)) {
+    /* Don't place "typedef" or "inline" on the stack. */
+    if (!strcmp("typedef", this_token.string) ||
+        (!strcmp("inline", this_token.string))) {
       continue;
     }
     if ((type == this_token.kind) && (!strcmp("union", this_token.string) ||
@@ -2800,7 +2853,6 @@ bool input_parsing_successful(struct parser_props *parser, char inputstr[]) {
   showstack(parser->stack, parser->stacklen, parser->out_stream, __LINE__);
 #endif
   if (!pop_all(parser)) {
-    release_parser_resources(parser);
     return false;
   }
   fprintf(parser->out_stream, "\n");

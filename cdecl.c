@@ -1920,14 +1920,14 @@ void reorder_array_identifier_and_lengths(struct parser_props *parser) {
     if (parser->ident.array_lengths[this_ident] > 1) {
 #ifdef DEBUG
       printf("Before reversing array lengths:\n");
-      showstack((const token *)&parser->stack[0], parser->stacklen, stdout,
-                __LINE__);
+      showstack((const struct token *)&parser->stack[0], parser->stacklen,
+                stdout, __LINE__);
 #endif
       reverse_lengths(parser, this_ident, current_stack_top);
 #ifdef DEBUG
       printf("After reversing array lengths:\n");
-      showstack((const token *)&parser->stack[0], parser->stacklen, stdout,
-                __LINE__);
+      showstack((const struct token *)&parser->stack[0], parser->stacklen,
+                stdout, __LINE__);
 #endif
     }
     /* Move past just-processed identifier in a daeclarator list. */

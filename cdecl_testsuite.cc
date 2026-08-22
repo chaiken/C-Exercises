@@ -3801,6 +3801,17 @@ TEST_F(ParserSuite, ParseTypedefFunction) {
       IsTrue());
 }
 
+TEST_F(ParserSuite, ParseTypedefFunctionPtr) {
+  char inputstr[] = "typedef void(*lan743x_vector_handler)(void *context, u32 "
+                    "int_sts, u32 flags);";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  // clang-format off
+  EXPECT_THAT(
+      StdoutMatches("lan743x_vector_handler is a(n) alias for pointer to a function which returns void and takes param(s) context is a(n) pointer to void and int_sts is a(n) u32 and flags is a(n) u32"),
+      // clang-format on
+      IsTrue());
+}
+
 TEST_F(ParserSuite, ParseBitfield) {
   char inputstr[] = "int has_32bit_inodes : 1;";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());

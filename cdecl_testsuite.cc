@@ -2999,6 +2999,21 @@ TEST_F(ParserSuite, ParseFunctionOutputLegalInlineFunctionQualifier) {
   // clang-format on
 }
 
+TEST_F(ParserSuite, ParseFunctionOutputUnsignedFunctionReturn) {
+  //clang-format off
+  char inputstr[] = "static inline unsigned long __cmpxchg(volatile void *ptr, "
+                    "unsigned long old, unsigned long new, int size);";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(
+      StdoutMatches(
+          "__cmpxchg is a(n) inline function which returns unsigned long and "
+          "takes param(s) ptr is a(n) pointer to volatile void and old is a(n) "
+          "unsigned long and new is a(n) unsigned long and size is a(n) int "
+          "and which has static storage duration and internal linkage"),
+      IsTrue());
+  //clang-format on
+}
+
 TEST_F(ParserSuite, ParseFunctionOutputIllegalInlineFunctionParameter) {
   char inputstr[] = "double sqrt(inline double x);";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());

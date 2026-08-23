@@ -16,6 +16,7 @@ const char typechars[] = {'1', '2', '3', '4', '6', '8', 'a', 'b',
                           'n', 'o', 'r', 's', 't', 'u'};
 const char *types[] = {"char",
                        "short",
+                       "long",
                        "int",
                        "float",
                        "double",

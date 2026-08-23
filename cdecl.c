@@ -1135,8 +1135,8 @@ bool qualifier_is_compatible_with_type(const struct parser_props *parser,
   while (cursor >= 0) {
     if (qualifier == parser->stack[cursor].kind) {
       if (!strcmp(parser->stack[cursor].string, "unsigned")) {
-        if ((!strcmp(type, "char") || !strcmp(type, "short")) ||
-            !strcmp(type, "int")) {
+        if (!strcmp(type, "char") || !strcmp(type, "short") ||
+            !strcmp(type, "long") || !strcmp(type, "int")) {
           return true;
         } else {
           fprintf(parser->err_stream,

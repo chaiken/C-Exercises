@@ -2999,7 +2999,7 @@ TEST_F(ParserSuite, ParseFunctionOutputLegalInlineFunctionQualifier) {
   // clang-format on
 }
 
-TEST_F(ParserSuite, ParseFunctionOutputUnsignedFunctionReturn) {
+TEST_F(ParserSuite, ParseFunctionOutputUnsignedLongFunctionReturn) {
   //clang-format off
   char inputstr[] = "static inline unsigned long __cmpxchg(volatile void *ptr, "
                     "unsigned long old, unsigned long new, int size);";
@@ -3012,6 +3012,12 @@ TEST_F(ParserSuite, ParseFunctionOutputUnsignedFunctionReturn) {
           "and which has static storage duration and internal linkage"),
       IsTrue());
   //clang-format on
+}
+
+TEST_F(ParserSuite, ParseFunctionOutputUnsignedImplicitFunctionReturn) {
+  char inputstr[] = "static inline unsigned omap3_l3_decode_cmd(u64 error);";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches(""), IsTrue());
 }
 
 TEST_F(ParserSuite, ParseFunctionOutputIllegalInlineFunctionParameter) {

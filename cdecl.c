@@ -2605,9 +2605,7 @@ bool finish_token(struct parser_props *parser, const char *offset_decl,
        * If the "unsigned" qualifier appeared without an additional type
        * indication, turn it into a type.
        */
-      if (reclassified_unsigned_qualifier(parser)) {
-        break;
-      } else {
+      if (!reclassified_unsigned_qualifier(parser)) {
         return false;
       }
     }

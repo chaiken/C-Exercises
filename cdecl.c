@@ -26,6 +26,7 @@
 #include <stdio_ext.h>
 #include <stdlib.h>
 #include <string.h>
+#include <wctype.h>
 
 #include "cdecl-internal.h"
 
@@ -205,12 +206,12 @@ struct parser_props *make_parser(struct parser_props *const parser) {
 
 /********** functions which characterize input **********/
 
-bool is_all_blanks(const char *input) {
+bool is_all_blanks(const wint_t *input) {
   if (!input || !strlen(input)) {
     return false;
   }
-  char *token_copy = strdup(input);
-  _cleanup_(freep) char *saveptr = token_copy;
+  wint_t *token_copy = strdup(input);
+  _cleanup_(freep) wint_t *saveptr = token_copy;
   while (token_copy && isprint(*token_copy) && isblank(*token_copy)) {
     token_copy++;
   }
@@ -221,12 +222,12 @@ bool is_all_blanks(const char *input) {
   return false;
 }
 
-bool has_alnum_chars(const char *input) {
+bool has_alnum_chars(const wint_t *input) {
   if (!input || !strlen(input)) {
     return false;
   }
-  char *copy = strdup(input);
-  _cleanup_(freep) char *saveptr = copy;
+  wint_t *copy = strdup(input);
+  _cleanup_(freep) wint_t *saveptr = copy;
   while (*copy && (!isalnum(*copy))) {
     copy++;
   }
@@ -237,12 +238,12 @@ bool has_alnum_chars(const char *input) {
   return true;
 }
 
-bool is_numeric(const char *input) {
+bool is_numeric(const wint_t *input) {
   if (!input || !strlen(input)) {
     return false;
   }
-  char *copy = strdup(input);
-  _cleanup_(freep) char *saveptr = copy;
+  wint_t *copy = strdup(input);
+  _cleanup_(freep) wint_t *saveptr = copy;
   while (*copy && (isdigit(*copy))) {
     copy++;
   }
@@ -253,7 +254,7 @@ bool is_numeric(const char *input) {
   return false;
 }
 
-static bool is_type_char(const char c) {
+static bool is_type_char(const wint_t c) {
   for (long unsigned i = 0; i < ARRAY_SIZE(typechars); i++) {
     if (c == typechars[i]) {
       return true;
@@ -268,23 +269,23 @@ static bool is_type_char(const char c) {
  * A valid identifier must begin with a non-digit character (Latin letter,
  * underscore, or Unicode non-digit character(since C99) . . .
  */
-static bool is_first_name_char(const char c) {
-  if (isalpha(c) || ('_' == c)) {
+static bool is_first_name_char(const wint_t c) {
+  if (iswalpha(c) || ('_' == c)) {
     return true;
   }
   return false;
 }
 
 /* Digits are in addition allowed after the first character. */
-static bool is_following_name_char(const char c) {
-  if ((is_first_name_char(c)) || isdigit(c)) {
+static bool is_following_name_char(const wint_t c) {
+  if ((is_first_name_char(c)) || iswdigit(c)) {
     return true;
   }
   return false;
 }
 
-static bool has_any_name_chars(const char *s) {
-  char c;
+static bool has_any_name_chars(const wint_t *s) {
+  wint_t c;
   if (!s) {
     return false;
   }
@@ -300,9 +301,9 @@ static bool has_any_name_chars(const char *s) {
   return false;
 }
 
-bool has_any_name_chars_before(const char *s, const char delimiter) {
-  const char *delimp = strchr(s, delimiter);
-  char delimited[MAXTOKENLEN];
+bool has_any_name_chars_before(const wint_t *s, const wint_t delimiter) {
+  const wint_t *delimp = strchr(s, delimiter);
+  wint_t delimited[MAXTOKENLEN];
   if (!delimp)
     return false;
   memset(&delimited, '\0', MAXTOKENLEN);

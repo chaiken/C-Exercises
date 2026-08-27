@@ -152,10 +152,10 @@ struct parser_props *make_parser(struct parser_props *const parser);
  * error.  Functions with two parameters modify the non-const one. None of the
  * functions advances the parser cursor.
  */
-bool is_all_blanks(const char *input);
-bool has_alnum_chars(const char *input);
-bool is_numeric(const char *input);
-static bool is_type_char(const char c);
+bool is_all_blanks(const wchar_t *input);
+bool has_alnum_chars(const wchar_t *input);
+bool is_numeric(const wchar_t *input);
+static bool is_type_char(const wchar_t c);
 static bool has_any_name_chars(const char *s);
 bool parens_match(const char *offset_decl, size_t *pair_count);
 bool check_for_array_dimensions(struct parser_props *parser,

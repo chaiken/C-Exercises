@@ -26,6 +26,7 @@
 #include <stdio_ext.h>
 #include <stdlib.h>
 #include <string.h>
+#include <wchar.h>
 #include <wctype.h>
 
 #include "cdecl-internal.h"
@@ -206,13 +207,13 @@ struct parser_props *make_parser(struct parser_props *const parser) {
 
 /********** functions which characterize input **********/
 
-bool is_all_blanks(const wint_t *input) {
-  if (!input || !strlen(input)) {
+bool is_all_blanks(const wchar_t *input) {
+  if (!input || !wcslen(input)) {
     return false;
   }
-  wint_t *token_copy = strdup(input);
-  _cleanup_(freep) wint_t *saveptr = token_copy;
-  while (token_copy && isprint(*token_copy) && isblank(*token_copy)) {
+  wchar_t *token_copy = wcsdup(input);
+  _cleanup_(freep) wchar_t *saveptr = token_copy;
+  while (token_copy && iswprint(*token_copy) && iswblank(*token_copy)) {
     token_copy++;
   }
   // Reached end of the string.
@@ -222,13 +223,13 @@ bool is_all_blanks(const wint_t *input) {
   return false;
 }
 
-bool has_alnum_chars(const wint_t *input) {
-  if (!input || !strlen(input)) {
+bool has_alnum_chars(const wchar_t *input) {
+  if (!input || !wcslen(input)) {
     return false;
   }
-  wint_t *copy = strdup(input);
-  _cleanup_(freep) wint_t *saveptr = copy;
-  while (*copy && (!isalnum(*copy))) {
+  wchar_t *copy = wcsdup(input);
+  _cleanup_(freep) wchar_t *saveptr = copy;
+  while (*copy && (!iswalnum(*copy))) {
     copy++;
   }
   /* Reached the end without finding alphanumeric characters. */
@@ -238,13 +239,13 @@ bool has_alnum_chars(const wint_t *input) {
   return true;
 }
 
-bool is_numeric(const wint_t *input) {
-  if (!input || !strlen(input)) {
+bool is_numeric(const wchar_t *input) {
+  if (!input || !wcslen(input)) {
     return false;
   }
-  wint_t *copy = strdup(input);
-  _cleanup_(freep) wint_t *saveptr = copy;
-  while (*copy && (isdigit(*copy))) {
+  wchar_t *copy = wcsdup(input);
+  _cleanup_(freep) wchar_t *saveptr = copy;
+  while (*copy && (iswdigit(*copy))) {
     copy++;
   }
   /* Reached the end without finding non-digit characters. */
@@ -254,7 +255,7 @@ bool is_numeric(const wint_t *input) {
   return false;
 }
 
-static bool is_type_char(const wint_t c) {
+static bool is_type_char(const wchar_t c) {
   for (long unsigned i = 0; i < ARRAY_SIZE(typechars); i++) {
     if (c == typechars[i]) {
       return true;
@@ -269,7 +270,7 @@ static bool is_type_char(const wint_t c) {
  * A valid identifier must begin with a non-digit character (Latin letter,
  * underscore, or Unicode non-digit character(since C99) . . .
  */
-static bool is_first_name_char(const wint_t c) {
+static bool is_first_name_char(const wchar_t c) {
   if (iswalpha(c) || ('_' == c)) {
     return true;
   }
@@ -277,23 +278,28 @@ static bool is_first_name_char(const wint_t c) {
 }
 
 /* Digits are in addition allowed after the first character. */
-static bool is_following_name_char(const wint_t c) {
+static bool is_following_name_char(const wchar_t c) {
   if ((is_first_name_char(c)) || iswdigit(c)) {
     return true;
   }
   return false;
 }
 
-static bool has_any_name_chars(const wint_t *s) {
-  wint_t c;
+static bool has_any_name_chars(const char *s) {
+  wchar_t c;
+  _cleanup_(freep) wchar_t *token =
+      (wchar_t *)malloc(sizeof(wchar_t) * MAXTOKENLEN);
   if (!s) {
     return false;
   }
-  if (is_first_name_char(*s)) {
+  memset(token, L'\0', MAXTOKENLEN);
+  memcpy(token, s, MAXTOKENLEN);
+  *((token + strlen(s)) - 1) = L'\0';
+  if (is_first_name_char(*token)) {
     return true;
   }
   for (size_t ctr = 1; ctr < strlen(s); ctr++) {
-    c = *(s + ctr);
+    c = *(token + ctr);
     if (is_following_name_char(c)) {
       return true;
     }
@@ -301,13 +307,13 @@ static bool has_any_name_chars(const wint_t *s) {
   return false;
 }
 
-bool has_any_name_chars_before(const wint_t *s, const wint_t delimiter) {
-  const wint_t *delimp = strchr(s, delimiter);
-  wint_t delimited[MAXTOKENLEN];
+bool has_any_name_chars_before(const char *s, const char delimiter) {
+  const wchar_t *delimp = wcschr((wchar_t *)s, delimiter);
+  char delimited[MAXTOKENLEN];
   if (!delimp)
     return false;
   memset(&delimited, '\0', MAXTOKENLEN);
-  strlcpy(delimited, s, (delimp - s) + 1);
+  memcpy(delimited, s, (delimp - (wchar_t *)s) + 1);
   return has_any_name_chars(delimited);
 }
 
@@ -417,7 +423,7 @@ bool check_for_function_parameters(struct parser_props *parser,
   if (3 > (params_end - (offset_decl + trimnum))) {
     return true;
   }
-  if (is_all_blanks(offset_decl + trimnum)) {
+  if (is_all_blanks((const wchar_t *)(offset_decl + trimnum))) {
     return true;
   }
   /*
@@ -449,7 +455,7 @@ bool check_for_struct_or_union_members(struct parser_props *parser,
   if (3 > (params_end - member_start)) {
     return true;
   }
-  if (is_all_blanks(member_start)) {
+  if (is_all_blanks((wchar_t *)member_start)) {
     return true;
   }
   /*
@@ -568,7 +574,7 @@ size_t trim_leading_whitespace(const char *input, char *trimmed) {
   if (!input || (0 == strlen(input))) {
     return 0;
   }
-  if (is_all_blanks(input)) {
+  if (is_all_blanks((wchar_t *)input)) {
     return strlen(input);
   }
   if (!isblank(*input)) {
@@ -607,7 +613,7 @@ size_t trim_trailing_whitespace(const char *input, char *trimmed) {
   if (!input || (0 == strlen(input))) {
     return 0;
   }
-  if (is_all_blanks(input)) {
+  if (is_all_blanks((wchar_t *)input)) {
     return strlen(input);
   }
   while ((last_char > copy) && (isblank(*last_char))) {
@@ -2277,7 +2283,8 @@ bool pop_all(struct parser_props *parser) {
 enum token_class get_kind(const char *intoken) {
   size_t numel = 0, ctr;
 
-  if ((!intoken) || (!strlen(intoken)) || is_all_blanks(intoken)) {
+  if ((!intoken) || (!strlen(intoken)) ||
+      is_all_blanks((const wchar_t *)intoken)) {
     return invalid;
   }
   if (!strcmp(intoken, "typedef")) {
@@ -2293,14 +2300,14 @@ enum token_class get_kind(const char *intoken) {
     if (!strcmp(intoken, qualifiers[ctr]))
       return qualifier;
   }
-  if (is_numeric(intoken)) {
+  if (is_numeric((wchar_t *)intoken)) {
     return length;
   }
   /*
    * A string without alphanumeric chars must be whitespace, a delimiter, or
    * garbage.
    */
-  if (!has_alnum_chars(intoken)) {
+  if (!has_alnum_chars((wchar_t *)intoken)) {
     return invalid;
   }
   return identifier;

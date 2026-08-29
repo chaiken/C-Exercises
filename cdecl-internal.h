@@ -132,6 +132,7 @@ struct parser_props {
   struct parser_props *prev;
   struct parser_props *next;
   struct parser_props *parent;
+  locale_t locale;
   /* The I/O streams are settable for the convenience of the tests. */
   FILE *out_stream;
   FILE *err_stream;
@@ -152,11 +153,11 @@ struct parser_props *make_parser(struct parser_props *const parser);
  * error.  Functions with two parameters modify the non-const one. None of the
  * functions advances the parser cursor.
  */
-bool is_all_blanks(const char *input);
-bool has_alnum_chars(const char *input);
-bool is_numeric(const char *input);
+bool is_all_blanks(const char *input, locale_t use_locale);
+bool has_alnum_chars(const char *input, locale_t use_locale);
+bool is_numeric(const char *input, locale_t use_locale);
 static bool is_type_char(const char c);
-static bool has_any_name_chars(const char *s);
+static bool has_any_name_chars(const char *s, locale_t use_locale);
 bool parens_match(const char *offset_decl, size_t *pair_count);
 bool check_for_array_dimensions(struct parser_props *parser,
                                 const char *offset_decl);
@@ -172,8 +173,10 @@ void check_for_declarator_list(struct parser_props *parser,
                                const char *user_input);
 
 /* functions which modify input */
-size_t trim_leading_whitespace(const char *input, char *trimmed);
-size_t trim_trailing_whitespace(const char *input, char *trimmed);
+size_t trim_leading_whitespace(const char *input, char *trimmed,
+                               locale_t use_locale);
+size_t trim_trailing_whitespace(const char *input, char *trimmed,
+                                locale_t use_locale);
 void elide_assignments(char **input);
 bool tokenize_function_params(char **output, char *input, const char delim);
 bool tokenize_struct_params(char **output, char *input, const char delim);
@@ -215,7 +218,7 @@ bool pop_stack(struct parser_props *parser, bool no_enum_instance,
 bool pop_all(struct parser_props *parser);
 
 /* the core parser functions */
-enum token_class get_kind(const char *intoken);
+enum token_class get_kind(const char *intoken, locale_t locale);
 size_t gettoken(struct parser_props *parser, const char *declstring,
                 struct token *this_token);
 bool finish_token(struct parser_props *parser, const char *offset_decl,

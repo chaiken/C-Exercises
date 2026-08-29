@@ -20,6 +20,7 @@
 #include <assert.h>
 #include <bsd/string.h>
 #include <ctype.h>
+#include <locale.h>
 #include <stdbool.h>
 #include <stdio.h>
 /* For __fpurge() */
@@ -138,6 +139,10 @@ void reset_parser(struct parser_props *parser) {
     parser->stack[i].kind = invalid;
     memset(parser->stack[i].string, '\0', MAXTOKENLEN);
   }
+  locale_t loc = newlocale(LC_CTYPE_MASK, "de_DE.ISO-8859-1", (locale_t)0);
+  //locale_t loc = newlocale(LC_ALL_MASK, "de_DE.UTF-8", (locale_t)0);
+  assert(NULL != loc);
+  parser->locale = loc;
   initialize_identifier(&parser->ident);
 }
 
@@ -205,13 +210,14 @@ struct parser_props *make_parser(struct parser_props *const parser) {
 
 /********** functions which characterize input **********/
 
-bool is_all_blanks(const char *input) {
+bool is_all_blanks(const char *input, locale_t use_locale) {
   if (!input || !strlen(input)) {
     return false;
   }
   char *token_copy = strdup(input);
   _cleanup_(freep) char *saveptr = token_copy;
-  while (token_copy && isprint(*token_copy) && isblank(*token_copy)) {
+  while (token_copy && isprint_l(*token_copy, use_locale) &&
+         isblank_l(*token_copy, use_locale)) {
     token_copy++;
   }
   // Reached end of the string.
@@ -221,13 +227,13 @@ bool is_all_blanks(const char *input) {
   return false;
 }
 
-bool has_alnum_chars(const char *input) {
+bool has_alnum_chars(const char *input, locale_t use_locale) {
   if (!input || !strlen(input)) {
     return false;
   }
   char *copy = strdup(input);
   _cleanup_(freep) char *saveptr = copy;
-  while (*copy && (!isalnum(*copy))) {
+  while (*copy && (!isalnum_l(*copy, use_locale))) {
     copy++;
   }
   /* Reached the end without finding alphanumeric characters. */
@@ -237,13 +243,13 @@ bool has_alnum_chars(const char *input) {
   return true;
 }
 
-bool is_numeric(const char *input) {
+bool is_numeric(const char *input, locale_t use_locale) {
   if (!input || !strlen(input)) {
     return false;
   }
   char *copy = strdup(input);
   _cleanup_(freep) char *saveptr = copy;
-  while (*copy && (isdigit(*copy))) {
+  while (*copy && (isdigit_l(*copy, use_locale))) {
     copy++;
   }
   /* Reached the end without finding non-digit characters. */
@@ -268,46 +274,47 @@ static bool is_type_char(const char c) {
  * A valid identifier must begin with a non-digit character (Latin letter,
  * underscore, or Unicode non-digit character(since C99) . . .
  */
-static bool is_first_name_char(const char c) {
-  if (isalpha(c) || ('_' == c)) {
+static bool is_first_name_char(const char c, locale_t use_locale) {
+  if (isalpha_l(c, use_locale) || ('_' == c)) {
     return true;
   }
   return false;
 }
 
 /* Digits are in addition allowed after the first character. */
-static bool is_following_name_char(const char c) {
-  if ((is_first_name_char(c)) || isdigit(c)) {
+static bool is_following_name_char(const char c, locale_t use_locale) {
+  if ((is_first_name_char(c, use_locale)) || isdigit_l(c, use_locale)) {
     return true;
   }
   return false;
 }
 
-static bool has_any_name_chars(const char *s) {
+static bool has_any_name_chars(const char *s, locale_t use_locale) {
   char c;
   if (!s) {
     return false;
   }
-  if (is_first_name_char(*s)) {
+  if (is_first_name_char(*s, use_locale)) {
     return true;
   }
   for (size_t ctr = 1; ctr < strlen(s); ctr++) {
     c = *(s + ctr);
-    if (is_following_name_char(c)) {
+    if (is_following_name_char(c, use_locale)) {
       return true;
     }
   }
   return false;
 }
 
-bool has_any_name_chars_before(const char *s, const char delimiter) {
+bool has_any_name_chars_before(const char *s, const char delimiter,
+                               locale_t use_locale) {
   const char *delimp = strchr(s, delimiter);
   char delimited[MAXTOKENLEN];
   if (!delimp)
     return false;
   memset(&delimited, '\0', MAXTOKENLEN);
   strlcpy(delimited, s, (delimp - s) + 1);
-  return has_any_name_chars(delimited);
+  return has_any_name_chars(delimited, use_locale);
 }
 
 /* A true return value means no errors. */
@@ -394,11 +401,12 @@ bool check_for_function_parameters(struct parser_props *parser,
   size_t trimnum = 0;
   if ((parser->is_function_ptr) && (')' == *offset_decl)) {
     /* +1 to go past ')' after function name. */
-    trimnum = trim_leading_whitespace(offset_decl + 1, &trimmed[0]);
+    trimnum =
+        trim_leading_whitespace(offset_decl + 1, &trimmed[0], parser->locale);
     /* Go past '(' at start of function parameters. */
     trimnum++;
   } else {
-    trimnum = trim_leading_whitespace(offset_decl, &trimmed[0]);
+    trimnum = trim_leading_whitespace(offset_decl, &trimmed[0], parser->locale);
   }
   if ('(' != *(offset_decl + trimnum)) {
     return true;
@@ -416,7 +424,7 @@ bool check_for_function_parameters(struct parser_props *parser,
   if (3 > (params_end - (offset_decl + trimnum))) {
     return true;
   }
-  if (is_all_blanks(offset_decl + trimnum)) {
+  if (is_all_blanks(offset_decl + trimnum, parser->locale)) {
     return true;
   }
   /*
@@ -448,7 +456,7 @@ bool check_for_struct_or_union_members(struct parser_props *parser,
   if (3 > (params_end - member_start)) {
     return true;
   }
-  if (is_all_blanks(member_start)) {
+  if (is_all_blanks(member_start, parser->locale)) {
     return true;
   }
   /*
@@ -558,7 +566,8 @@ void check_for_declarator_list(struct parser_props *parser,
  * character. If there are no non-whitespace characters, trimmed will be empty.
  * Caller must allocate trimmed.
  */
-size_t trim_leading_whitespace(const char *input, char *trimmed) {
+size_t trim_leading_whitespace(const char *input, char *trimmed,
+                               locale_t use_locale) {
   char *copy = strdup(input);
   _cleanup_(freep) char *saveptr = copy;
   size_t removed = 0;
@@ -567,13 +576,13 @@ size_t trim_leading_whitespace(const char *input, char *trimmed) {
   if (!input || (0 == strlen(input))) {
     return 0;
   }
-  if (is_all_blanks(input)) {
+  if (is_all_blanks(input, use_locale)) {
     return strlen(input);
   }
-  if (!isblank(*input)) {
+  if (!isblank_l(*input, use_locale)) {
     return 0;
   }
-  while (copy && isblank(*copy)) {
+  while (copy && isblank_l(*copy, use_locale)) {
     copy++;
     removed++;
   }
@@ -593,7 +602,8 @@ size_t trim_leading_whitespace(const char *input, char *trimmed) {
  * character. If there are no non-whitespace characters, trimmed will be empty.
  * Caller must allocate trimmed.
  */
-size_t trim_trailing_whitespace(const char *input, char *trimmed) {
+size_t trim_trailing_whitespace(const char *input, char *trimmed,
+                                locale_t use_locale) {
   _cleanup_(freep) char *copy = strdup(input);
   char *last_char = copy + (strlen(copy) - 1);
   /*
@@ -606,10 +616,10 @@ size_t trim_trailing_whitespace(const char *input, char *trimmed) {
   if (!input || (0 == strlen(input))) {
     return 0;
   }
-  if (is_all_blanks(input)) {
+  if (is_all_blanks(input, use_locale)) {
     return strlen(input);
   }
-  while ((last_char > copy) && (isblank(*last_char))) {
+  while ((last_char > copy) && (isblank_l(*last_char, use_locale))) {
     last_char--;
     removed++;
   }
@@ -866,7 +876,7 @@ bool truncate_input(char **input, struct parser_props *parser) {
   if (strstr(*input, "=")) {
     elide_assignments(input);
   }
-  if (trim_trailing_whitespace(*input, trimmed)) {
+  if (trim_trailing_whitespace(*input, trimmed, parser->locale)) {
     strlcpy(*input, trimmed, MAXTOKENLEN);
   }
   if (!strlen(*input)) {
@@ -967,8 +977,8 @@ bool handled_compound_type(struct parser_props *parser, char *progress_ptr,
   size_t existing_token_len;
   size_t i, j = 0;
 
-  parser->cursor += trim_leading_whitespace(progress_ptr + parser->cursor,
-                                            &compound_type_name[0]);
+  parser->cursor += trim_leading_whitespace(
+      progress_ptr + parser->cursor, &compound_type_name[0], parser->locale);
   /*
    * A struct or union inside another struct or union can be
    * anonymous, without a compound type or a trailing instance name.
@@ -980,7 +990,7 @@ bool handled_compound_type(struct parser_props *parser, char *progress_ptr,
   if (parser->parent && parser->parent->is_struct_or_union && startdelimp &&
       ('\0' != *startdelimp) &&
       !has_any_name_chars_before(progress_ptr + parser->cursor,
-                                 parser->parent->start_delim)) {
+                                 parser->parent->start_delim, parser->locale)) {
     return true;
   }
   /*
@@ -1266,7 +1276,8 @@ bool load_next_secondary_param(struct parser_props *const current_parser,
 static void advance_past_separator(struct parser_props *parser,
                                    const char *input) {
   if (strchr(input + parser->cursor, parser->separator) &&
-      (!has_any_name_chars_before(input + parser->cursor, parser->separator))) {
+      (!has_any_name_chars_before(input + parser->cursor, parser->separator,
+                                  parser->locale))) {
     while (parser->separator != *(input + parser->cursor)) {
       parser->cursor++;
     }
@@ -1287,8 +1298,8 @@ static void advance_past_start_delim(struct parser_props *parser,
   if (parser->end_delim == *(input + parser->cursor)) {
     parser->cursor++;
   }
-  parser->cursor +=
-      trim_leading_whitespace(input + parser->cursor, next_member);
+  parser->cursor += trim_leading_whitespace(input + parser->cursor, next_member,
+                                            parser->locale);
   /* Finally advance the parser into the parameters or members. */
   if (parser->start_delim == *(input + parser->cursor)) {
     parser->cursor++;
@@ -1350,7 +1361,7 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
      * that it can be popped at the start of output.  Functions have no trailing
      * instance names, so the end delimiter in question is '}'.
      */
-    if (has_any_name_chars(progress_ptr)) {
+    if (has_any_name_chars(progress_ptr, parser->locale)) {
       if (parser->end_delim && (parser->end_delim == *progress_ptr)) {
         break;
       }
@@ -1377,7 +1388,8 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
       }
       progress_ptr = user_input + parser->cursor;
       /* All done with struct, union or functions params or members. */
-      if (!has_any_name_chars_before(progress_ptr, parser->end_delim)) {
+      if (!has_any_name_chars_before(progress_ptr, parser->end_delim,
+                                     parser->locale)) {
         break;
       }
 #ifdef DEBUG
@@ -1598,16 +1610,16 @@ bool handle_bitfield_width(struct parser_props *parser,
   return false;
 }
 
-bool has_digit_after_possible_blanks(const char *s) {
+bool has_digit_after_possible_blanks(const char *s, locale_t use_locale) {
   _cleanup_(freep) char *searched = strdup(s);
   if ((!s) || ('\0' == *s)) {
     return false;
   }
   while (s++) {
-    if (isdigit(*s)) {
+    if (isdigit_l(*s, use_locale)) {
       return true;
     }
-    if (!isblank(*s)) {
+    if (!isblank_l(*s, use_locale)) {
       return false;
     }
   }
@@ -1625,7 +1637,7 @@ bool check_for_bitfield(struct parser_props *parser, const char *offset_decl) {
   if (!colon_pos) {
     return true;
   }
-  if (has_digit_after_possible_blanks(colon_pos)) {
+  if (has_digit_after_possible_blanks(colon_pos, parser->locale)) {
     parser->is_bitfield = true;
     return true;
   }
@@ -1692,7 +1704,8 @@ bool process_enum_constants(struct parser_props *parser, char *user_input) {
     parser->has_enum_constants = false;
     return true;
   }
-  parser->cursor += trim_leading_whitespace(progress_ptr, first_non_blank);
+  parser->cursor +=
+      trim_leading_whitespace(progress_ptr, first_non_blank, parser->locale);
   /*
    * trim_leading_whitespace() should have advanced parsing to '{'.  If not,
    * there is unanticipated input before the enumeration constants, so return an
@@ -1712,7 +1725,8 @@ bool process_enum_constants(struct parser_props *parser, char *user_input) {
       progress_ptr++;
     }
     /* Parsing is done. */
-    if (('}' == *progress_ptr) || (!has_any_name_chars(progress_ptr))) {
+    if (('}' == *progress_ptr) ||
+        (!has_any_name_chars(progress_ptr, parser->locale))) {
       if (!strlen(parser->enumerator_list)) {
         fprintf(parser->err_stream,
                 "Enumeration constant list cannot be empty.\n");
@@ -2273,10 +2287,10 @@ bool pop_all(struct parser_props *parser) {
 
 /********** the core parser functions **********/
 
-enum token_class get_kind(const char *intoken) {
+enum token_class get_kind(const char *intoken, locale_t use_locale) {
   size_t numel = 0, ctr;
 
-  if ((!intoken) || (!strlen(intoken)) || is_all_blanks(intoken)) {
+  if ((!intoken) || (!strlen(intoken)) || is_all_blanks(intoken, use_locale)) {
     return invalid;
   }
   if (!strcmp(intoken, "typedef")) {
@@ -2292,14 +2306,14 @@ enum token_class get_kind(const char *intoken) {
     if (!strcmp(intoken, qualifiers[ctr]))
       return qualifier;
   }
-  if (is_numeric(intoken)) {
+  if (is_numeric(intoken, use_locale)) {
     return length;
   }
   /*
    * A string without alphanumeric chars must be whitespace, a delimiter, or
    * garbage.
    */
-  if (!has_alnum_chars(intoken)) {
+  if (!has_alnum_chars(intoken, use_locale)) {
     return invalid;
   }
   return identifier;
@@ -2333,7 +2347,8 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
   const char *endbracket = strchr(declstring, ']');
   const char *firstcomma = strchr(declstring, ',');
   char nextchar = '\0';
-  const size_t trimnum = trim_leading_whitespace(declstring, trimmed);
+  const size_t trimnum =
+      trim_leading_whitespace(declstring, trimmed, parser->locale);
   _cleanup_(freep) char *inputstr = strdup(declstring);
 
   initialize_token(this_token);
@@ -2349,13 +2364,14 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
   tokenoffset = trimnum;
   if (parser->is_declarator_list && ',' == *(declstring + tokenoffset)) {
     tokenoffset++;
-    tokenoffset += trim_leading_whitespace(declstring + tokenoffset, trimmed);
+    tokenoffset += trim_leading_whitespace(declstring + tokenoffset, trimmed,
+                                           parser->locale);
   }
   /*
    * Make sure not to go past commas separating declarator-list items when
    * considering array dimensions.
    */
-  if (!is_first_name_char(*(declstring + tokenoffset)) &&
+  if (!is_first_name_char(*(declstring + tokenoffset), parser->locale) &&
       parser->num_identifiers &&
       parser->ident.array_dimensions[parser->num_identifiers - 1] &&
       endbracket) {
@@ -2403,7 +2419,7 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
        * We are looking for an identifier. Finding an identifier terminates
        * parsing unless we are processing an enum with an enumerator list.
        */
-      if (!is_following_name_char(nextchar)) {
+      if (!is_following_name_char(nextchar, parser->locale)) {
         if ((('{' == nextchar) || ('=' == nextchar) || isblank(nextchar)) &&
             (startbracep && (startbracep <= (declstring + tokenoffset)))) {
           if (parser->is_enum) {
@@ -2437,7 +2453,7 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
         }
         break; /* end of if (is_following_name_char(nextchar)) */
       } else if (((trimnum == tokenoffset) || (0 == tokenoffset)) &&
-                 (!is_first_name_char(nextchar))) {
+                 (!is_first_name_char(nextchar, parser->locale))) {
         /* The first character of a name cannot be a digit, so special-case it.
          */
         return 0;
@@ -2447,7 +2463,8 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
        * We are looking for a type but we might first see a qualifier composed
        * of name_chars.
        */
-      if (!is_following_name_char(nextchar) && !is_type_char(nextchar)) {
+      if (!is_following_name_char(nextchar, parser->locale) &&
+          !is_type_char(nextchar)) {
         break;
       }
     }
@@ -2585,7 +2602,7 @@ bool finish_token(struct parser_props *parser, const char *offset_decl,
     return false;
   }
 
-  this_token->kind = get_kind(this_token->string);
+  this_token->kind = get_kind(this_token->string, parser->locale);
   switch (this_token->kind) {
   case identifier:
     /*
@@ -2716,7 +2733,6 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
   struct token this_token;
   initialize_token(&this_token);
   size_t increm = 0;
-  initialize_token(&this_token);
   while (parser->cursor <= strlen(user_input)) {
     /*
      * Finding the identifier terminates initial stack loading since it comes
@@ -2798,7 +2814,7 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
     return 0;
   }
   if ((parser->cursor < strlen(user_input)) &&
-      (has_any_name_chars(user_input + parser->cursor))) {
+      (has_any_name_chars(user_input + parser->cursor, parser->locale))) {
     if ((parser->has_function_params && strchr(user_input, ')')) ||
         (parser->has_struct_or_union_members && strchr(user_input, '}')) ||
         (parser->is_bitfield)) {
@@ -2832,7 +2848,7 @@ bool input_parsing_successful(struct parser_props *parser, char inputstr[]) {
   _cleanup_(freep) char *trimmed = (char *)malloc(MAXTOKENLEN);
 
   strlcpy(user_input, inputstr, MAXTOKENLEN);
-  if (!has_any_name_chars(user_input)) {
+  if (!has_any_name_chars(user_input, parser->locale)) {
     fprintf(parser->err_stream, "Input lacks required elements: %s\n",
             user_input);
     return false;
@@ -2840,7 +2856,8 @@ bool input_parsing_successful(struct parser_props *parser, char inputstr[]) {
   if (!truncate_input(&user_input, parser)) {
     return false;
   }
-  parser->cursor = trim_trailing_whitespace(user_input, trimmed);
+  parser->cursor =
+      trim_trailing_whitespace(user_input, trimmed, parser->locale);
   if (strlen(trimmed)) {
     strlcpy(user_input, trimmed, MAXTOKENLEN);
   }
@@ -2930,6 +2947,7 @@ int main(int argc, char **argv) {
   char inputstr[MAXTOKENLEN] = {0};
   struct parser_props parser;
   initialize_parser(&parser);
+  //  setlocale(LC_ALL, "");
 
   if ((argc != 2)) {
     usage();

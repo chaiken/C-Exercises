@@ -20,6 +20,7 @@
 #include <assert.h>
 #include <bsd/string.h>
 #include <ctype.h>
+#include <locale.h>
 #include <stdbool.h>
 #include <stdio.h>
 /* For __fpurge() */
@@ -2938,6 +2939,9 @@ int main(int argc, char **argv) {
   char inputstr[MAXTOKENLEN] = {0};
   struct parser_props parser;
   initialize_parser(&parser);
+  setlocale(LC_ALL, "de_DE.UTF8");
+  char *ctype = setlocale(LC_CTYPE, NULL);
+  printf("LC_CTYPE is %s\n", ctype);
 
   if ((argc != 2)) {
     usage();

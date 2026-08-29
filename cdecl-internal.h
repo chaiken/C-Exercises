@@ -11,75 +11,76 @@
 
 const size_t BITS_PER_INT = (size_t)floor(log2(8.0 * sizeof(int)));
 
-const char typechars[] = {'1', '2', '3', '4', '6', '8', 'a', 'b',
-                          'c', 'd', 'e', 'f', 'g', 'h', 'i', 'l',
-                          'n', 'o', 'r', 's', 't', 'u'};
-const char *types[] = {"char",
-                       "short",
-                       "long",
-                       "int",
-                       "float",
-                       "double",
-                       "long",
-                       "struct",
-                       "enum",
-                       "union",
-                       "void",
-                       "int8_t",
-                       "uint8_t",
-                       "int8_t",
-                       "uint16_t",
-                       "int16_t",
-                       "uint32_t",
-                       "int32_t",
-                       "uint64_t",
-                       "int64_t",
-                       "size_t",
-                       "ssize_t",
-                       "bool",
-                       "u8",
-                       "s8",
-                       "u16",
-                       "s16",
-                       "u32",
-                       "s32",
-                       "u64",
-                       "s64",
-                       "intptr_t",
-                       "uintptr_t",
-                       "ptrdiff_t"
-                       "wchar_t",
-                       "atomic_bool",
-                       "atomic_char",
-                       "atomic_schar",
-                       "atomic_uchar",
-                       "atomic_short",
-                       "atomic_ushort",
-                       "atomic_int",
-                       "atomic_uint",
-                       "atomic_long",
-                       "atomic_ulong",
-                       "atomic_llong",
-                       "atomic_ullong",
-                       "atomic_char8",
-                       "atomic_char16",
-                       "atomic_char32",
-                       "atomic_wchar",
-                       "atomic_intptr",
-                       "atomic_uintptr",
-                       "atomic_size",
-                       "atomic_ptrdiff",
-                       "atomic_intmax",
-                       "atomic_uintmax"};
-const char *qualifiers[] = {"const",    "volatile", "static", "*",     "extern",
-                            "unsigned", "restrict", "atomic", "inline"};
+const wchar_t typechars[] = {'1', '2', '3', '4', '6', '8', 'a', 'b',
+                             'c', 'd', 'e', 'f', 'g', 'h', 'i', 'l',
+                             'n', 'o', 'r', 's', 't', 'u'};
+const wchar_t *types[] = {L"char",
+                          L"short",
+                          L"long",
+                          L"int",
+                          L"float",
+                          L"double",
+                          L"long",
+                          L"struct",
+                          L"enum",
+                          L"union",
+                          L"void",
+                          L"int8_t",
+                          L"uint8_t",
+                          L"int8_t",
+                          L"uint16_t",
+                          L"int16_t",
+                          L"uint32_t",
+                          L"int32_t",
+                          L"uint64_t",
+                          L"int64_t",
+                          L"size_t",
+                          L"ssize_t",
+                          L"bool",
+                          L"u8",
+                          L"s8",
+                          L"u16",
+                          L"s16",
+                          L"u32",
+                          L"s32",
+                          L"u64",
+                          L"s64",
+                          L"intptr_t",
+                          L"uintptr_t",
+                          L"ptrdiff_t"
+                          L"wchar_t",
+                          L"atomic_bool",
+                          L"atomic_char",
+                          L"atomic_schar",
+                          L"atomic_uchar",
+                          L"atomic_short",
+                          L"atomic_ushort",
+                          L"atomic_int",
+                          L"atomic_uint",
+                          L"atomic_long",
+                          L"atomic_ulong",
+                          L"atomic_llong",
+                          L"atomic_ullong",
+                          L"atomic_char8",
+                          L"atomic_char16",
+                          L"atomic_char32",
+                          L"atomic_char",
+                          L"atomic_intptr",
+                          L"atomic_uintptr",
+                          L"atomic_size",
+                          L"atomic_ptrdiff",
+                          L"atomic_intmax",
+                          L"atomic_uintmax"};
+const wchar_t *qualifiers[] = {L"const",    L"volatile", L"static",
+                               L"*",        L"extern",   L"unsigned",
+                               L"restrict", L"atomic",   L"inline"};
 enum token_class { invalid = 0, type, qualifier, identifier, length, typedefn };
 enum specifier_state { UNKNOWN, UNSPECIFIED, SPECIFIED };
-const char *kind_names[] = {"invalid",    "type",   "qualifier",
-                            "identifier", "length", "typedefn"};
+const wchar_t *kind_names[] = {L"invalid",    L"type",   L"qualifier",
+                               L"identifier", L"length", L"typedefn"};
 struct token {
   enum token_class kind;
-  char string[MAXTOKENLEN];
+  wchar_t string[MAXTOKENLEN];
 };
 
 /*
@@ -118,15 +119,15 @@ struct parser_props {
   bool has_enum_constants;
   bool has_function_params;
   bool has_struct_or_union_members;
-  char enumerator_list[MAXTOKENLEN];
+  wchar_t enumerator_list[MAXTOKENLEN];
   size_t num_identifiers;
   size_t bitfield_width;
   /* These parameters describe the internal parser state. */
   size_t cursor;
   size_t stacklen;
-  char start_delim;
-  char end_delim;
-  char separator;
+  wchar_t start_delim;
+  wchar_t end_delim;
+  wchar_t separator;
   struct token stack[MAXTOKENS];
   struct identifier_props ident;
   struct parser_props *prev;
@@ -156,28 +157,30 @@ bool is_all_blanks(const wchar_t *input);
 bool has_alnum_chars(const wchar_t *input);
 bool is_numeric(const wchar_t *input);
 static bool is_type_char(const wchar_t c);
-static bool has_any_name_chars(const char *s);
-bool parens_match(const char *offset_decl, size_t *pair_count);
+static bool has_any_name_chars(const wchar_t *s);
+bool parens_match(const wchar_t *offset_decl, size_t *pair_count);
 bool check_for_array_dimensions(struct parser_props *parser,
-                                const char *offset_decl);
+                                const wchar_t *offset_decl);
 bool check_for_function_parameters(struct parser_props *parser,
-                                   const char *offset_decl);
+                                   const wchar_t *offset_decl);
 bool check_for_struct_or_union_members(struct parser_props *parser,
-                                       const char *offset_decl);
+                                       const wchar_t *offset_decl);
 bool check_for_enum_constants(struct parser_props *parser,
-                              const char *offset_decl);
+                              const wchar_t *offset_decl);
 bool check_for_function_ptr(struct parser_props *parser,
-                            const char *offset_decl);
+                            const wchar_t *offset_decl);
 void check_for_declarator_list(struct parser_props *parser,
-                               const char *user_input);
+                               const wchar_t *user_input);
 
 /* functions which modify input */
-size_t trim_leading_whitespace(const char *input, char *trimmed);
-size_t trim_trailing_whitespace(const char *input, char *trimmed);
-void elide_assignments(char **input);
-bool tokenize_function_params(char **output, char *input, const char delim);
-bool tokenize_struct_params(char **output, char *input, const char delim);
-bool truncate_input(char **input, struct parser_props *parser);
+size_t trim_leading_whitespace(const wchar_t *input, wchar_t *trimmed);
+size_t trim_trailing_whitespace(const wchar_t *input, wchar_t *trimmed);
+void elide_assignments(wchar_t **input);
+bool tokenize_function_params(wchar_t **output, wchar_t *input,
+                              const wchar_t delim);
+bool tokenize_struct_params(wchar_t **output, wchar_t *input,
+                            const wchar_t delim);
+bool truncate_input(wchar_t **input, struct parser_props *parser);
 
 /* debugging functions */
 struct parser_props *get_head_parser(struct parser_props *parser);
@@ -187,21 +190,21 @@ void showstack(const struct token *stack, const size_t stacklen,
 
 /* parser helper functions */
 bool have_stacked_compound_type(const struct parser_props *parser);
-bool handled_compound_type(struct parser_props *parser, char *progress_ptr,
+bool handled_compound_type(struct parser_props *parser, wchar_t *progress_ptr,
                            struct token *this_token);
 bool all_identifiers_are_enum_constants(const struct parser_props *parser);
 bool first_identifier_is_enumerator(const struct parser_props *parser,
-                                    const char *user_input);
+                                    const wchar_t *user_input);
 void handle_trailing_instance_name(struct parser_props *parser,
-                                   char *user_input);
-bool process_secondary_params(struct parser_props *parser, char *user_input);
+                                   wchar_t *user_input);
+bool process_secondary_params(struct parser_props *parser, wchar_t *user_input);
 size_t process_array_length(struct parser_props *parser,
-                            const char *offset_string,
+                            const wchar_t *offset_string,
                             struct token *this_token);
-bool process_array_dimensions(struct parser_props *parser, char *user_input,
+bool process_array_dimensions(struct parser_props *parser, wchar_t *user_input,
                               struct token *this_token);
-bool process_enum_constants(struct parser_props *parser, char *user_input);
-bool handled_extended_parsing(struct parser_props *parser, char *user_input,
+bool process_enum_constants(struct parser_props *parser, wchar_t *user_input);
+bool handled_extended_parsing(struct parser_props *parser, wchar_t *user_input,
                               struct token *this_token);
 
 /* output functions */
@@ -215,17 +218,19 @@ bool pop_stack(struct parser_props *parser, bool no_enum_instance,
 bool pop_all(struct parser_props *parser);
 
 /* the core parser functions */
-enum token_class get_kind(const char *intoken);
-size_t gettoken(struct parser_props *parser, const char *declstring,
+enum token_class get_kind(const wchar_t *intoken);
+size_t gettoken(struct parser_props *parser, const wchar_t *declstring,
                 struct token *this_token);
-bool finish_token(struct parser_props *parser, const char *offset_decl,
+bool finish_token(struct parser_props *parser, const wchar_t *offset_decl,
                   struct token *this_token, const size_t ctr);
 void push_stack(struct parser_props *parser, struct token *this_token);
-size_t load_stack(struct parser_props *parser, char *user_input);
+size_t load_stack(struct parser_props *parser, wchar_t *user_input);
 
 /* functions to process user input */
-bool input_parsing_successful(struct parser_props *parser, char inputstr[]);
-size_t process_stdin(char stdinp[], FILE *input_stream);
-size_t find_input_string(const char from_user[], char inputstr[], FILE *stream);
+bool input_parsing_successful(struct parser_props *parser, wchar_t inputstr[]);
+size_t process_stdin(wchar_t stdinp[], FILE *input_stream);
+
+size_t find_input_string(const wchar_t from_user[], wchar_t inputstr[],
+                         FILE *stream);
 
 #endif

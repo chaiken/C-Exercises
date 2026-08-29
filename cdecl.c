@@ -636,7 +636,7 @@ size_t trim_trailing_whitespace(const wchar_t *input, wchar_t *trimmed) {
  * by shifting the characters after it left.
  */
 void elide_assignments(wchar_t **input) {
-  size_t equals_offset = strcspn(*input, L"=");
+  size_t equals_offset = wcscspn(*input, L"=");
   size_t comma_pos = 0;
   size_t prefix_len = 0;
   bool has_enumerations = (NULL != wcsstr(*input, L"enum"));
@@ -665,7 +665,7 @@ void elide_assignments(wchar_t **input) {
     *(*input + equals_offset) = '\0';
     if (('&' == *second) || ('{' == *second) || ('*' == *second) ||
         !wcscmp(L"NULL", second) || !wcscmp(L"NUL", second)) {
-      comma_pos = strcspn(second, L",");
+      comma_pos = wcscspn(second, L",");
       /* There are no more initializations, so omit the rest of the expression.
        * A comma between a pair of braces is internal to an array
        * initialization, which we want to omit its entirety.
@@ -708,7 +708,7 @@ void elide_assignments(wchar_t **input) {
      */
     memmove(*input + prefix_len, second, wcslen(second));
     *(*input + prefix_len + wcslen(second)) = '\0';
-    equals_offset = strcspn(*input, L"=");
+    equals_offset = wcscspn(*input, L"=");
   }
 }
 
@@ -776,7 +776,7 @@ bool tokenize_function_params(wchar_t **output, wchar_t *input,
     param_len = param_end - input;
   }
   /* Copy the entire input, as otherwise there is no trailing NULL. */
-  strlcpy(*output, param_start, param_len + 1);
+  wcsncpy(*output, param_start, param_len + 1);
   return true;
 }
 
@@ -851,7 +851,7 @@ bool tokenize_struct_params(wchar_t **output, wchar_t *input,
     return false;
   }
   /* Copy the entire input, as otherwise there is no trailing NULL. */
-  strlcpy(*output, param_start, param_len + 1);
+  wcsncpy(*output, param_start, param_len + 1);
   return true;
 }
 
@@ -878,7 +878,7 @@ bool truncate_input(wchar_t **input, struct parser_props *parser) {
     elide_assignments(input);
   }
   if (trim_trailing_whitespace(*input, trimmed)) {
-    strlcpy(*input, trimmed, MAXTOKENLEN);
+    wcsncpy(*input, trimmed, MAXTOKENLEN - 1);
   }
   if (!wcslen(*input)) {
     fwprintf(parser->err_stream, L"Zero-length input string.\n");
@@ -1117,7 +1117,7 @@ bool reclassified_unsigned_qualifier(struct parser_props *parser) {
     if ((qualifier == parser->stack[cursor].kind) &&
         (!wcscmp(parser->stack[cursor].string, L"unsigned"))) {
       parser->stack[cursor].kind = type;
-      strlcpy(parser->stack[cursor].string, L"unsigned int",
+      wcsncpy(parser->stack[cursor].string, L"unsigned int",
               wcslen(L"unsigned int") + 1);
       parser->have_type = true;
       return true;
@@ -1214,7 +1214,7 @@ void handle_trailing_instance_name(struct parser_props *parser,
       if (!increm || (invalid == this_token.kind) ||
           !wcslen(this_token.string)) {
         fwprintf(parser->err_stream,
-                 "Trailing instance name processing failed: %ls\n",
+                 L"Trailing instance name processing failed: %ls\n",
                  user_input + parser->cursor);
         return;
       }
@@ -1559,7 +1559,7 @@ bool process_array_dimensions(struct parser_props *parser, wchar_t *user_input,
       push_stack(parser, this_token);
     } else {
       fwprintf(parser->err_stream,
-               "Array declarations must be followed by (possibly empty) "
+               L"Array declarations must be followed by (possibly empty) "
                "lengths, not %ls.\n",
                progress_ptr);
       return false;
@@ -1599,7 +1599,7 @@ bool handle_bitfield_width(struct parser_props *parser,
     if (isdigit(*(user_input + parser->cursor))) {
       /* Only works because the maximum bitfield width is 8, which is a single
        * digit. */
-      bf_width = atol(user_input + parser->cursor);
+      bf_width = wcstol(user_input + parser->cursor, NULL, 10);
       if (bf_width) {
         parser->bitfield_width = bf_width;
         return true;
@@ -1671,7 +1671,7 @@ bool type_is_bitfield_compatible(const struct parser_props *parser) {
           return true;
         } else {
           fwprintf(parser->err_stream,
-                   "Bitfield width %ld too wide for integer type.\n",
+                   L"Bitfield width %ld too wide for integer type.\n",
                    parser->bitfield_width);
         }
       } else if (!wcscmp(parser->stack[stacktop].string, L"bool")) {
@@ -1751,9 +1751,9 @@ bool process_enum_constants(struct parser_props *parser, wchar_t *user_input) {
     }
     list_capacity = (MAXTOKENLEN - wcslen(parser->enumerator_list)) - 1;
     if (wcslen(parser->enumerator_list)) {
-      strlcat(parser->enumerator_list, L",", list_capacity);
+      wcsncat(parser->enumerator_list, L",", list_capacity - 1);
     }
-    strlcat(parser->enumerator_list, this_token.string, list_capacity);
+    wcsncat(parser->enumerator_list, this_token.string, list_capacity - 1);
     commapos = wcschr(progress_ptr, ',');
     /* Go past comma or end brace. */
     parser->cursor++;
@@ -1843,8 +1843,10 @@ void reverse_lengths(struct parser_props *parser, const size_t top_ident,
   for (size_t ctr = 0; ctr < num_pairs; ctr++) {
     struct token bottom_len = parser->stack[bottom_len_idx + ctr];
     struct token top_len = parser->stack[top_len_idx - ctr];
-    strlcpy(parser->stack[top_len_idx].string, bottom_len.string, MAXTOKENLEN);
-    strlcpy(parser->stack[bottom_len_idx].string, top_len.string, MAXTOKENLEN);
+    wcsncpy(parser->stack[top_len_idx].string, bottom_len.string,
+            MAXTOKENLEN - 1);
+    wcsncpy(parser->stack[bottom_len_idx].string, top_len.string,
+            MAXTOKENLEN - 1);
   }
 }
 
@@ -1871,15 +1873,15 @@ void reorder_qualifier_and_type(struct parser_props *parser) {
           (0 != wcscmp(L"*", parser->stack[stacktop - 1].string))) {
         /* Save type element's string. */
         wchar_t type_name[MAXTOKENLEN];
-        strlcpy(type_name, parser->stack[stacktop].string, MAXTOKENLEN);
+        wcsncpy(type_name, parser->stack[stacktop].string, MAXTOKENLEN - 1);
         /* Overwrite type (top element) with the 2nd element from top
          * (qualifier). */
         parser->stack[stacktop].kind = qualifier;
-        strlcpy(parser->stack[stacktop].string,
-                parser->stack[stacktop - 1].string, MAXTOKENLEN);
+        wcsncpy(parser->stack[stacktop].string,
+                parser->stack[stacktop - 1].string, MAXTOKENLEN - 1);
         /* Complete the swap. */
         parser->stack[stacktop - 1].kind = type;
-        strlcpy(parser->stack[stacktop - 1].string, type_name, MAXTOKENLEN);
+        wcsncpy(parser->stack[stacktop - 1].string, type_name, MAXTOKENLEN - 1);
       }
     }
   }
@@ -1933,10 +1935,10 @@ void reorder_array_identifier_and_lengths(struct parser_props *parser) {
              MAXTOKENLEN * sizeof(wchar_t));
       memset(parser->stack[(top_length - unprocessed_lengths)].string, '\0',
              MAXTOKENLEN * sizeof(wchar_t));
-      strlcpy(parser->stack[(top_length - unprocessed_lengths) + 1].string,
-              name.string, MAXTOKENLEN);
-      strlcpy(parser->stack[top_length - unprocessed_lengths].string,
-              arraylen.string, MAXTOKENLEN);
+      wcsncpy(parser->stack[(top_length - unprocessed_lengths) + 1].string,
+              name.string, MAXTOKENLEN - 1);
+      wcsncpy(parser->stack[top_length - unprocessed_lengths].string,
+              arraylen.string, MAXTOKENLEN - 1);
       parser->stack[(top_length - unprocessed_lengths) + 1].kind = identifier;
       parser->stack[top_length - unprocessed_lengths].kind = length;
       unprocessed_lengths--;
@@ -2035,7 +2037,7 @@ void handle_enum_constants(const struct parser_props *parser,
     } else {
       fwprintf(parser->out_stream, L"with enum constant");
     }
-    fwprintf(parser->out_stream, " %ls ", parser->enumerator_list);
+    fwprintf(parser->out_stream, L" %ls ", parser->enumerator_list);
   }
 }
 
@@ -2269,10 +2271,10 @@ bool pop_all(struct parser_props *parser) {
   while (parser && parser->stacklen) {
     /* pop_stack() erases the final token. Save its string. */
     if (parser->stacklen) {
-      strlcpy(save, parser->stack[parser->stacklen - 1].string,
+      wcsncpy(save, parser->stack[parser->stacklen - 1].string,
               wcslen(parser->stack[parser->stacklen - 1].string) + 1);
     } else {
-      strlcpy(save, L"", 1);
+      wcsncpy(save, L"", 1);
     }
     if (!pop_stack(parser, no_enum_instance, passed_pointer_qualifier)) {
       return false;
@@ -2401,7 +2403,7 @@ size_t gettoken(struct parser_props *parser, const wchar_t *declstring,
   }
   /* The token is a single character. */
   if ('*' == *(declstring + tokenoffset)) {
-    strlcpy(this_token->string, L"*", 2);
+    wcsncpy(this_token->string, L"*", 2);
     tokenoffset++;
     ctr++;
     if (!finish_token(parser, declstring + tokenoffset, this_token, ctr)) {
@@ -2645,7 +2647,7 @@ bool finish_token(struct parser_props *parser, const wchar_t *offset_decl,
          parser->is_function) &&
         parser_has_atomic_qualifier(parser)) {
       fwprintf(parser->err_stream,
-               "Function return values and arrays cannot be atomic.\n");
+               L"Function return values and arrays cannot be atomic.\n");
       this_token->kind = invalid;
       return false;
     }
@@ -2725,7 +2727,7 @@ void push_stack(struct parser_props *parser, struct token *this_token) {
   }
 
   parser->stack[parser->stacklen].kind = this_token->kind;
-  strlcpy(parser->stack[parser->stacklen].string, this_token->string,
+  wcsncpy(parser->stack[parser->stacklen].string, this_token->string,
           wcslen(this_token->string) + 1);
   parser->stacklen++;
   return;
@@ -2809,7 +2811,7 @@ size_t load_stack(struct parser_props *parser, wchar_t *user_input) {
           (parser->parent && (parser->parent->is_function_ptr ||
                               parser->parent->has_function_params)))) {
       fwprintf(parser->err_stream,
-               "Input lacks required identifier or type element.\n");
+               L"Input lacks required identifier or type element.\n");
       return 0;
     }
   }
@@ -2847,11 +2849,13 @@ size_t load_stack(struct parser_props *parser, wchar_t *user_input) {
  * doing so facilitates testing.
  */
 bool input_parsing_successful(struct parser_props *parser, wchar_t inputstr[]) {
-  /* Allocate and call strlcpy() in case the input is too long. */
-  _cleanup_(freep) wchar_t *user_input = (wchar_t *)malloc(MAXTOKENLEN);
-  _cleanup_(freep) wchar_t *trimmed = (wchar_t *)malloc(MAXTOKENLEN);
+  /* Allocate and call wcsncpy() in case the input is too long. */
+  _cleanup_(freep) wchar_t *user_input =
+      (wchar_t *)malloc(MAXTOKENLEN * sizeof(wchar_t));
+  _cleanup_(freep) wchar_t *trimmed =
+      (wchar_t *)malloc(MAXTOKENLEN * sizeof(wchar_t));
 
-  strlcpy(user_input, inputstr, MAXTOKENLEN);
+  wcsncpy(user_input, inputstr, MAXTOKENLEN - 1);
   if (!has_any_name_chars(user_input)) {
     fwprintf(parser->err_stream, L"Input lacks required elements: %ls\n",
              user_input);
@@ -2862,7 +2866,7 @@ bool input_parsing_successful(struct parser_props *parser, wchar_t inputstr[]) {
   }
   parser->cursor = trim_trailing_whitespace(user_input, trimmed);
   if (wcslen(trimmed)) {
-    strlcpy(user_input, trimmed, MAXTOKENLEN);
+    wcsncpy(user_input, trimmed, MAXTOKENLEN - 1);
   }
   if (!load_stack(parser, user_input)) {
     return false;
@@ -2893,7 +2897,7 @@ size_t process_stdin(wchar_t stdinp[], FILE *input_stream) {
     if (NULL == newline_pos) {
       /* Input was truncated by fgets(). */
       fwprintf(stderr,
-               "Input from stdin must be less than %u characters long.\n",
+               L"Input from stdin must be less than %u characters long.\n",
                MAXTOKENLEN - 1);
     } else {
       /* Because fgets() writes to the array on the stack rather than stdinp,
@@ -2905,7 +2909,7 @@ size_t process_stdin(wchar_t stdinp[], FILE *input_stream) {
        * The +1 allows for the NULL.   Otherwise the last character will be
        * truncated.
        */
-      (void)strlcpy(stdinp, raw_input, offset + 1);
+      (void)wcsncpy(stdinp, raw_input, offset + 1);
       /*
         Return the lesser of the destination capacity and the requested copy
         length.
@@ -2927,21 +2931,19 @@ size_t process_stdin(wchar_t stdinp[], FILE *input_stream) {
  */
 size_t find_input_string(const wchar_t from_user[], wchar_t inputstr[],
                          FILE *stream) {
+  size_t inputlen =
+      ((wcslen(inputstr) < (MAXTOKENLEN - 1)) ? inputlen : MAXTOKENLEN - 1);
   /*
    * Without the length check, providing "-val;" as input triggers a hang, as
    * process_stdin() never receives any chars in its fgets() call and waits
    * forever.
    */
-  if ((1 == wcslen(from_user)) && (from_user[0] == '-')) {
+  if ((1 == inputlen) && (from_user[0] == '-')) {
     return process_stdin(inputstr, stream);
   } else {
     /* read input from CLI */
-    const size_t requested = strlcpy(inputstr, from_user, MAXTOKENLEN - 1);
-    /*
-     * Subtract 1 since strlcpy() ALWAYS apppends a NULL.
-     * Return the lesser of the input length and the destination capacity.
-     */
-    return (requested < MAXTOKENLEN - 1) ? requested : MAXTOKENLEN - 1;
+    (void)wcsncpy(inputstr, from_user, inputlen);
+    return inputlen;
   }
 }
 
@@ -2950,9 +2952,7 @@ int main(int argc, char **argv) {
   wchar_t inputstr[MAXTOKENLEN] = {0};
   struct parser_props parser;
   initialize_parser(&parser);
-  setlocale(LC_ALL, "de_DE.UTF8");
-  wchar_t *ctype = setlocale(LC_CTYPE, NULL);
-  wprintf(L"LC_CTYPE is %ls\n", ctype);
+  setlocale(LC_CTYPE, "UTF-8");
 
   if ((argc != 2)) {
     usage();
@@ -2960,7 +2960,7 @@ int main(int argc, char **argv) {
     exit(EXIT_SUCCESS);
   }
   /* For the case where input is provided on stdin, the wcslen is 1 for '-'. */
-  if (wcslen(argv[1]) > (MAXTOKENLEN - 1)) {
+  if (strlen(argv[1]) > (MAXTOKENLEN - 1)) {
     limitations();
     exit(-E2BIG);
   }

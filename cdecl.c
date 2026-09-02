@@ -99,6 +99,8 @@ void initialize_identifier(struct identifier_props *ident) {
     ident->array_dimensions[i] = 0;
     ident->array_lengths[i] = 0;
     ident->last_dimension[i] = UNKNOWN;
+    ident->is_bitfield[i] = false;
+    ident->bitfield_width[i] = 0;
   }
 }
 
@@ -117,13 +119,11 @@ void reset_parser(struct parser_props *parser) {
   parser->is_pointer = false;
   parser->is_function_ptr = false;
   parser->is_typedef = false;
-  parser->is_bitfield = false;
   parser->is_declarator_list = false;
   parser->is_inline = false;
   parser->has_enum_constants = false;
   parser->cursor = 0;
   parser->enumerator_list[0] = '\0';
-  parser->bitfield_width = 0;
   parser->num_identifiers = 0;
   parser->has_function_params = false;
   parser->has_struct_or_union_members = false;
@@ -1161,7 +1161,7 @@ bool qualifier_is_compatible_with_type(const struct parser_props *parser,
  * enumeration constant or struct member list.
  */
 void handle_trailing_instance_name(struct parser_props *parser,
-                                   char *user_input) {
+                                   const char *user_input) {
   const char *first_end_delim = strchr(user_input, '}');
   const char *last_end_delim = strrchr(user_input, '}');
   size_t increm = 0;
@@ -1468,6 +1468,7 @@ size_t process_array_length(struct parser_props *parser,
   }
   if (!finish_token(parser, offset_string, this_token, ctr)) {
     this_token->kind = invalid;
+    __fpurge(parser->out_stream);
     return 0;
   }
   return ctr;
@@ -1571,9 +1572,48 @@ bool process_array_dimensions(struct parser_props *parser, char *user_input,
   return true;
 }
 
+/*
+ * C does not support bitfields wider than integers. The only other choices
+ * are unsigned int and bool.  See
+ * https://en.cppreference.com/c/language/bit_field
+ */
+bool type_is_bitfield_compatible(const struct parser_props *parser) {
+  int stacktop = (parser->stacklen - 1) > 0 ? parser->stacklen - 1 : 0;
+  const size_t top_ident = parser->num_identifiers - 1;
+  if (!parser || !parser->stacklen || !parser->have_type) {
+    return false;
+  }
+  while (stacktop >= 0) {
+    if (type == parser->stack[stacktop].kind) {
+      if ((!strcmp(parser->stack[stacktop].string, "int")) ||
+          (!strcmp(parser->stack[stacktop].string, "unsigned int"))) {
+        if (MAX_BITFIELD_WIDTH >= parser->ident.bitfield_width[top_ident]) {
+          return true;
+        } else {
+          fprintf(parser->err_stream,
+                  "Bitfield width %ld too wide for integer type.\n",
+                  parser->ident.bitfield_width[top_ident]);
+        }
+      } else if (!strcmp(parser->stack[stacktop].string, "bool")) {
+        if (1 == parser->ident.bitfield_width[top_ident]) {
+          return true;
+        }
+        fprintf(parser->err_stream, "Boolean bitfields must have width 1.\n");
+      } else {
+        fprintf(parser->err_stream, "Type %s does not support bitfields.\n",
+                parser->stack[stacktop].string);
+      }
+    }
+    stacktop--;
+  }
+  return false;
+}
+
 bool handle_bitfield_width(struct parser_props *parser,
                            const char *user_input) {
-  const char *colon_pos = strchr(user_input + parser->cursor, ':');
+  char *colon_pos = (char *)strchr(user_input + parser->cursor, ':');
+  char *comma_pos = (char *)strchr(user_input + parser->cursor, ',');
+  const size_t top_ident = parser->num_identifiers - 1;
   size_t bf_width = 0;
   size_t offset;
 
@@ -1581,16 +1621,40 @@ bool handle_bitfield_width(struct parser_props *parser,
     fprintf(parser->err_stream, "Bitfield length not found.\n");
     return false;
   }
-  offset = colon_pos - (user_input + parser->cursor);
-  parser->cursor += offset + 1;
-  while ('\0' != *(user_input + parser->cursor)) {
+  while (strlen(user_input + parser->cursor)) {
+    /*
+     * If the previous identifier is a bitfield, the logic must find the new
+     * identifier in a declarator_list before considering whether it is a
+     * bitfield as well.  It may be that later identifiers are bitfields even if
+     * the currently considered one is not.
+     */
+    if (parser->is_declarator_list &&
+        (!parser->ident.is_bitfield[top_ident] ||
+         (comma_pos && (comma_pos < colon_pos)))) {
+      return true;
+    }
+    offset = colon_pos - (user_input + parser->cursor);
+    parser->cursor += offset + 1;
+    if (!(strlen(user_input + parser->cursor))) {
+      break;
+    }
+    while (isblank(*(user_input + parser->cursor))) {
+      parser->cursor++;
+    }
+    if (!(strlen(user_input + parser->cursor))) {
+      break;
+    }
     if (isdigit(*(user_input + parser->cursor))) {
       /* Only works because the maximum bitfield width is 8, which is a single
        * digit. */
       bf_width = atol(user_input + parser->cursor);
       if (bf_width) {
         parser->cursor++;
-        parser->bitfield_width = bf_width;
+        parser->ident.bitfield_width[top_ident] = bf_width;
+        if (!type_is_bitfield_compatible(parser)) {
+          parser->ident.bitfield_width[top_ident] = 0;
+          return false;
+        }
         return true;
       } else {
         fprintf(parser->err_stream, "Bitfield length cannot be zero.\n");
@@ -1598,7 +1662,10 @@ bool handle_bitfield_width(struct parser_props *parser,
       }
     }
     parser->cursor++;
+    colon_pos = (char *)strchr(user_input + parser->cursor, ':');
+    comma_pos = (char *)strchr(user_input + parser->cursor, ',');
   }
+  fprintf(parser->err_stream, "Bitfield not found.\n");
   return false;
 }
 
@@ -1630,49 +1697,20 @@ bool check_for_bitfield(struct parser_props *parser, const char *offset_decl) {
     return true;
   }
   if (has_digit_after_possible_blanks(colon_pos)) {
-    parser->is_bitfield = true;
+    /*
+     * The tokenizer has consumed any comma following a non-bitfield
+     * identifier in a declarator list.  If the next characters
+     * following possibly whitespace are name characters rather than
+     * ':', they belong to the next identifier in the list.
+     */
+    if (!(parser->is_declarator_list &&
+          has_any_name_chars_before(offset_decl, ':'))) {
+      parser->ident.is_bitfield[parser->num_identifiers - 1] = true;
+    }
     return true;
   }
   fprintf(parser->err_stream, "Malformed bitfield specification %s\n",
           offset_decl);
-  return false;
-}
-
-/*
- * C does not support bitfields wider than integers. The only other choice is
- * bool.  See https://en.cppreference.com/c/language/bit_field
- */
-bool type_is_bitfield_compatible(const struct parser_props *parser) {
-  size_t stacktop = parser->stacklen - 1;
-  if (!parser || !parser->stacklen || !parser->have_type) {
-    return false;
-  }
-  /*
-   * Decrementing the counter after the test means that it must be >0 rather
-   * than >=0, which would allow negative indices inside the loop.
-   */
-  while (stacktop-- > 0) {
-    if (type == parser->stack[stacktop].kind) {
-      if ((!strcmp(parser->stack[stacktop].string, "int")) ||
-          (!strcmp(parser->stack[stacktop].string, "unsigned int"))) {
-        if (MAX_BITFIELD_WIDTH >= parser->bitfield_width) {
-          return true;
-        } else {
-          fprintf(parser->err_stream,
-                  "Bitfield width %ld too wide for integer type.\n",
-                  parser->bitfield_width);
-        }
-      } else if (!strcmp(parser->stack[stacktop].string, "bool")) {
-        if (1 == parser->bitfield_width) {
-          return true;
-        }
-        fprintf(parser->err_stream, "Boolean bitfields must have width 1.\n");
-      } else {
-        fprintf(parser->err_stream, "Type %s does not support bitfields.\n",
-                parser->stack[stacktop].string);
-      }
-    }
-  }
   return false;
 }
 
@@ -1758,30 +1796,31 @@ bool process_enum_constants(struct parser_props *parser, char *user_input) {
  */
 bool handled_extended_parsing(struct parser_props *parser, char *user_input,
                               struct token *this_token) {
-  if (!check_for_bitfield(parser, user_input)) {
+  size_t top_ident;
+  if (!(parser->num_identifiers || parser->is_struct_or_union ||
+        parser->is_function || parser->parent->is_function_ptr)) {
     return false;
   }
-  if (parser->is_bitfield) {
-    if (!handle_bitfield_width(parser, user_input)) {
-      return false;
-    }
-    if (!type_is_bitfield_compatible(parser)) {
-      return false;
-    }
-  }
-  if (parser->num_identifiers &&
-      parser->ident.array_dimensions[parser->num_identifiers - 1]) {
-    if (!process_array_dimensions(parser, user_input, this_token)) {
-      return false;
-    }
-  } else if (parser->has_function_params ||
-             parser->has_struct_or_union_members) {
+  if (parser->has_function_params || parser->has_struct_or_union_members) {
     /* Move past the already-processed characters and '('. */
     if (!process_secondary_params(parser, user_input)) {
       return false;
     }
   } else if (parser->has_enum_constants) {
     if (!process_enum_constants(parser, user_input)) {
+      return false;
+    }
+  }
+  if (MAXIDENTIFIERS <= (top_ident = parser->num_identifiers - 1)) {
+    return true;
+  }
+  if (parser->ident.is_bitfield[top_ident]) {
+    if (!parser->ident.bitfield_width[top_ident]) {
+      fprintf(parser->err_stream, "ERROR: bitfield has no width.\n");
+      return false;
+    }
+  } else if (parser->ident.array_dimensions[top_ident]) {
+    if (!process_array_dimensions(parser, user_input, this_token)) {
       return false;
     }
   }
@@ -2027,13 +2066,20 @@ void handle_enum_constants(const struct parser_props *parser,
 }
 
 bool handled_bitfield(const struct parser_props *parser) {
-  if (parser->is_bitfield) {
-    if (parser->bitfield_width) {
-      fprintf(parser->out_stream, "bitfield of width %ld",
-              parser->bitfield_width);
+  if (!parser->num_identifiers) {
+    return true;
+  }
+  const size_t top_ident = parser->num_identifiers - 1;
+  if (parser->ident.is_bitfield[top_ident]) {
+    if (parser->ident.bitfield_width[top_ident]) {
+      fprintf(parser->out_stream, "bitfield of width %ld ",
+              parser->ident.bitfield_width[top_ident]);
+    }
+    /* The last identifier will print the type. */
+    if (1 == parser->num_identifiers) {
+      fprintf(parser->out_stream, "of type ");
     } else {
-      fprintf(parser->err_stream, "ERROR: bitfield has no width.\n");
-      return false;
+      fprintf(parser->out_stream, "and ");
     }
   }
   return true;
@@ -2124,6 +2170,7 @@ bool identifier_is_last(const struct parser_props *parser) {
 bool pop_stack(struct parser_props *parser, bool no_enum_instance,
                bool is_second_pointer_qualifier) {
   size_t stacktop;
+  size_t top_ident = parser->num_identifiers - 1;
   if (!parser->stacklen) {
     fprintf(parser->err_stream, "Attempt to pop empty stack.\n");
     return false;
@@ -2162,16 +2209,14 @@ bool pop_stack(struct parser_props *parser, bool no_enum_instance,
         return false;
       }
       handle_enum_constants(parser, no_enum_instance);
-      if (!handled_bitfield(parser)) {
-        return false;
-      }
       break;
     case identifier:
       /* Delay printing "and" until after "array of" when applicable. */
       if (parser->is_declarator_list && stacktop &&
           (identifier == parser->stack[stacktop - 1].kind) &&
           (!(parser->num_identifiers &&
-             parser->ident.array_dimensions[parser->num_identifiers - 1]))) {
+             (parser->ident.array_dimensions[top_ident] ||
+              parser->ident.is_bitfield[parser->num_identifiers - 1])))) {
         fprintf(parser->out_stream, "%s is a(n) and ",
                 parser->stack[stacktop].string);
       } else {
@@ -2182,11 +2227,11 @@ bool pop_stack(struct parser_props *parser, bool no_enum_instance,
         fprintf(parser->out_stream, "alias for ");
       }
       if (parser->num_identifiers &&
-          parser->ident.array_dimensions[parser->num_identifiers - 1]) {
+          parser->ident.array_dimensions[top_ident]) {
         fprintf(parser->out_stream, "array of ");
         if (parser->is_declarator_list &&
             !(identifier_is_last(parser) ||
-              parser->ident.array_lengths[parser->num_identifiers - 1])) {
+              parser->ident.array_lengths[top_ident])) {
           fprintf(parser->out_stream, "and ");
         } else {
           /*
@@ -2206,6 +2251,9 @@ bool pop_stack(struct parser_props *parser, bool no_enum_instance,
       }
       if (parser->is_function && (!parser->is_function_ptr)) {
         fprintf(parser->out_stream, "function which returns ");
+      }
+      if (!handled_bitfield(parser)) {
+        return false;
       }
       /*
        * In order to generate proper output for structs and unions, decrement
@@ -2361,22 +2409,24 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
    * considering array dimensions.
    */
   if (!is_first_name_char(*(declstring + tokenoffset)) &&
-      parser->num_identifiers &&
-      parser->ident.array_dimensions[parser->num_identifiers - 1] &&
-      endbracket) {
-    if (!firstcomma || (endbracket < firstcomma)) {
-      /* Process as-yet-unprocessed array lengths, if any. We should already
-       * have an identifier. */
-      if ('[' == *(declstring + tokenoffset)) {
-        tokenoffset++;
-      }
-      tokenoffset +=
-          process_array_length(parser, declstring + tokenoffset, this_token);
-      if (parser->ident.array_dimensions[parser->num_identifiers - 1] ==
-          parser->ident.array_lengths[parser->num_identifiers - 1]) {
-        parser->ident.last_dimension[parser->num_identifiers - 1] = SPECIFIED;
-      } else {
-        parser->ident.last_dimension[parser->num_identifiers - 1] = UNSPECIFIED;
+      parser->num_identifiers) {
+    if (parser->ident.array_dimensions[parser->num_identifiers - 1] &&
+        endbracket) {
+      if (!firstcomma || (endbracket < firstcomma)) {
+        /* Process as-yet-unprocessed array lengths, if any. We should already
+         * have an identifier. */
+        if ('[' == *(declstring + tokenoffset)) {
+          tokenoffset++;
+        }
+        tokenoffset +=
+            process_array_length(parser, declstring + tokenoffset, this_token);
+        if (parser->ident.array_dimensions[parser->num_identifiers - 1] ==
+            parser->ident.array_lengths[parser->num_identifiers - 1]) {
+          parser->ident.last_dimension[parser->num_identifiers - 1] = SPECIFIED;
+        } else {
+          parser->ident.last_dimension[parser->num_identifiers - 1] =
+              UNSPECIFIED;
+        }
       }
       return tokenoffset;
     }
@@ -2626,14 +2676,29 @@ bool finish_token(struct parser_props *parser, const char *offset_decl,
       }
       return false;
     }
-    if (((parser->num_identifiers &&
-          parser->ident.array_dimensions[top_ident]) ||
-         parser->is_function) &&
+    if ((MAXIDENTIFIERS - 1) < top_ident) {
+      fprintf(parser->err_stream, "Too many identifiers (%lu) for parser",
+              top_ident);
+      return false;
+    }
+    /* Because array dimensions and bitfield widths bind to the identifier
+     * rather than to the overall parsing context, they must be evaluated here.
+     */
+    if ((parser->ident.array_dimensions[top_ident] || parser->is_function) &&
         parser_has_atomic_qualifier(parser)) {
       fprintf(parser->err_stream,
               "Function return values and arrays cannot be atomic.\n");
       this_token->kind = invalid;
       return false;
+    }
+    if (!check_for_bitfield(parser, offset_decl)) {
+      return false;
+    }
+    if ((parser->ident.is_bitfield[parser->num_identifiers - 1]) &&
+        (strchr(offset_decl, ':'))) {
+      if (!handle_bitfield_width(parser, offset_decl - parser->cursor)) {
+        return 0;
+      }
     }
     break;
   case type:
@@ -2741,6 +2806,7 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
     if (!increm || (invalid == this_token.kind)) {
       /* There is an error. */
       if (!parser->stacklen && !parser->prev) {
+        __fpurge(parser->out_stream);
         return 0;
       }
       if ((',' == *(parser->cursor + user_input)) &&
@@ -2748,7 +2814,7 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
         parser->cursor++;
         continue;
       }
-      break;
+      break; /* leave the while loop */
     }
     if ((invalid == this_token.kind) &&
         (UNSPECIFIED ==
@@ -2764,6 +2830,7 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
                                       !strcmp("struct", this_token.string) ||
                                       !strcmp("enum", this_token.string))) {
       if (!handled_compound_type(parser, user_input, &this_token)) {
+        __fpurge(parser->out_stream);
         return 0;
       }
     }
@@ -2796,6 +2863,7 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
                               parser->parent->has_function_params)))) {
       fprintf(parser->err_stream,
               "Input lacks required identifier or type element.\n");
+      __fpurge(parser->out_stream);
       return 0;
     }
   }
@@ -2806,14 +2874,17 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
       (has_any_name_chars(user_input + parser->cursor))) {
     if ((parser->has_function_params && strchr(user_input, ')')) ||
         (parser->has_struct_or_union_members && strchr(user_input, '}')) ||
-        (parser->is_bitfield)) {
+        (parser->num_identifiers &&
+         parser->ident.is_bitfield[parser->num_identifiers - 1])) {
       if (!handled_extended_parsing(parser, user_input, &this_token)) {
+        __fpurge(parser->out_stream);
         return 0;
       }
     } else {
       /* There is unclassifiable junk at the end of the expression. */
       fprintf(parser->err_stream, "Expression ends with erroneous output: %s\n",
               user_input + parser->cursor);
+      __fpurge(parser->out_stream);
       return 0;
     }
   }

@@ -91,6 +91,8 @@ struct identifier_props {
   size_t array_dimensions[MAXIDENTIFIERS];
   size_t array_lengths[MAXIDENTIFIERS];
   enum specifier_state last_dimension[MAXIDENTIFIERS];
+  bool is_bitfield[MAXIDENTIFIERS];
+  size_t bitfield_width[MAXIDENTIFIERS];
 };
 
 /*
@@ -112,7 +114,6 @@ struct parser_props {
   bool is_pointer;
   bool is_function_ptr;
   bool is_typedef;
-  bool is_bitfield;
   bool is_declarator_list;
   bool is_inline;
   /* Enumeration, function and struct objects contain subsidiary objects. */
@@ -121,7 +122,6 @@ struct parser_props {
   bool has_struct_or_union_members;
   char enumerator_list[MAXTOKENLEN];
   size_t num_identifiers;
-  size_t bitfield_width;
   /* These parameters describe the internal parser state. */
   size_t cursor;
   size_t stacklen;
@@ -194,7 +194,7 @@ bool all_identifiers_are_enum_constants(const struct parser_props *parser);
 bool first_identifier_is_enumerator(const struct parser_props *parser,
                                     const char *user_input);
 void handle_trailing_instance_name(struct parser_props *parser,
-                                   char *user_input);
+                                   const char *user_input);
 bool process_secondary_params(struct parser_props *parser, char *user_input);
 size_t process_array_length(struct parser_props *parser,
                             const char *offset_string,

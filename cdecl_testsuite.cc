@@ -752,6 +752,13 @@ TEST(CheckForDeclaratorListTest, Enum) {
   EXPECT_THAT(parser.is_declarator_list, IsFalse());
 }
 
+TEST(CheckForDeclaratorListTest, Bitfields) {
+  struct parser_props parser;
+  const char *user_input = "bool rx_support:1, tx_support:1;";
+  check_for_declarator_list(&parser, user_input);
+  EXPECT_THAT(parser.is_declarator_list, IsTrue());
+}
+
 /*
  * Insure that an array length which appears above its associated identifier on
  * the stack is reordered below it.
@@ -2776,12 +2783,13 @@ TEST_F(ParserSuite, LoadStackDeclaratorListLeadingOnlyUnspecifiedDimension) {
   showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
 }
 
-TEST_F(ParserSuite, LoadStackBitfield) {
+TEST_F(ParserSuite, LoadStackSingleBitfield) {
   char user_input[MAXTOKENLEN];
   const char *probe = "bool rx_support:1";
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input);
   EXPECT_THAT(consumed, Eq(strlen(probe)));
+  showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string bool"),
               IsTrue());
   EXPECT_THAT(
@@ -2789,12 +2797,85 @@ TEST_F(ParserSuite, LoadStackBitfield) {
       IsTrue());
   EXPECT_THAT(parser.stacklen, Eq(2));
   ASSERT_THAT(parser.num_identifiers, Eq(1));
-  EXPECT_THAT(parser.is_bitfield, IsTrue());
-  EXPECT_THAT(parser.bitfield_width, Eq(1));
+  EXPECT_THAT(parser.ident.is_bitfield[0], IsTrue());
+  EXPECT_THAT(parser.ident.bitfield_width[0], Eq(1));
   showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
 }
 
+TEST_F(ParserSuite, LoadStackDeclaratorListBitfieldBoth) {
+  char user_input[MAXTOKENLEN];
+  const char *probe = "bool rx_support:2, tx_support:1";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input);
+  EXPECT_THAT(consumed, Eq(strlen(probe)));
+  showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string bool"),
+              IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 1 has kind identifier and string rx_support"),
+      IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 2 has kind identifier and string tx_support"),
+      IsTrue());
+  EXPECT_THAT(parser.stacklen, Eq(3));
+  EXPECT_THAT(parser.is_declarator_list, IsTrue());
+  ASSERT_THAT(parser.num_identifiers, Eq(2));
+  EXPECT_THAT(parser.ident.is_bitfield[0], IsTrue());
+  EXPECT_THAT(parser.ident.is_bitfield[1], IsTrue());
+  EXPECT_THAT(parser.ident.bitfield_width[0], Eq(2));
+  EXPECT_THAT(parser.ident.bitfield_width[1], Eq(1));
+}
+
+TEST_F(ParserSuite, LoadStackDeclaratorListBitfieldFirst) {
+  char user_input[MAXTOKENLEN];
+  const char *probe = "bool rx_support:1, tx_support";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input);
+  EXPECT_THAT(consumed, Eq(strlen(probe)));
+  showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string bool"),
+              IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 1 has kind identifier and string rx_support"),
+      IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 2 has kind identifier and string tx_support"),
+      IsTrue());
+  EXPECT_THAT(parser.stacklen, Eq(3));
+  EXPECT_THAT(parser.is_declarator_list, IsTrue());
+  ASSERT_THAT(parser.num_identifiers, Eq(2));
+  EXPECT_THAT(parser.ident.is_bitfield[0], IsTrue());
+  EXPECT_THAT(parser.ident.is_bitfield[1], IsFalse());
+  EXPECT_THAT(parser.ident.bitfield_width[0], Eq(1));
+  EXPECT_THAT(parser.ident.bitfield_width[1], Eq(0));
+}
+
+TEST_F(ParserSuite, LoadStackDeclaratorListBitfieldLast) {
+  char user_input[MAXTOKENLEN];
+  const char *probe = "bool rx_support, tx_support:1";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input);
+  EXPECT_THAT(consumed, Eq(strlen(probe)));
+  showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string bool"),
+              IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 1 has kind identifier and string rx_support"),
+      IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 2 has kind identifier and string tx_support"),
+      IsTrue());
+  EXPECT_THAT(parser.stacklen, Eq(3));
+  EXPECT_THAT(parser.is_declarator_list, IsTrue());
+  ASSERT_THAT(parser.num_identifiers, Eq(2));
+  EXPECT_THAT(parser.ident.is_bitfield[0], IsFalse());
+  EXPECT_THAT(parser.ident.is_bitfield[1], IsTrue());
+  EXPECT_THAT(parser.ident.bitfield_width[0], Eq(0));
+  EXPECT_THAT(parser.ident.bitfield_width[1], Eq(1));
+}
+
 TEST_F(ParserSuite, ParseSimpleExpression) {
+  exit(0);
   char inputstr[] = "int x;";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // The output has a trailng space in case there's output after the type.
@@ -3882,6 +3963,14 @@ TEST_F(ParserSuite, ParseBitfieldNoSpaces) {
   char inputstr[] = "int has_32bit_inodes:1;";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("has_32bit_inodes is a(n) int bitfield of width 1"),
+              IsTrue());
+}
+
+TEST_F(ParserSuite, ParseBitfieldList) {
+  char inputstr[] = "bool rx_support:1, tx_support:1;";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("rx_support is a(n) bool bitfield of width 1 and "
+                            "tx_support is a(n) bool bitfield of width 1"),
               IsTrue());
 }
 

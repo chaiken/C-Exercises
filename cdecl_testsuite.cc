@@ -2776,6 +2776,24 @@ TEST_F(ParserSuite, LoadStackDeclaratorListLeadingOnlyUnspecifiedDimension) {
   showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
 }
 
+TEST_F(ParserSuite, LoadStackBitfield) {
+  char user_input[MAXTOKENLEN];
+  const char *probe = "bool rx_support:1";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input);
+  EXPECT_THAT(consumed, Eq(strlen(probe)));
+  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string bool"),
+              IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Token number 1 has kind identifier and string rx_support"),
+      IsTrue());
+  EXPECT_THAT(parser.stacklen, Eq(2));
+  ASSERT_THAT(parser.num_identifiers, Eq(1));
+  EXPECT_THAT(parser.is_bitfield, IsTrue());
+  EXPECT_THAT(parser.bitfield_width, Eq(1));
+  showstack(&parser.stack[0], parser.stacklen, stdout, __LINE__);
+}
+
 TEST_F(ParserSuite, ParseSimpleExpression) {
   char inputstr[] = "int x;";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
@@ -3888,7 +3906,8 @@ TEST_F(ParserSuite, ParseBitfieldBadLength) {
 TEST_F(ParserSuite, ParseBitfieldBadType) {
   char inputstr[] = "double strange_bits : 8;";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
-  EXPECT_THAT(StderrMatches("Type does not support bitfields."), IsTrue());
+  EXPECT_THAT(StderrMatches("Type double does not support bitfields."),
+              IsTrue());
 }
 
 TEST_F(ParserSuite, ParseBitfieldTooWide) {

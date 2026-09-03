@@ -9,7 +9,8 @@
 
 #include <math.h>
 
-const size_t BITS_PER_INT = (size_t)floor(log2(8.0 * sizeof(int)));
+/* https://en.cppreference.com/c/language/bit_field, until C23 */
+const size_t MAX_BITFIELD_WIDTH = 7;
 
 const char typechars[] = {'1', '2', '3', '4', '6', '8', 'a', 'b',
                           'c', 'd', 'e', 'f', 'g', 'h', 'i', 'l',

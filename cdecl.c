@@ -1575,17 +1575,21 @@ bool handle_bitfield_width(struct parser_props *parser,
                            const char *user_input) {
   const char *colon_pos = strchr(user_input + parser->cursor, ':');
   size_t bf_width = 0;
+  size_t offset;
 
   if (!colon_pos) {
     fprintf(parser->err_stream, "Bitfield length not found.\n");
     return false;
   }
+  offset = colon_pos - (user_input + parser->cursor);
+  parser->cursor += offset + 1;
   while ('\0' != *(user_input + parser->cursor)) {
     if (isdigit(*(user_input + parser->cursor))) {
       /* Only works because the maximum bitfield width is 8, which is a single
        * digit. */
       bf_width = atol(user_input + parser->cursor);
       if (bf_width) {
+        parser->cursor++;
         parser->bitfield_width = bf_width;
         return true;
       } else {
@@ -1651,7 +1655,7 @@ bool type_is_bitfield_compatible(const struct parser_props *parser) {
     if (type == parser->stack[stacktop].kind) {
       if ((!strcmp(parser->stack[stacktop].string, "int")) ||
           (!strcmp(parser->stack[stacktop].string, "unsigned int"))) {
-        if (BITS_PER_INT >= parser->bitfield_width) {
+        if (MAX_BITFIELD_WIDTH >= parser->bitfield_width) {
           return true;
         } else {
           fprintf(parser->err_stream,
@@ -1664,7 +1668,8 @@ bool type_is_bitfield_compatible(const struct parser_props *parser) {
         }
         fprintf(parser->err_stream, "Boolean bitfields must have width 1.\n");
       } else {
-        fprintf(parser->err_stream, "Type does not support bitfields.\n");
+        fprintf(parser->err_stream, "Type %s does not support bitfields.\n",
+                parser->stack[stacktop].string);
       }
     }
   }

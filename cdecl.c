@@ -1572,9 +1572,9 @@ bool process_array_dimensions(struct parser_props *parser, char *user_input,
 }
 
 bool handle_bitfield_width(struct parser_props *parser,
-                           const char *user_input) {
-  char *colon_pos = (char *)strchr(user_input + parser->cursor, ':');
-  char *comma_pos = (char *)strchr(user_input + parser->cursor, ',');
+                           const char *declstring) {
+  char *colon_pos = (char *)strchr(declstring, ':');
+  char *comma_pos = (char *)strchr(declstring, ',');
   const size_t top_ident = parser->num_identifiers - 1;
   size_t bf_width = 0;
   size_t offset;
@@ -1583,7 +1583,7 @@ bool handle_bitfield_width(struct parser_props *parser,
     fprintf(parser->err_stream, "Bitfield length not found.\n");
     return false;
   }
-  while ('\0' != *(user_input + parser->cursor)) {
+  while ('\0' != *(declstring + parser->cursor)) {
     /*
      * If the previous identifier is a bitfield, the logic must find the new
      * identifier in a declarator_list before considering whether it is a
@@ -1595,12 +1595,12 @@ bool handle_bitfield_width(struct parser_props *parser,
          (comma_pos && (comma_pos < colon_pos)))) {
       return true;
     }
-    offset = colon_pos - (user_input + parser->cursor);
+    offset = colon_pos - (declstring + parser->cursor);
     parser->cursor += offset + 1;
-    if (isdigit(*(user_input + parser->cursor))) {
+    if (isdigit(*(declstring + parser->cursor))) {
       /* Only works because the maximum bitfield width is 8, which is a single
        * digit. */
-      bf_width = atol(user_input + parser->cursor);
+      bf_width = atol(declstring + parser->cursor);
       if (bf_width) {
         parser->cursor++;
         parser->ident.bitfield_width[top_ident] = bf_width;
@@ -1611,8 +1611,8 @@ bool handle_bitfield_width(struct parser_props *parser,
       }
     }
     parser->cursor++;
-    colon_pos = (char *)strchr(user_input + parser->cursor, ':');
-    comma_pos = (char *)strchr(user_input + parser->cursor, ',');
+    colon_pos = (char *)strchr(declstring + parser->cursor, ':');
+    comma_pos = (char *)strchr(declstring + parser->cursor, ',');
   }
   return false;
 }
@@ -1644,6 +1644,7 @@ bool check_for_bitfield(struct parser_props *parser, const char *offset_decl) {
   if (!colon_pos) {
     return true;
   }
+printf("offset_decl: %s, colon_pos: %s\n", offset_decl, colon_pos);
   if (has_digit_after_possible_blanks(colon_pos)) {
     parser->ident.is_bitfield[parser->num_identifiers - 1] = true;
     return true;
@@ -2657,12 +2658,12 @@ bool finish_token(struct parser_props *parser, const char *offset_decl,
       this_token->kind = invalid;
       return false;
     }
-    if (!check_for_bitfield(parser, offset_decl - parser->cursor)) {
+    if (!check_for_bitfield(parser, offset_decl)) {
       return false;
     }
     if ((parser->ident.is_bitfield[parser->num_identifiers - 1]) &&
         (':' == *(offset_decl))) {
-      if (!handle_bitfield_width(parser, offset_decl - parser->cursor)) {
+      if (!handle_bitfield_width(parser, offset_decl)) {
         return 0;
       }
     }

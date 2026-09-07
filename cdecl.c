@@ -2722,7 +2722,7 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
   initialize_token(&this_token);
   size_t increm = 0;
   initialize_token(&this_token);
-  while (parser->cursor <= strlen(user_input)) {
+  while (parser->cursor < strlen(user_input)) {
     /*
      * Finding the identifier terminates initial stack loading since it comes
      * last, as long as there are no function arguments or array delimiters and

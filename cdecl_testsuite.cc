@@ -2138,8 +2138,7 @@ TEST_F(ParserSuite, LoadStackSimpleStruct) {
   const char *probe = "struct node nodelist { int payload; struct node *next;}";
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input);
-  // -1 because the code returns when '}' is reached.
-  EXPECT_THAT(consumed, Eq(strlen(probe) - 1));
+  EXPECT_THAT(consumed, Eq(strlen(probe)));
   EXPECT_THAT(parser.has_struct_or_union_members, IsTrue());
   EXPECT_THAT(parser.stacklen, Eq(2));
   EXPECT_THAT(
@@ -2523,9 +2522,6 @@ TEST_F(ParserSuite, LoadStackNestedStruct) {
                       "u32 per_lane; }; }";
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input);
-  // Trailing delimiters are not included in cursor count in
-  // load_next_secondary_param().
-  // Trailing separator is overwritten with NULL in tokenize_struct_params().
   EXPECT_THAT(consumed, Eq(strlen(probe)));
   EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string u64"),
               IsTrue());
@@ -2554,9 +2550,6 @@ TEST_F(ParserSuite, LoadStackNestedAnonymousUnion) {
                       "autoneg; enum ethtool_training training; }; }";
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input);
-  // Trailing delimiters are not included in cursor count in
-  // load_next_secondary_param().
-  // Trailing separator is overwritten with NULL in tokenize_struct_params().
   EXPECT_THAT(consumed, Eq(strlen(probe)));
   EXPECT_THAT(
       StdoutMatches(

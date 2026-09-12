@@ -285,7 +285,7 @@ static bool is_following_name_char(const char c) {
 
 static bool has_any_name_chars(const char *s) {
   char c;
-  if (!s) {
+  if (!(s && strlen(s))) {
     return false;
   }
   if (is_first_name_char(*s)) {
@@ -301,6 +301,9 @@ static bool has_any_name_chars(const char *s) {
 }
 
 bool has_any_name_chars_before(const char *s, const char delimiter) {
+  if (!(s && strlen(s))) {
+    return false;
+  }
   const char *delimp = strchr(s, delimiter);
   char delimited[MAXTOKENLEN];
   if (!delimp)
@@ -1170,6 +1173,21 @@ void handle_trailing_instance_name(struct parser_props *parser,
   initialize_token(&this_token);
   if (!first_end_delim) {
     return;
+  }
+  /* Return if there is no characters which could contribute to an instance
+   * name. */
+  if (last_end_delim) {
+    if (!has_any_name_chars(last_end_delim)) {
+      /*
+       * Go past the end delimiter so that subsequent code will observe that all
+       * characters have been consumed.
+       */
+      if (parser->is_struct_or_union ||
+          (parser->parent && parser->parent->is_struct_or_union)) {
+        parser->cursor += 1 + (last_end_delim - (user_input + parser->cursor));
+      }
+      return;
+    }
   }
   /*
    * There can only be one instance name.  If the first identifier on the stack

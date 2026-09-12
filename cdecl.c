@@ -1727,7 +1727,7 @@ bool check_for_bitfield(struct parser_props *parser, const char *offset_decl) {
     }
     return true;
   }
-  fprintf(parser->err_stream, "Malformed bitfield specification %s\n",
+  fprintf(parser->err_stream, "Malformed bitfield specification: %s\n",
           offset_decl);
   return false;
 }
@@ -2679,6 +2679,7 @@ bool finish_token(struct parser_props *parser, const char *offset_decl,
        * indication, turn it into a type.
        */
       if (!reclassified_unsigned_qualifier(parser)) {
+        fprintf(parser->err_stream, "Input lacks required type.\n");
         return false;
       }
     }

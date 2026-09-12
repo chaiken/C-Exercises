@@ -759,6 +759,13 @@ TEST(CheckForDeclaratorListTest, Bitfields) {
   EXPECT_THAT(parser.is_declarator_list, IsTrue());
 }
 
+TEST(CheckForDeclaratorListTest, BitfieldsInStruct) {
+  struct parser_props parser;
+  const char *user_input = "struct conn { bool rx_support:1, tx_support:1; };";
+  check_for_declarator_list(&parser, user_input);
+  EXPECT_THAT(parser.is_declarator_list, IsTrue());
+}
+
 /*
  * Insure that an array length which appears above its associated identifier on
  * the stack is reordered below it.
@@ -3952,6 +3959,31 @@ TEST_F(ParserSuite, ParseBitfield) {
       IsTrue());
 }
 
+TEST_F(ParserSuite, ParseBitfieldInStruct) {
+  char inputstr[] = "struct nodes { int has_32bit_inodes : 1; };";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("struct nodes has member(s) has_32bit_inodes is "
+                            "a(n) bitfield of width 1 of type int"),
+              IsTrue());
+}
+
+TEST_F(ParserSuite, ParseBitfieldInStruct2) {
+  char inputstr[] = "struct nodes { int tx:1, rx:3; };";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("struct nodes has member(s) rx is a(n) bitfield of width 3 "
+                    "and tx is a(n) bitfield of width 1 of type int"),
+      IsTrue());
+}
+
+TEST_F(ParserSuite, ParseBitfieldInStruct3) {
+  char inputstr[] = "struct nodes { int tx, rx:3; };";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("struct nodes has member(s) rx is a(n) bitfield of "
+                            "width 3 and tx is a(n) int"),
+              IsTrue());
+}
+
 TEST_F(ParserSuite, ParseBitfieldNoSpaces) {
   char inputstr[] = "int has_32bit_inodes:1;";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
@@ -3967,6 +3999,18 @@ TEST_F(ParserSuite, ParseBitfieldList) {
       StdoutMatches("tx_support is a(n) bitfield of width 1 and "
                     "rx_support is a(n) bitfield of width 1 of type bool"),
       IsTrue());
+}
+
+TEST_F(ParserSuite, ParseBitfieldBadList) {
+  char inputstr[] = ", tx_support:1;";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  EXPECT_THAT(StderrMatches("Input lacks required type"), IsTrue());
+}
+
+TEST_F(ParserSuite, ParseBitfieldBadWidth) {
+  char inputstr[] = "int tx_support:a;";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  EXPECT_THAT(StderrMatches("Malformed bitfield specification: :a"), IsTrue());
 }
 
 TEST_F(ParserSuite, ParseBitfieldListSpaces) {

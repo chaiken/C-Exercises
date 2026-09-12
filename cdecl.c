@@ -522,8 +522,12 @@ void check_for_declarator_list(struct parser_props *parser,
   char *next_open_braces = strchr(input, '{');
   char *next_close_braces = strchr(input, '}');
   size_t cursor = 0;
-  /* Declarator lists are not nested and typedefs are one per line. */
-  if (parser->prev || parser->is_typedef || parser->is_enum) {
+  /*
+   * Declarator lists may appear as struct or union members, but not as function
+   * parameters.
+   */
+  if ((parser->parent && !parser->parent->is_struct_or_union) ||
+      (parser->is_typedef || parser->is_enum)) {
     return;
   }
   while (cursor < strlen(input)) {
@@ -1729,7 +1733,7 @@ bool check_for_bitfield(struct parser_props *parser, const char *offset_decl) {
     }
     return true;
   }
-  fprintf(parser->err_stream, "Malformed bitfield specification %s\n",
+  fprintf(parser->err_stream, "Malformed bitfield specification: %s\n",
           offset_decl);
   return false;
 }
@@ -2681,6 +2685,7 @@ bool finish_token(struct parser_props *parser, const char *offset_decl,
        * indication, turn it into a type.
        */
       if (!reclassified_unsigned_qualifier(parser)) {
+        fprintf(parser->err_stream, "Input lacks required type.\n");
         return false;
       }
     }

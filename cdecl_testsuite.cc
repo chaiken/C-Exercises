@@ -3952,6 +3952,41 @@ TEST_F(ParserSuite, ParseBitfield) {
       IsTrue());
 }
 
+TEST_F(ParserSuite, ParseBitfieldInStruct) {
+  char inputstr[] = "struct nodes { int has_32bit_inodes : 1; };";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("struct nodes has member(s) has_32bit_inodes is "
+                            "a(n) bitfield of width 1 of type int"),
+              IsTrue());
+}
+
+TEST_F(ParserSuite, ParseBitfieldInStruct2) {
+  char inputstr[] = "struct nodes { int tx:1, rx:3; };";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("struct nodes has member(s) rx is a(n) bitfield of width 3 "
+                    "and tx is a(n) bitfield of width 1 of type int"),
+      IsTrue());
+}
+
+TEST_F(ParserSuite, ParseBitfieldInStruct3) {
+  char inputstr[] = "struct nodes { int tx, rx:3; };";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("struct nodes has member(s) rx is a(n) bitfield of "
+                            "width 3 and tx is a(n) int"),
+              IsTrue());
+}
+
+TEST_F(ParserSuite, ParseBitfieldInNestedStruct) {
+  char inputstr[] =
+      "struct nodes { uint32_t *cookie; struct  { int tx, rx:3; }; };";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("struct nodes has member(s) cookie is a(n) pointer "
+                            "to uint32_t and struct has member(s) rx is a(n) "
+                            "bitfield of width 3 and tx is a(n) int"),
+              IsTrue());
+}
+
 TEST_F(ParserSuite, ParseBitfieldNoSpaces) {
   char inputstr[] = "int has_32bit_inodes:1;";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
@@ -3967,6 +4002,28 @@ TEST_F(ParserSuite, ParseBitfieldList) {
       StdoutMatches("tx_support is a(n) bitfield of width 1 and "
                     "rx_support is a(n) bitfield of width 1 of type bool"),
       IsTrue());
+}
+
+TEST_F(ParserSuite, ParseBitfieldListInStruct) {
+  char inputstr[] = "struct conn { bool rx_support:1, tx_support:1; };";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(
+      StdoutMatches(
+          "struct conn has member(s) tx_support is a(n) bitfield of width 1 "
+          "and rx_support is a(n) bitfield of width 1 of type bool"),
+      IsTrue());
+}
+
+TEST_F(ParserSuite, ParseBitfieldBadList) {
+  char inputstr[] = ", tx_support:1;";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  EXPECT_THAT(StderrMatches("Input lacks required type"), IsTrue());
+}
+
+TEST_F(ParserSuite, ParseBitfieldBadWidth) {
+  char inputstr[] = "int tx_support:a;";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  EXPECT_THAT(StderrMatches("Malformed bitfield specification: :a"), IsTrue());
 }
 
 TEST_F(ParserSuite, ParseBitfieldListSpaces) {
@@ -4125,4 +4182,12 @@ TEST_F(ParserSuite, ParseDeclaratorListBothUnspecified) {
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("b is a(n) array of"), IsTrue());
   EXPECT_THAT(StdoutMatches("and a is a(n) array of int"), IsTrue());
+}
+
+TEST_F(ParserSuite, ParseDeclaratorListEnumsInStruct) {
+  char inputstr[] = "struct process { enum State fuel, exhaust; };";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("struct process has member(s) exhaust is a(n) and "
+                            "fuel is a(n) enum State"),
+              IsTrue());
 }

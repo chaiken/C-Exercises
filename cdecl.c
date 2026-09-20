@@ -20,12 +20,14 @@
 #include <assert.h>
 #include <bsd/string.h>
 #include <ctype.h>
+#include <locale.h>
 #include <stdbool.h>
 #include <stdio.h>
 /* For __fpurge() */
 #include <stdio_ext.h>
 #include <stdlib.h>
 #include <string.h>
+#include <wchar.h>
 
 #include "cdecl-internal.h"
 
@@ -216,6 +218,23 @@ bool is_all_blanks(const char *input) {
   }
   // Reached end of the string.
   if (!(token_copy && *token_copy)) {
+    return true;
+  }
+  return false;
+}
+
+/*
+ * https://www.cppreference.com/c/string/multibyte/mbrlen
+ * https://en.cppreference.com/c/string/multibyte/wcstombs
+ */
+bool is_utf8(const char *input, size_t *len) {
+  mbstate_t mbs;
+  if (!input) {
+    return false;
+  }
+  memset(&mbs, 0, sizeof(mbs));
+  *len = mbrlen(input, 4, &mbs);
+  if (*len <= 4) {
     return true;
   }
   return false;
@@ -3031,6 +3050,7 @@ int main(int argc, char **argv) {
   char inputstr[MAXTOKENLEN] = {0};
   struct parser_props parser;
   initialize_parser(&parser);
+  setlocale(LC_CTYPE, "de_DE.utf8");
 
   if ((argc != 2)) {
     usage();

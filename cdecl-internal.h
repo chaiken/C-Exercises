@@ -7,8 +7,6 @@
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 #define _cleanup_(x) __attribute__((__cleanup__(x)))
 
-#include <math.h>
-
 /* https://en.cppreference.com/c/language/bit_field, until C23 */
 const size_t MAX_BITFIELD_WIDTH = 8;
 

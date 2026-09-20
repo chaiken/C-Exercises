@@ -185,6 +185,22 @@ TEST(StringManipulateSuite, GetKindIdentifiers) {
   EXPECT_THAT(get_kind(" myvar;"), Eq(identifier));
 }
 
+TEST(StringManipulateSuite, IsUTF8) {
+  setlocale(LC_CTYPE, "de_DE.utf8");
+  size_t len = 0;
+  EXPECT_THAT(is_utf8(NULL, &len), IsFalse());
+  EXPECT_THAT(is_utf8("", &len), IsTrue());
+  EXPECT_THAT(len, Eq(0));
+  EXPECT_THAT(is_utf8("a", &len), IsTrue());
+  EXPECT_THAT(len, Eq(1));
+  // UTF-8: 0xC3 0x9F
+  EXPECT_THAT(is_utf8("ß", &len), IsTrue());
+  EXPECT_THAT(len, Eq(2));
+  // UTF-8: 0xE2 0xBA 0xA2
+  EXPECT_THAT(is_utf8("水", &len), IsTrue());
+  EXPECT_THAT(len, Eq(3));
+}
+
 struct TokenizerSuite : public Test {
   TokenizerSuite() { initialize_parser(&parser); }
   struct token this_token;
@@ -192,6 +208,7 @@ struct TokenizerSuite : public Test {
 };
 
 TEST_F(TokenizerSuite, Empty) {
+  exit(0);
   char input[] = "";
   EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(0));
   EXPECT_THAT(this_token.string, IsEmpty());

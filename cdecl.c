@@ -27,7 +27,9 @@
 #include <stdio_ext.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/param.h>
 #include <wchar.h>
+#include <wctype.h>
 
 #include "cdecl-internal.h"
 
@@ -229,11 +231,15 @@ bool is_all_blanks(const char *input) {
  */
 bool is_utf8(const char *input, size_t *len) {
   mbstate_t mbs;
+  if (!input || !len) {
+    return false;
+  }
+  size_t to_examine = MIN(4, strlen(input));
   if (!input) {
     return false;
   }
   memset(&mbs, 0, sizeof(mbs));
-  *len = mbrlen(input, 4, &mbs);
+  *len = mbrlen(input, to_examine, &mbs);
   if (*len <= 4) {
     return true;
   }
@@ -241,16 +247,49 @@ bool is_utf8(const char *input, size_t *len) {
 }
 
 bool has_alnum_chars(const char *input) {
-  if (!input || !strlen(input)) {
+  if (!input) {
     return false;
   }
+  size_t len = strlen(input);
+  wchar_t wc = L'\0';
+  size_t converted = 0;
   char *copy = strdup(input);
   _cleanup_(freep) char *saveptr = copy;
-  while (*copy && (!isalnum(*copy))) {
-    copy++;
+  char *curr = copy;
+  int maybe_failed = 0;
+  size_t mbrlen = 0;
+  if (!len) {
+    return false;
   }
+  while (converted < strlen(input)) {
+    if (!is_utf8(curr, &mbrlen)) {
+      fprintf(stderr, "Input must be UTF8: %s\n", curr);
+      return false;
+    }
+    if (isascii(*curr)) {
+      if (isalnum(*curr)) {
+        return true;
+      }
+      converted++;
+      curr = copy + converted;
+    } else {
+      /* reset the conversion state */
+      mbtowc(NULL, NULL, 0);
+      maybe_failed = mbtowc(&wc, curr, strlen(copy) - converted);
+      if (maybe_failed <= 0) {
+        fprintf(stderr, "Failed to convert input %s\n", curr);
+        return false;
+      }
+      if (iswalnum(wc)) {
+        return true;
+      }
+      converted += maybe_failed;
+    }
+    curr = copy + converted;
+  }
+
   /* Reached the end without finding alphanumeric characters. */
-  if (!*copy) {
+  if (('\0' == *curr) || (L'\0' == *curr)) {
     return false;
   }
   return true;

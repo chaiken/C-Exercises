@@ -106,7 +106,7 @@ int main(void)
     setlocale(LC_ALL, "de_DE.utf8");
     printf("winput string:\n");
     for (size_t ndx = 0; ndx < sizeof winput / sizeof winput[0]; ++ndx)
-        printf("   src[%2zu] = %#8x\n", ndx, winput[ndx]);
+        printf("   src[%2zu] = %#2x\n", ndx, winput[ndx] & 0xff);
     wlen = wcslen(winput);
     slen = strlen(input);
     printf("strlen(input): %lu, wcslen(input): %lu\n", slen, wlen);
@@ -119,7 +119,7 @@ int main(void)
     printf("strlen(converted): %lu\n", strlen(converted));
     printf("converted string:\n");
     for (size_t ndx = 0; ndx < slen; ++ndx)
-        printf("   src[%2zu] = %#8x\n", ndx, converted[ndx]);
+        printf("   src[%2zu] = %#2x\n", ndx, converted[ndx] & 0xff);
     free(converted);
 
     printf("\nnarrowing of wchar_t winput: strlen of %s is %lu\n", (char *)winput, strlen((char *)winput));

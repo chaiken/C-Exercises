@@ -159,6 +159,14 @@ TEST(StringManipulateSuite, HasAlnumMBChars) {
   EXPECT_THAT(has_alnum_chars("水"), IsTrue());
 }
 
+TEST(StringManipulateSuite, HasMBNameChars) {
+  setlocale(LC_CTYPE, "de_DE.utf8");
+  EXPECT_THAT(has_any_name_chars(""), IsFalse());
+  EXPECT_THAT(has_any_name_chars("ß"), IsTrue());
+  EXPECT_THAT(has_any_name_chars("水"), IsTrue());
+  EXPECT_THAT(has_any_name_chars("€!"), IsFalse());
+}
+
 TEST(StringManipulateSuite, GetKindBad) {
   EXPECT_THAT(get_kind(""), Eq(invalid));
   EXPECT_THAT(get_kind(";"), Eq(invalid));
@@ -4212,4 +4220,10 @@ TEST_F(ParserSuite, ParseDeclaratorListEnumsInStruct) {
   EXPECT_THAT(StdoutMatches("struct process has member(s) exhaust is a(n) and "
                             "fuel is a(n) enum State"),
               IsTrue());
+}
+
+TEST_F(ParserSuite, ParseUTF8Name) {
+  char inputstr[] = "int ß; };";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("ß is a(n) int"), IsTrue());
 }

@@ -154,7 +154,7 @@ struct parser_props *make_parser(struct parser_props *const parser);
 bool is_all_blanks(const char *input);
 bool has_alnum_chars(const char *input);
 bool is_numeric(const char *input);
-static bool is_type_char(const char c);
+static bool is_type_char(const wchar_t c);
 static bool has_any_name_chars(const char *s);
 bool parens_match(const char *offset_decl, size_t *pair_count);
 bool check_for_array_dimensions(struct parser_props *parser,

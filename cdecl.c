@@ -235,9 +235,6 @@ bool is_utf8(const char *input, size_t *len) {
     return false;
   }
   size_t to_examine = MIN(4, strlen(input));
-  if (!input) {
-    return false;
-  }
   memset(&mbs, 0, sizeof(mbs));
   *len = mbrlen(input, to_examine, &mbs);
   if (*len <= 4) {
@@ -250,7 +247,6 @@ bool has_alnum_chars(const char *input) {
   if (!input) {
     return false;
   }
-  size_t len = strlen(input);
   wchar_t wc = L'\0';
   size_t converted = 0;
   char *copy = strdup(input);
@@ -258,7 +254,7 @@ bool has_alnum_chars(const char *input) {
   char *curr = copy;
   int maybe_failed = 0;
   size_t mbrlen = 0;
-  if (!len) {
+  if (!strlen(input)) {
     return false;
   }
   while (converted < strlen(input)) {
@@ -311,9 +307,12 @@ bool is_numeric(const char *input) {
   return false;
 }
 
-static bool is_type_char(const char c) {
+static bool is_type_char(const wchar_t wc) {
+  if (!isascii(wc)) {
+    return false;
+  }
   for (long unsigned i = 0; i < ARRAY_SIZE(typechars); i++) {
-    if (c == typechars[i]) {
+    if (wc == typechars[i]) {
       return true;
     }
   }
@@ -326,32 +325,47 @@ static bool is_type_char(const char c) {
  * A valid identifier must begin with a non-digit character (Latin letter,
  * underscore, or Unicode non-digit character(since C99) . . .
  */
-static bool is_first_name_char(const char c) {
-  if (isalpha(c) || ('_' == c)) {
+static bool is_first_name_char(const wchar_t wc) {
+  if (iswalpha(wc) || (L'_' == wc)) {
+    return true;
+  }
+  if (iswalnum(wc)) {
     return true;
   }
   return false;
 }
 
 /* Digits are in addition allowed after the first character. */
-static bool is_following_name_char(const char c) {
-  if ((is_first_name_char(c)) || isdigit(c)) {
+static bool is_following_name_char(const wchar_t wc) {
+  if ((is_first_name_char(wc)) || iswdigit(wc)) {
     return true;
   }
   return false;
 }
 
 static bool has_any_name_chars(const char *s) {
-  char c;
+  wchar_t wc = L'\0';
+  size_t converted = 0;
+  int maybe_failed = 0;
   if (!(s && strlen(s))) {
     return false;
   }
-  if (is_first_name_char(*s)) {
+  mbtowc(NULL, NULL, 0);
+  converted = mbtowc(&wc, s, MIN(4, strlen(s)));
+  if (0 >= converted) {
+    return false;
+  }
+  if (is_first_name_char(wc)) {
     return true;
   }
-  for (size_t ctr = 1; ctr < strlen(s); ctr++) {
-    c = *(s + ctr);
-    if (is_following_name_char(c)) {
+  while (converted < strlen(s)) {
+    maybe_failed = mbtowc(&wc, s + converted, strlen(s) - converted);
+    if (maybe_failed <= 0) {
+      fprintf(stderr, "Failed to convert input %s\n", s);
+      return false;
+    }
+    converted += maybe_failed;
+    if (is_following_name_char(wc)) {
       return true;
     }
   }
@@ -359,7 +373,7 @@ static bool has_any_name_chars(const char *s) {
 }
 
 bool has_any_name_chars_before(const char *s, const char delimiter) {
-  if (!(s && strlen(s))) {
+  if (!(s && strlen(s)) || !isascii(delimiter)) {
     return false;
   }
   const char *delimp = strchr(s, delimiter);

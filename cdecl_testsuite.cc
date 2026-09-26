@@ -1439,6 +1439,29 @@ TEST_F(ParserSuite, ProcessStructMembersOneMemberWithInstanceName) {
   release_parser_resources(&parser);
 }
 
+TEST_F(ParserSuite, FunctionReturnsStruct) {
+  char inputstr[] = "static struct snd_dlsym_link __SND_DLSYM_VERSION(long "
+                    "snd_dlsym_, char *name, char *version); ";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(
+      StdoutMatches(
+          "__SND_DLSYM_VERSION is a(n) function which returns struct "
+          "snd_dlsym_link and takes param(s) snd_dlsym_ is a(n) long and name "
+          "is a(n) pointer to char and version is a(n) pointer to char and "
+          "which has static storage duration and internal linkage"),
+      IsTrue());
+}
+
+TEST_F(ParserSuite, FunctionReturnsEnum) {
+  char inputstr[] = "enum fd_version fd_device_version(struct fd_device *dev);";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(
+      StdoutMatches(
+          "fd_device_version is a(n) function which returns enum fd_version "
+          "and takes param(s) dev is a(n) pointer to struct fd_device"),
+      IsTrue());
+}
+
 TEST_F(ParserSuite, PopEmpty) {
   EXPECT_THAT(pop_stack(&parser, true, false), IsFalse());
   EXPECT_THAT(StderrMatches("Attempt to pop empty stack."), IsTrue());

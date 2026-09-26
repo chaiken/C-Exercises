@@ -4278,7 +4278,7 @@ TEST_F(ParserSuite, ParseContinuationLineCompleteNoInitialization) {
 }
 
 TEST_F(ParserSuite, RejectContinuationLineComplete) {
-  char inputstr[] = "static struct snd_dlsym_link __SND_DLSYM_VERSION(snd_dlsym_, name, version);";
+  char inputstr[] = "static struct snd_dlsym_link __SND_DLSYM_VERSION(snd_dlsym_, name, version); ";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(
       StderrMatches(

@@ -4258,3 +4258,21 @@ TEST_F(ParserSuite, ParseIllFormedCommentSlashes) {
           "// process { enum State fuel, exhaust; } is not a valid type name"),
       IsTrue());
 }
+
+TEST_F(ParserSuite, ParseContinuationLineNoSemicolon) {
+  char inputstr[] = "unsigned int name[] { \\";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  EXPECT_THAT(StderrMatches(""), IsTrue());
+}
+
+TEST_F(ParserSuite, ParseContinuationLineWithInitialization) {
+  char inputstr[] = " int32_t _u8_get_index=1; \\";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("_u8_get_index is a(n) int32_t"), IsTrue());
+}
+
+TEST_F(ParserSuite, ParseContinuationLineCompleteNoInitialization) {
+  char inputstr[] = " int32_t _u8_get_index; \\";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("_u8_get_index is a(n) int32_t"), IsTrue());
+}

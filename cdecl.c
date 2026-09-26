@@ -89,7 +89,7 @@ void limitations() {
          "ANSI C, not all\n");
   printf("\t   libc, kernel extensions or compiler attributes;\n");
   printf("\tc) does not support C23 or C26 additions;\n");
-  printf("\t   unicode or continuation lines.\n");
+  printf("\t   unicode or functions which return structs or unions.\n");
 }
 
 /********** functions to modify the parser **********/

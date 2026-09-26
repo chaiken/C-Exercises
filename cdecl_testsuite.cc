@@ -3582,8 +3582,7 @@ TEST_F(ParserSuite, ParseStructForwardDeclarationWhitespace) {
 TEST_F(ParserSuite, ParseStructForwardDeclarationNoName) {
   char inputstr[] = "struct *;";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
-  EXPECT_THAT(StderrMatches("Input lacks required identifier or type element."),
-              IsTrue());
+  EXPECT_THAT(StderrMatches("* is not a valid type name."), IsTrue());
 }
 
 TEST_F(ParserSuite, ParseEnumWithIdentifierNoEnumerators) {
@@ -4190,4 +4189,72 @@ TEST_F(ParserSuite, ParseDeclaratorListEnumsInStruct) {
   EXPECT_THAT(StdoutMatches("struct process has member(s) exhaust is a(n) and "
                             "fuel is a(n) enum State"),
               IsTrue());
+}
+
+TEST_F(ParserSuite, ParseCommentOnly) {
+  char inputstr[] = "# struct process { enum State fuel, exhaust; };";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("The input expression is a comment."), IsTrue());
+}
+
+TEST_F(ParserSuite, ParseCommentOnlySlashes) {
+  char inputstr[] = "//struct process { enum State fuel, exhaust; };";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("The input expression is a comment."), IsTrue());
+}
+
+TEST_F(ParserSuite, ParseTrailingComment) {
+  char inputstr[] =
+      "struct process { enum State fuel, exhaust; }; # preliminary";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("struct process has member(s) exhaust is a(n) and "
+                            "fuel is a(n) enum State"),
+              IsTrue());
+}
+
+TEST_F(ParserSuite, ParseTrailingCommentSlashes) {
+  char inputstr[] =
+      "struct process { enum State fuel, exhaust; }; // preliminary";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("struct process has member(s) exhaust is a(n) and "
+                            "fuel is a(n) enum State"),
+              IsTrue());
+}
+
+TEST_F(ParserSuite, ParseCommentDeclaratorList) {
+  char inputstr[] = "# int a, b;";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("The input expression is a comment."), IsTrue());
+}
+
+TEST_F(ParserSuite, ParseTrailingCommentDeclaratorList) {
+  char inputstr[] = "int a, b; # boring";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("b is a(n) and a is a(n) int"), IsTrue());
+}
+
+TEST_F(ParserSuite, ParseTrailingCommentDeclaratorListStraySemicolong) {
+  char inputstr[] = "int a, b; # boring;";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  EXPECT_THAT(
+      StderrMatches("Expression ends with erroneous output: ; # boring"),
+      IsTrue());
+}
+
+TEST_F(ParserSuite, ParseIllFormedComment) {
+  char inputstr[] = "struct # process { enum State fuel, exhaust; };";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  EXPECT_THAT(
+      StderrMatches(
+          "# process { enum State fuel, exhaust; } is not a valid type name"),
+      IsTrue());
+}
+
+TEST_F(ParserSuite, ParseIllFormedCommentSlashes) {
+  char inputstr[] = "struct // process { enum State fuel, exhaust; };";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  EXPECT_THAT(
+      StderrMatches(
+          "// process { enum State fuel, exhaust; } is not a valid type name"),
+      IsTrue());
 }

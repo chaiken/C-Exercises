@@ -89,7 +89,7 @@ void limitations() {
          "ANSI C, not all\n");
   printf("\t   libc, kernel extensions or compiler attributes;\n");
   printf("\tc) does not support C23 or C26 additions;\n");
-  printf("\t   unicode, continuation lines, or comments.\n");
+  printf("\t   unicode or continuation lines.\n");
 }
 
 /********** functions to modify the parser **********/
@@ -121,6 +121,7 @@ void reset_parser(struct parser_props *parser) {
   parser->is_typedef = false;
   parser->is_declarator_list = false;
   parser->is_inline = false;
+  parser->is_comment = false;
   parser->has_enum_constants = false;
   parser->cursor = 0;
   parser->enumerator_list[0] = '\0';
@@ -989,6 +990,13 @@ bool handled_compound_type(struct parser_props *parser, char *progress_ptr,
       !has_any_name_chars_before(progress_ptr + parser->cursor,
                                  parser->parent->start_delim)) {
     return true;
+  }
+  /* Check for junk in the middle of the expression. */
+  if ((parser->start_delim != *(progress_ptr + parser->cursor)) &&
+      (!is_first_name_char(*(progress_ptr + parser->cursor)))) {
+    fprintf(parser->err_stream, "%s is not a valid type name.\n",
+            progress_ptr + parser->cursor);
+    return false;
   }
   /*
    * Since there's no leading whitespace, the next blank terminates the compound
@@ -2422,6 +2430,23 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
     fprintf(stderr, "\nToken too long %s.\n", declstring);
     return 0;
   }
+  /* Bail out on comments. */
+  if (('#' == *(declstring + tokenoffset)) ||
+      ((2 <= num_remaining_chars) &&
+       ('/' == *(declstring + tokenoffset) &&
+        ('/' == *(declstring + tokenoffset + 1))))) {
+    if (!parser->stacklen) {
+      parser->is_comment = true;
+      fprintf(parser->out_stream, "The input expression is a comment.\n");
+    } else {
+      /*
+       * The comment char is in the middled of the expression, so indicate an
+       * error.
+       */
+      parser->stacklen = 0;
+    }
+    return 0;
+  }
   /* Move past leading whitespace plus any commas in a declarator list. */
   tokenoffset = trimnum;
   if (parser->is_declarator_list && ',' == *(declstring + tokenoffset)) {
@@ -2829,6 +2854,9 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
     parser->cursor += increm;
     /* Reached end of input, or hit an error. */
     if (!increm || (invalid == this_token.kind)) {
+      if (parser->is_comment) {
+        return 0;
+      }
       /* There is an error. */
       if (!parser->stacklen && !parser->prev) {
         __fpurge(parser->out_stream);
@@ -2946,6 +2974,9 @@ bool input_parsing_successful(struct parser_props *parser, char inputstr[]) {
     strlcpy(user_input, trimmed, MAXTOKENLEN);
   }
   if (!load_stack(parser, user_input)) {
+    if (parser->is_comment) {
+      return true;
+    }
     return false;
   }
 #ifdef DEBUG

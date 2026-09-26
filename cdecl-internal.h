@@ -116,6 +116,7 @@ struct parser_props {
   bool is_typedef;
   bool is_declarator_list;
   bool is_inline;
+  bool is_comment;
   /* Enumeration, function and struct objects contain subsidiary objects. */
   bool has_enum_constants;
   bool has_function_params;

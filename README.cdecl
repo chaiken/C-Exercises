@@ -1,0 +1,25 @@
+cdecl is a C parser written in C.  The code interprets only pre-processed
+declarations and removes initializations, which are arguably part of the runtime
+rather than declarations.  Nearly all of the C11 standard is implemented
+excepting Unicode support, which would require a replacement of all
+string-mangling functions with their wide alternatives.
+
+The output of cdecl is English sentences read from an array-backed stack at
+program exit.  The stack is constructed by creating a parser context in struct
+parser_props, which stores the boolean state variables set as parsing
+proceeds.
+
+In order to support compound objects like functions, structs and unions, the
+parser spawns subparsers whose order is maintained in a singly linked list.
+Parsers are spawned every time the logic encounters a new function parameter or
+struct/union member.   Subparsers are necessary because the state variables
+which apply to one member may not apply to another.   For example, one function
+parameter may be const, while another may be a pointer.   The output section of
+the program walks the parser list and frees the elements are their output is
+printed.
+
+Special handling was needed to deal with arrays and bitfields inside
+comma-separated declarator lists.   Spawning a list of parsers made no sense for
+declarator lists, as all objects are at top level.   Thus all objects are const,
+or none are.   However, whether an identifier in a list describes a pointer,
+array or bitfield varies on a per-identifier basis.

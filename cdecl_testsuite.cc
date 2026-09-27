@@ -1443,6 +1443,7 @@ TEST_F(ParserSuite, FunctionReturnsStruct) {
   char inputstr[] = "static struct snd_dlsym_link __SND_DLSYM_VERSION(long "
                     "snd_dlsym_, char *name, char *version); ";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(parser.is_struct_or_union, IsFalse());
   EXPECT_THAT(
       StdoutMatches(
           "__SND_DLSYM_VERSION is a(n) function which returns struct "
@@ -1455,6 +1456,7 @@ TEST_F(ParserSuite, FunctionReturnsStruct) {
 TEST_F(ParserSuite, FunctionReturnsEnum) {
   char inputstr[] = "enum fd_version fd_device_version(struct fd_device *dev);";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(parser.is_enum, IsFalse());
   EXPECT_THAT(
       StdoutMatches(
           "fd_device_version is a(n) function which returns enum fd_version "

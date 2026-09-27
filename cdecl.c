@@ -413,6 +413,9 @@ bool check_for_function_parameters(struct parser_props *parser,
     return false;
   }
   parser->is_function = true;
+  /* Reverse false interpretation of struct, union or enum return values. */
+  parser->is_struct_or_union = false;
+  parser->is_enum = false;
   parser->start_delim = '(';
   parser->end_delim = ')';
   parser->separator = ',';

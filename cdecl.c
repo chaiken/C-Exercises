@@ -1612,7 +1612,7 @@ bool process_array_dimensions(struct parser_props *parser, char *user_input,
  * are unsigned int and bool.  See
  * https://en.cppreference.com/c/language/bit_field
  */
-bool type_is_bitfield_compatible(const struct parser_props *parser) {
+bool type_is_bitfield_compatible(struct parser_props *parser) {
   int stacktop = (parser->stacklen - 1) > 0 ? parser->stacklen - 1 : 0;
   const size_t top_ident = parser->num_identifiers - 1;
   if (!parser || !parser->stacklen || !parser->have_type) {
@@ -1637,6 +1637,8 @@ bool type_is_bitfield_compatible(const struct parser_props *parser) {
       } else {
         fprintf(parser->err_stream, "Type %s does not support bitfields.\n",
                 parser->stack[stacktop].string);
+        parser->ident.is_bitfield[stacktop] = false;
+        return false;
       }
     }
     stacktop--;
@@ -1851,7 +1853,6 @@ bool handled_extended_parsing(struct parser_props *parser, char *user_input,
   }
   if (parser->ident.is_bitfield[top_ident]) {
     if (!parser->ident.bitfield_width[top_ident]) {
-      fprintf(parser->err_stream, "ERROR: bitfield has no width.\n");
       return false;
     }
   } else if (parser->ident.array_dimensions[top_ident]) {

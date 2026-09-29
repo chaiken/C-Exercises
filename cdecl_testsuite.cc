@@ -4082,7 +4082,6 @@ TEST_F(ParserSuite, ParseBitfieldBadType) {
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
   EXPECT_THAT(StderrMatches("Type double does not support bitfields."),
               IsTrue());
-  EXPECT_THAT(StderrMatches("ERROR: bitfield has no width."), IsTrue());
 }
 
 TEST_F(ParserSuite, ParseBitfieldTooWide) {

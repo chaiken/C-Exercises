@@ -952,6 +952,29 @@ void showstack(const struct token *stack, const size_t stacklen,
   return;
 }
 
+void show_identifier_lists(const struct parser_props *parser) {
+  if (!parser || !parser->is_declarator_list || !parser->num_identifiers) {
+    return;
+  }
+  fprintf(parser->out_stream, "\n");
+  for (size_t i = 0; i < parser->num_identifiers; i++) {
+    fprintf(parser->out_stream, "Identifier %lu: ", i);
+    if (parser->ident.array_dimensions[i]) {
+      fprintf(parser->out_stream, " has dimensions %lu",
+              parser->ident.array_dimensions[i]);
+      fprintf(parser->out_stream, " and lengths %lu",
+              parser->ident.array_lengths[i]);
+    } else if (parser->ident.is_bitfield[i]) {
+      fprintf(parser->out_stream, " bitfield of width %lu",
+              parser->ident.bitfield_width[i]);
+    } else {
+      fprintf(parser->out_stream, " has no array dimensions or bitfield");
+    }
+    fprintf(parser->out_stream, "\n");
+  }
+  fprintf(parser->out_stream, "\n");
+}
+
 /********** parser helper functions **********/
 
 bool have_stacked_compound_type(const struct parser_props *parser) {
@@ -2985,6 +3008,7 @@ bool input_parsing_successful(struct parser_props *parser, char inputstr[]) {
   }
 #ifdef DEBUG
   showstack(parser->stack, parser->stacklen, parser->out_stream, __LINE__);
+  show_identifier_lists(parser);
 #endif
   if (!pop_all(parser)) {
     return false;

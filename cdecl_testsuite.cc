@@ -4257,12 +4257,23 @@ TEST_F(ParserSuite, ParseTrailingCommentDeclaratorList) {
   EXPECT_THAT(StdoutMatches("b is a(n) and a is a(n) int"), IsTrue());
 }
 
-TEST_F(ParserSuite, ParseTrailingCommentDeclaratorListStraySemicolong) {
+TEST_F(ParserSuite, ParseTrailingCommentDeclaratorListStraySemicolon) {
   char inputstr[] = "int a, b; # boring;";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
   EXPECT_THAT(
       StderrMatches("Expression ends with erroneous output: ; # boring"),
       IsTrue());
+}
+
+TEST_F(ParserSuite, ParseDeclaratorListCheckIdentifierList) {
+  char inputstr[] = "int a[3][], *b, c : 8;";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("Identifier 0:  has dimensions 2 and lengths 1"),
+              IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("Identifier 1:  has no array dimensions or bitfield"),
+      IsTrue());
+  EXPECT_THAT(StdoutMatches("Identifier 2:  bitfield of width 8"), IsTrue());
 }
 
 TEST_F(ParserSuite, ParseIllFormedComment) {

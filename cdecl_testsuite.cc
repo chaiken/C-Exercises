@@ -4215,6 +4215,20 @@ TEST_F(ParserSuite, ParseDeclaratorListEnumsInStruct) {
               IsTrue());
 }
 
+TEST_F(ParserSuite, ParseDeclaratorListConstPointer) {
+  char inputstr[] = "int a[], * const b, c:2;";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("c is a(n) bitfield of width 2"), IsTrue());
+  EXPECT_THAT(StdoutMatches("and b is a(n) const pointer to"), IsTrue());
+  EXPECT_THAT(StdoutMatches("and a is a(n) array of int"), IsTrue());
+}
+
+TEST_F(ParserSuite, ParseDeclaratorListRestrictPointer) {
+  char inputstr[] = "int a[], * restrict b, c:2;";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("and b is a(n) restrict pointer to"), IsTrue());
+}
+
 TEST_F(ParserSuite, ParseCommentOnly) {
   char inputstr[] = "# struct process { enum State fuel, exhaust; };";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());

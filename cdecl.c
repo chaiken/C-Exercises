@@ -2167,6 +2167,10 @@ bool handled_struct_or_union_members(struct parser_props *parser) {
        */
       parser->num_identifiers--;
     }
+    /*
+     * clangtidy marks this line use-after-free, but I am not convinced.
+     * The code is bog-standard walking of a linked-list.
+     */
     while (cursor && cursor->stacklen) {
       if (depth) {
         fprintf(parser->out_stream, "and ");

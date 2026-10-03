@@ -144,8 +144,4 @@ One might naively expect instead an array of structs parser_props
 struct identifier_props iprops[MAXIDENTIFERS] {};
 ```
 
-That kind of data structure exemplifies the [array-of-structs antipattern]
-(https://en.wikipedia.org/wiki/AoS_and_SoA) which maximizes thrashing of cache
-lines.  While efficiency and SIMD friendliness are hardly critical for this toy
-program, the code is written in the more performant way.   Thanks to Glenn for
-explaining these concepts.
+That kind of data structure exemplifies the [array-of-structs antipattern](https://en.wikipedia.org/wiki/AoS_and_SoA) which maximizes thrashing of cache lines.  While efficiency and SIMD friendliness are hardly critical for this toy program, the code is written in the more performant way.   Thanks to Glenn for explaining these concepts.

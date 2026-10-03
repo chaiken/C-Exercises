@@ -1160,7 +1160,11 @@ bool reclassified_unsigned_qualifier(struct parser_props *parser) {
 bool qualifier_is_compatible_with_type(const struct parser_props *parser,
                                        const char *type) {
   int cursor = 0;
-  if (!parser || !parser->stacklen) {
+  if (!parser) {
+    printf("Stack has no qualifier to evaluate with type %s.\n", type);
+    return false;
+  }
+  if (!parser->stacklen) {
     /*
      * "inline" is not pushed onto the stack, but only triggers setting of the
      * is_line state.
@@ -1168,9 +1172,6 @@ bool qualifier_is_compatible_with_type(const struct parser_props *parser,
     if (parser->is_inline) {
       return true;
     }
-    fprintf(parser->err_stream,
-            "Stack has no qualifier to evaluate with type %s.\n", type);
-    return false;
   }
   cursor = parser->stacklen - 1;
   while (cursor >= 0) {

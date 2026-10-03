@@ -26,6 +26,7 @@
 #include <stdio_ext.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/param.h>
 
 #include "cdecl-internal.h"
 
@@ -1552,10 +1553,13 @@ bool process_array_dimensions(struct parser_props *parser, char *user_input,
   char *next_dim = NULL;
   char *progress_ptr = NULL;
   size_t increm = 0;
-  const size_t top_ident = parser->num_identifiers - 1;
+  const size_t top_ident = MIN(parser->num_identifiers, MAXIDENTIFIERS) - 1;
 
   if (!strlen(user_input + parser->cursor) || !parser->num_identifiers) {
     return true;
+  }
+  if (MAXIDENTIFIERS < parser->num_identifiers) {
+    return false;
   }
   do {
     /*
@@ -1980,12 +1984,18 @@ void reorder_qualifier_and_type(struct parser_props *parser) {
 void reorder_array_identifier_and_lengths(struct parser_props *parser) {
   int top_length;
   int current_stack_top = parser->stacklen - 1;
+  size_t num_idents = 0;
   if (!parser->stacklen || !parser->num_identifiers) {
     return;
   }
+  num_idents = MIN(parser->num_identifiers, MAXIDENTIFIERS) - 1;
+  if (MAXIDENTIFIERS < parser->num_identifiers) {
+    fprintf(parser->err_stream, "Too many identifiers for parser: %lu\n",
+            parser->num_identifiers);
+    return;
+  }
   /* Process each identifier in a declarator list in turn. */
-  for (int this_ident = parser->num_identifiers - 1; this_ident >= 0;
-       this_ident--) {
+  for (int this_ident = num_idents; this_ident >= 0; this_ident--) {
     top_length =
         found_array_length_in_remaining_stack(parser, current_stack_top);
     if (0 > top_length) {
@@ -2731,7 +2741,12 @@ bool finish_token(struct parser_props *parser, const char *offset_decl,
       return false;
     }
     parser->num_identifiers++;
-    top_ident = parser->num_identifiers - 1;
+    top_ident = MIN(parser->num_identifiers, MAXIDENTIFIERS) - 1;
+    if (MAXIDENTIFIERS < parser->num_identifiers) {
+      fprintf(parser->err_stream, "Too many identifiers for parser: %lu\n",
+              parser->num_identifiers);
+      return false;
+    }
     if (!parser->have_type) {
       /*
        * If the "unsigned" qualifier appeared without an additional type
@@ -2752,11 +2767,6 @@ bool finish_token(struct parser_props *parser, const char *offset_decl,
       if (parser->prev) {
         break;
       }
-      return false;
-    }
-    if ((MAXIDENTIFIERS - 1) < top_ident) {
-      fprintf(parser->err_stream, "Too many identifiers (%lu) for parser",
-              top_ident);
       return false;
     }
     /* Because array dimensions and bitfield widths bind to the identifier
@@ -2949,6 +2959,9 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
     }
   }
   if (!handled_extended_parsing(parser, user_input, &this_token)) {
+    return 0;
+  }
+  if (MAXIDENTIFIERS < parser->num_identifiers) {
     return 0;
   }
   if ((parser->cursor < strlen(user_input)) &&

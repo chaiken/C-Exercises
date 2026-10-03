@@ -4290,6 +4290,14 @@ TEST_F(ParserSuite, ParseDeclaratorListCheckIdentifierList) {
   EXPECT_THAT(StdoutMatches("Identifier 2:  bitfield of width 8"), IsTrue());
 }
 
+TEST_F(ParserSuite, ParseDeclaratorListTooManyIdentifiers) {
+  char inputstr[] =
+      "uint8_t zero, one, two, three, four, five, six, seven, eight;";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  EXPECT_THAT(parser.num_identifiers, Eq(9));
+  EXPECT_THAT(StderrMatches("Too many identifiers for parser: 9"), IsTrue());
+}
+
 TEST_F(ParserSuite, ParseIllFormedComment) {
   char inputstr[] = "struct # process { enum State fuel, exhaust; };";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());

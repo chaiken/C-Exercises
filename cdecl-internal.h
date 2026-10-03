@@ -3,7 +3,7 @@
 
 #define MAXTOKENLEN 128
 #define MAXTOKENS 256
-#define MAXIDENTIFIERS 4
+#define MAXIDENTIFIERS 8
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 #define _cleanup_(x) __attribute__((__cleanup__(x)))
 

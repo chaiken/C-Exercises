@@ -1378,7 +1378,7 @@ static bool next_separator_is_inside_delims(const struct parser_props *parser,
 bool process_secondary_params(struct parser_props *parser, char *user_input) {
   struct parser_props *params_parser = NULL;
   struct parser_props *tail_parser = get_tail_parser(parser);
-  char *progress_ptr = user_input + parser->cursor;
+  char *progress_ptr = NULL;
 
   /*
    * Create a pointer which the code doesn't otherwise need as a peg

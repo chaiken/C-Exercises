@@ -123,7 +123,7 @@ Identifier 1:  has no array dimensions or bitfield
 Identifier 2:  bitfield of width 8
 ```
 
-### Structs of arrays and arrays of structs
+## Structs of arrays and arrays of structs
 
 The identifier properties are stored in arrays which are members of `struct identifier_props`.  Each element in these arrays corresponds to an identifier on the stack.  The names of the identifiers are not stored in the struct, but the identifiers on the stack are kept in one-to-one correspondence with the struct-member array elements.
 
@@ -147,7 +147,7 @@ struct identifier_props iprops[MAXIDENTIFERS] {};
 
 That kind of data structure exemplifies the [array-of-structs antipattern](https://en.wikipedia.org/wiki/AoS_and_SoA) which maximizes thrashing of cache lines.  While efficiency and SIMD friendliness are hardly critical for this toy program, the code is written in the more performant way.   Thanks to Glenn for explaining these concepts.
 
-### Unit tests
+## Unit tests
 
 `cdecl` has over 400 unit tests based on the [googletest](https://github.com/google/googletest) framework.  As noted in the [README](https://github.com/chaiken/C-Exercises/blob/master/README) file, compilation proceeds via a hack copied from [Mike Long](https://github.com/meekrosoft).   Because of the baroque manner in which the tests are compiled, I've not been able to get gcov to work with them.  [Valgrind](https://valgrind.org) works fine with the binary:
 
@@ -171,5 +171,4 @@ __cmpxchg is a(n) inline function which returns unsigned long and takes param(s)
 ==447977== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
 ```
 
-The tests are compiled with [ASAN and UBSAN](https://github.com/google/sanitizers).  [clangtidy](https://clang.llvm.org/extra/clang-tidy/) reports one use-after-free bug in the handled_struct_or_union_mebers() function which traverses the parser list in the output stage.   Exactly the same code occurs in handled_function_params() where it is not flagged.  (TODO: factor this common code out.)   While clang-tidy finds many actual bugs, it is (unlike valgrind) not aware of the [`__cleanup__` attribute](https://accu.org/journals/overload/34/192/chaiken/), which both GCC and clang have supported since 2006.  The
-clang-tidy output is therefore polluted by many false-positive memory-leak reports.
+The tests are compiled with [ASAN and UBSAN](https://github.com/google/sanitizers).  [clangtidy](https://clang.llvm.org/extra/clang-tidy/) reports that the code is clean except for many false-positive memory-leak reports.   While clang-tidy finds many actual bugs, it is (unlike valgrind) not aware of the [`__cleanup__` attribute](https://accu.org/journals/overload/34/192/chaiken/), which both GCC and clang have supported since 2006.

@@ -1157,7 +1157,7 @@ bool reclassified_unsigned_qualifier(struct parser_props *parser) {
   return false;
 }
 
-/* Return false is a qualifier-type combination is nonsensical. */
+/* Return false if a qualifier-type combination is nonsensical. */
 bool qualifier_is_compatible_with_type(const struct parser_props *parser,
                                        const char *type) {
   int cursor = 0;
@@ -2092,35 +2092,58 @@ bool handled_qualifiers(const struct parser_props *parser,
   return true;
 }
 
+bool process_subsidiary_parsers(const struct parser_props *parser,
+                                const char *connector_str) {
+  struct parser_props *cursor = parser->next;
+  size_t depth = 0;
+  while (cursor && cursor->stacklen) {
+    if (depth) {
+      fprintf(parser->out_stream, "and ");
+    } else {
+      fprintf(parser->out_stream, "%s", connector_str);
+    }
+    if (!pop_all(cursor)) {
+      return false;
+    }
+    depth++;
+    struct parser_props *save_next = cursor->next;
+    struct parser_props *save_prev = cursor->prev;
+    free(cursor);
+    save_prev->next = save_next;
+    if (save_next) {
+      save_next->prev = save_prev;
+    }
+    cursor = save_next;
+  }
+  return true;
+}
+
 bool handled_function_params(const struct parser_props *parser) {
+  const char *connector_str = "and takes param(s) ";
   /*
    * If the function is itself part of a union or struct, then
    * parser->next could be populated without function params.
    */
-  if (parser->has_function_params) {
-    struct parser_props *cursor = parser->next;
-    size_t depth = 0;
-    while (cursor && cursor->stacklen) {
-      if (depth) {
-        fprintf(parser->out_stream, "and ");
-      } else {
-        fprintf(parser->out_stream, "and takes param(s) ");
-      }
-      if (!pop_all(cursor)) {
-        return false;
-      }
-      depth++;
-      struct parser_props *save_next = cursor->next;
-      struct parser_props *save_prev = cursor->prev;
-      free(cursor);
-      save_prev->next = save_next;
-      if (save_next) {
-        save_next->prev = save_prev;
-      }
-      cursor = save_next;
-    }
+  if (!parser->has_function_params) {
+    return true;
   }
-  return true;
+  return process_subsidiary_parsers(parser, connector_str);
+}
+
+bool handled_struct_or_union_members(struct parser_props *parser) {
+  const char *connector_str = "has member(s) ";
+  if (!parser->has_struct_or_union_members) {
+    return true;
+  }
+  if (parser->num_identifiers) {
+    fprintf(parser->out_stream, "which ");
+    /*
+     * Perform the decrement which pop_stack() deferred for the sake of
+     * "which".
+     */
+    parser->num_identifiers--;
+  }
+  return process_subsidiary_parsers(parser, connector_str);
 }
 
 void handle_enum_constants(const struct parser_props *parser,
@@ -2150,45 +2173,6 @@ bool handled_bitfield(const struct parser_props *parser) {
       fprintf(parser->out_stream, "of type ");
     } else {
       fprintf(parser->out_stream, "and ");
-    }
-  }
-  return true;
-}
-
-bool handled_struct_or_union_members(struct parser_props *parser) {
-  if (parser->has_struct_or_union_members) {
-    struct parser_props *cursor = parser->next;
-    size_t depth = 0;
-    if (parser->num_identifiers) {
-      fprintf(parser->out_stream, "which ");
-      /*
-       * Perform the decrement which pop_stack() deferred for the sake of
-       * "which".
-       */
-      parser->num_identifiers--;
-    }
-    /*
-     * clangtidy marks this line use-after-free, but I am not convinced.
-     * The code is bog-standard walking of a linked-list.
-     */
-    while (cursor && cursor->stacklen) {
-      if (depth) {
-        fprintf(parser->out_stream, "and ");
-      } else {
-        fprintf(parser->out_stream, "has member(s) ");
-      }
-      if (!pop_all(cursor)) {
-        return false;
-      }
-      depth++;
-      struct parser_props *save_next = cursor->next;
-      struct parser_props *save_prev = cursor->prev;
-      free(cursor);
-      save_prev->next = save_next;
-      if (save_next) {
-        save_next->prev = save_prev;
-      }
-      cursor = save_next;
     }
   }
   return true;

@@ -74,23 +74,28 @@ static inline void subsidiary_parsers_cleanup(void *parserp) {
 /********** documentation functions **********/
 
 void usage(void) {
-  printf("\ncdecl prints out the English language form of a C declaration.\n");
-  printf("Invoke as 'cdecl <declaration>' or\n");
-  printf("provide input on stdin and use '-' as the single command-line "
-         "argument.\n");
-  printf("Input must be terminated with a semicolon and enclosed in quotation "
-         "marks.\n");
+  fprintf(stderr,
+          "\ncdecl prints out the English language form of a C declaration.\n");
+  fprintf(stderr, "Invoke as 'cdecl <declaration>' or\n");
+  fprintf(stderr,
+          "provide input on stdin and use '-' as the single command-line "
+          "argument.\n");
+  fprintf(stderr,
+          "Input must be terminated with a semicolon and enclosed in quotation "
+          "marks.\n");
 }
 
 void limitations() {
-  printf("Input must be shorter than %u characters, not including quotation "
-         "marks and semicolon.\n",
-         MAXTOKENLEN);
-  printf("Known deficiencies:\n\ta) includes only the qualifiers defined in "
-         "ANSI C, not all\n");
-  printf("\t   libc, kernel extensions or compiler attributes;\n");
-  printf("\tc) does not support C23 or C26 additions;\n");
-  printf("\t   or unicode.\n");
+  fprintf(stderr,
+          "Input must be shorter than %u characters, not including quotation "
+          "marks and semicolon.\n",
+          MAXTOKENLEN);
+  fprintf(stderr,
+          "Known deficiencies:\n\ta) includes only the qualifiers defined in "
+          "ANSI C, not all\n");
+  fprintf(stderr, "\t   libc, kernel extensions or compiler attributes;\n");
+  fprintf(stderr, "\tc) does not support C23 or C26 additions;\n");
+  fprintf(stderr, "\t   or unicode.\n");
 }
 
 /********** functions to modify the parser **********/

@@ -94,9 +94,11 @@ Token number 2 has kind identifier and string b
 b is a(n) array of and a is a(n) uint32_t
 ```
 
-## Functions, structs and unions
+## Functions, structs, unions and enums
 
-In order to support compound objects like functions, structs and unions, the parser spawns subparsers whose order is maintained in a singly linked list. Parsers are spawned every time the logic encounters a new function parameter or struct/union member.  Subparsers are necessary because the state variables which apply to the top-level struct, union or function may not apply to function parameters or struct/union members.  For example, one function parameter may be const char*, while another may be an enum.  The output section of the program walks the parser list and frees the elements as their output is printed.  The progressive linking of new parsers into the list is made visible via the cdecl-debug binary.
+### Nested objects
+
+In order to support nested objects like function parameters and struct/union members, the parser spawns subparsers whose order is maintained in a singly linked list. Parsers are spawned every time the logic encounters a new function parameter or struct/union member.  Subparsers are necessary because the state variables which apply to the top-level struct, union or function may not apply to function parameters or struct/union members.  For example, one function parameter may be const char*, while another may be an enum.  The output section of the program walks the parser list and frees the elements as their output is printed.  The progressive linking of new parsers into the list is made visible via the cdecl-debug binary.
 
 ```console
 $ make cdecl-debug
@@ -109,9 +111,21 @@ HEAD at 1437: 0x7bb077cf00d0-->0x7e80787e0400-->0x7e80787ea400-->0x7e80787f4400-
 
 Here there are 5 parsers, the top-level one for `__cmpxchg` and one subparser for each of the 4 function parameters.
 
+Enumerations do not require subsidiary parsers to handle any enumeration constants, as the enumeration constants are simply strings which the parser can directly copy into the output, rather than subobjects which must themselves be parsed.
+
+### Compound type names and instance names
+
+`struct` is not a type name, nor are `union` and `enum`.   These keywords need accompanying identifiers to specify a type.   When one of them is encountered, the parser copies an adjacent identifier into the type name, or else registers an error.   Any subsequent top-level identifiers are names of an instance of the struct, union or enum rather than part of the type name.
+
 ## Tight-binding of array, bitfield and pointer properties
 
-Arrays and bitfields inside comma-separated declarator lists also require special handling.  Spawning a list of parsers makes no sense for declarator lists, as the elements in the list are all at top level.  Thus all objects are const, or none are.  However, whether each element in a list describes a pointer, array or bitfield varies on a per-identifier basis.  The state variables which describe these properties must therefore bind to each of the identifiers individually, not to the overall parsing context.  The authors and maintainers of the C language made this tight-binding clear via the syntax, in that square brackets, asterisk and colon are by convention adjacent to the identifier name, or at least are separated from the next identifier by a comma. The result is
+Arrays and bitfields inside comma-separated declarator lists like
+
+```console
+uint32_t *cookie, init_val, b[2] = { 312, 111 };
+```
+
+also require special handling.  Spawning a list of parsers makes no sense for declarator lists, as the elements in the list are all at top level.  Thus all objects are const, or none are.  However, whether each element in a list describes a pointer, array or bitfield varies on a per-identifier basis.  The state variables which describe these properties must therefore bind to each of the identifiers individually, not to the overall parsing context.  The authors and maintainers of the C language made this tight-binding clear via the syntax, in that square brackets, asterisk and colon are by convention adjacent to the identifier name, or at least are separated from the next identifier by a comma. The result is
 
 ```console
 $ ./cdecl "int a[3][], *b, c : 8;" 
@@ -137,7 +151,7 @@ struct identifier_props {
 };
 ```
 
-Note that whether an identifier is a pointer is not represented in the `identifier_props` struct.  Since pointerness is completely described by a bool and has no associated data, the easiest way to represent it was to put '*' on the stack.  Bitfields and arrays, on the other hand, have more associated data.
+Note that whether an identifier is a pointer is not represented in the `identifier_props` struct.  Since pointerness is completely described by a bool and has no associated data, the easiest way to represent it was to put `*` on the stack.  Bitfields and arrays, on the other hand, have associated metadata.
 
 One might naively expect instead an array of structs parser_props
 
@@ -147,9 +161,13 @@ struct identifier_props iprops[MAXIDENTIFERS] {};
 
 That kind of data structure exemplifies the [array-of-structs antipattern](https://en.wikipedia.org/wiki/AoS_and_SoA) which maximizes thrashing of cache lines.  While efficiency and SIMD friendliness are hardly critical for this toy program, the code is written in the more performant way.   Thanks to Glenn for explaining these concepts.
 
+## Compatibility of object properties
+
+Various combinations of object properties are not compatible with one another.   Thus `double` cannot be the type of a bitfield and only pointers can have the `restrict` property.    Evaluating the compatibility of qualifiers and types is complicated by the fact that qualifiers like `volatile` and `const` modify (for example) the return value of a function and occur before the type, but `const` and `restrict`r appear after the type and the identifier.   The parser is therefore unable in some cases to assess compatibility until parsing is complete and the output stage runs.
+
 ## Unit tests
 
-`cdecl` has over 400 unit tests based on the [googletest](https://github.com/google/googletest) framework.  As noted in the [README](https://github.com/chaiken/C-Exercises/blob/master/README) file, compilation proceeds via a hack copied from [Mike Long](https://github.com/meekrosoft).   Because of the baroque manner in which the tests are compiled, I've not been able to get gcov to work with them.  [Valgrind](https://valgrind.org) works fine with the binary:
+`cdecl` has over 400 unit tests based on the [googletest](https://github.com/google/googletest) framework.  As noted in the [README](https://github.com/chaiken/C-Exercises/blob/master/README) file, compilation proceeds via a hack copied from [Mike Long](https://github.com/meekrosoft).   Because of the baroque manner in which the tests are compiled, I've not been able to get `gcov` to work with them.  [Valgrind](https://valgrind.org) works fine with the binary:
 
 ```console
 $ valgrind ./cdecl-valgrind "static inline unsigned long __cmpxchg(volatile void *ptr, unsigned long old, unsigned long new, int size);"

@@ -1033,7 +1033,8 @@ bool handled_compound_type(struct parser_props *parser, char *progress_ptr,
   }
   /*
    * If because of missing spaces there's a '{' within the enumerator list,
-   * insert the missing space and the string to cut off the enumerators.
+   * insert the missing space and terminate the string to cut off the
+   * enumerators.
    */
   if (parser->is_enum) {
     char *stray_delim = strchr(compound_type_name, '{');

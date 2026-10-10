@@ -13,6 +13,10 @@ array-backed stack of tokens at program exit.  It should be straightforward to
 modify the code to output an actual AST since the program implicitly assembles
 the data from which one is constituted.
 
+### Further limitations
+
+`cdecl` processes input one line at a time and has no stored state.   While the program correctly processes typedefs, it therefore makes no use of the declared types in subsequent processing, nor does it consider the content of included headers processing whole files.
+
 ## How to run the program
 
 ```console
@@ -27,6 +31,8 @@ Input may alternatively be piped to cdecl's stdin when a '-' is provided as an a
 $ echo "uint64_t hash(const char *seed, uint64_t key);" | ./cdecl -
 hash is a(n) function which returns uint64_t and takes param(s) seed is a(n) pointer to const char and key is a(n) uint64_t
 ```
+
+A third possibility 
 
 ## Internals
 

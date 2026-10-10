@@ -3658,6 +3658,36 @@ TEST_F(ParserSuite, ParseEnumNoIdentifierTwoEnumerators) {
               IsTrue());
 }
 
+TEST_F(ParserSuite, ParseEnumNoIdentifierOneEnumeratorLeadingSpace) {
+  char inputstr[] = "enum State { GAS};";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("enum State has enum constant GAS"), IsTrue());
+}
+
+TEST_F(ParserSuite, ParseEnumNoIdentifierOneEnumeratorTrailingSpace) {
+  char inputstr[] = "enum State {GAS };";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("enum State has enum constant GAS"), IsTrue());
+}
+
+TEST_F(ParserSuite, ParseEnumNoIdentifierOneEnumeratorTrailingSpaceWithComma) {
+  char inputstr[] = "enum State {GAS, };";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("enum State has enum constant GAS"), IsTrue());
+}
+
+TEST_F(ParserSuite, ParseEnumNoIdentifierOneEnumeratorTrailingSpaceWithComma2) {
+  char inputstr[] = "enum State {GAS , };";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("enum State has enum constant GAS"), IsTrue());
+}
+
+TEST_F(ParserSuite, ParseEnumNoIdentifierOneEnumeratorTrailingSpaceWithComma3) {
+  char inputstr[] = "enum State {GAS ,};";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("enum State has enum constant GAS"), IsTrue());
+}
+
 TEST_F(ParserSuite, ParseOneEnumeratorMissingLeadingSpaceInstanceName) {
   char inputstr[] = "enum State state{GAS};";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());

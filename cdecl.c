@@ -1024,11 +1024,24 @@ bool handled_compound_type(struct parser_props *parser, char *progress_ptr,
     return true;
   }
   /* Check for junk in the middle of the expression. */
-  if ((parser->start_delim != *(progress_ptr + parser->cursor)) &&
+  if (parser->start_delim &&
+      (parser->start_delim != *(progress_ptr + parser->cursor)) &&
       (!is_first_name_char(*(progress_ptr + parser->cursor)))) {
     fprintf(parser->err_stream, "%s is not a valid type name.\n",
             progress_ptr + parser->cursor);
     return false;
+  }
+  /*
+   * If because of missing spaces there's a '{' within the enumerator list,
+   * insert the missing space and the string to cut off the enumerators.
+   */
+  if (parser->is_enum) {
+    char *stray_delim = strchr(compound_type_name, '{');
+    if (stray_delim) {
+      size_t offset = stray_delim - compound_type_name;
+      *(compound_type_name + offset) = ' ';
+      *(compound_type_name + offset + 1) = '\0';
+    }
   }
   /*
    * Since there's no leading whitespace, the next blank terminates the compound
@@ -2932,6 +2945,14 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
        * whether or not the enum has an instance name.
        */
       parser->cursor -= strlen(this_token.string) + 1;
+      /*
+       * Go back past any whitespace between the opening brace and the first
+       * enumerator or between the first enumerator and comma, or between the
+       * first enumerator and the closing brace.
+       */
+      while (parser->cursor && ('{' != *(user_input + parser->cursor))) {
+        parser->cursor--;
+      }
       break;
     }
     push_stack(parser, &this_token);

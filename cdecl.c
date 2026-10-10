@@ -2168,9 +2168,9 @@ void handle_enum_constants(const struct parser_props *parser,
                            const bool no_enum_instance) {
   if (parser->has_enum_constants) {
     if (no_enum_instance) {
-      fprintf(parser->out_stream, "has enum constant");
+      fprintf(parser->out_stream, "has enum constant(s)");
     } else {
-      fprintf(parser->out_stream, "with enum constant");
+      fprintf(parser->out_stream, "with enum constant(s)");
     }
     fprintf(parser->out_stream, " %s ", parser->enumerator_list);
   }

@@ -3045,22 +3045,49 @@ TEST_F(ParserSuite, ParseArrayWithBadLength3) {
   EXPECT_THAT(StderrMatches("Invalid array length: x"), IsTrue());
 }
 
-TEST_F(ParserSuite, ParseSimpleFunctionOutput) {
-  char inputstr[] = "double sqrt();";
+TEST_F(ParserSuite, ParseFunctionParamsNoParams) {
+  char inputstr[] = "bool is_valid();";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(parser.has_function_params, IsFalse());
-  EXPECT_THAT(StdoutMatches("sqrt is a(n) function which returns double"),
+  EXPECT_THAT(StdoutMatches("is_valid is a(n) function which returns bool"),
               IsTrue());
+  EXPECT_THAT(StdoutMatches("and takes no params"), IsTrue());
+}
+
+TEST_F(ParserSuite, ProcessFunctionParamsOnlyVoid) {
+  char inputstr[] = "bool is_valid(void);";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(parser.has_function_params, IsFalse());
+  EXPECT_THAT(StdoutMatches("is_valid is a(n) function which returns bool"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("and takes no params"), IsTrue());
+}
+
+TEST_F(ParserSuite, ProcessFunctionParamsOnlyVoidSpaces) {
+  char inputstr[] = "bool is_valid( void );";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(parser.has_function_params, IsFalse());
+  EXPECT_THAT(StdoutMatches("is_valid is a(n) function which returns bool"),
+              IsTrue());
+  EXPECT_THAT(StdoutMatches("and takes no params"), IsTrue());
+}
+
+TEST_F(ParserSuite, ProcessFunctionParamsVoidWithIdentifier) {
+  char inputstr[] = "bool is_valid(void a);";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  EXPECT_THAT(StderrMatches(
+                  "Only pointers or empty parameter lists may have type void"),
+              IsTrue());
+  release_parser_resources(&parser);
 }
 
 TEST_F(ParserSuite, ParseFunctionOutputOneParam) {
   char inputstr[] = "double sqrt(const double x);";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(parser.has_function_params, IsTrue());
-  // clang-format off
-  EXPECT_THAT(StdoutMatches("sqrt is a(n) function which returns double and takes param(s) x is a(n) const double"),
+  EXPECT_THAT(StdoutMatches("sqrt is a(n) function which returns double and "
+                            "takes param(s) x is a(n) const double"),
               IsTrue());
-  // clang-format on
 }
 
 TEST_F(ParserSuite, ParseFunctionOutputOneParamQualifier) {
@@ -3215,10 +3242,10 @@ TEST_F(ParserSuite, ParseFunctionPtrWithTwoParamsNoIdentifiersVariantSpaces) {
 TEST_F(ParserSuite, ParseFunctionPtrInStructNoParams) {
   char inputstr[] = "struct file { int (*open)(); };";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  // clang-format off
-  EXPECT_THAT(StdoutMatches("struct file has member(s) open is a(n) pointer to a function which returns int"),
+  EXPECT_THAT(StdoutMatches("struct file has member(s) open is a(n) pointer to "
+                            "a function which returns int"),
               IsTrue());
-  // clang-format on
+  EXPECT_THAT(StdoutMatches("and takes no params"), IsTrue());
 }
 
 TEST_F(ParserSuite, ParseFunctionPtrInStructTwoMembersNoParamsPtrFirst) {
@@ -3243,9 +3270,14 @@ TEST_F(ParserSuite, ParseFunctionPtrTwoInStructNoParams) {
   char inputstr[] = "struct file { int (*open)(); int (*read)(); };";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   // clang-format off
-  EXPECT_THAT(StdoutMatches("struct file has member(s) open is a(n) pointer to a function which returns int and read is a(n) pointer to a function which returns int"),
+  EXPECT_THAT(StdoutMatches("struct file has member(s) open is a(n) pointer to a function which returns int"),
               IsTrue());
+  EXPECT_THAT(
+      StdoutMatches(
+                    "and read is a(n) pointer to a function which returns int"),
+      IsTrue());
   // clang-format on
+  EXPECT_THAT(StdoutMatches("and takes no params"), IsTrue());
 }
 
 TEST_F(ParserSuite, ParseFunctionPtrInStructOneParamWithIdentifier) {
@@ -3280,10 +3312,14 @@ TEST_F(ParserSuite, ParseFunctionPtrsInStructTrailingFunctionParam) {
   char inputstr[] =
       "struct f {int (*open)(); ssize_t (*read)(struct inode *); };";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  // clang-format off
-  EXPECT_THAT(StdoutMatches("struct f has member(s) open is a(n) pointer to a function which returns int and read is a(n) pointer to a function which returns ssize_t and takes param(s) pointer to struct inode "),
+  EXPECT_THAT(StdoutMatches("struct f has member(s) open is a(n) pointer to a "
+                            "function which returns int"),
               IsTrue());
-  // clang-format on
+  EXPECT_THAT(
+      StdoutMatches("and read is a(n) pointer to a function which returns "
+                    "ssize_t and takes param(s) pointer to struct inode "),
+      IsTrue());
+  EXPECT_THAT(StdoutMatches("and takes no params"), IsTrue());
 }
 
 TEST_F(ParserSuite, ParseFunctionPtrsInStructTwoFunctionParamsWithIdentifiers) {

@@ -1434,7 +1434,10 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
       }
       advance_past_separator(parser, user_input);
       progress_ptr = user_input + parser->cursor;
-      // Freed in pop_stack().
+      /*
+       * Freed in process_subsidiary_parsers(), which is called from
+       * pop_stack()'s helper functions.
+       */
       params_parser = make_parser(tail_parser);
       params_parser->parent = parser;
     }
@@ -2281,6 +2284,9 @@ bool pop_stack(struct parser_props *parser, bool no_enum_instance,
       if (!handled_function_params(parser)) {
         return false;
       }
+      if (parser->is_function && !parser->has_function_params) {
+        fprintf(parser->out_stream, " and takes no params ");
+      }
       if (!handled_struct_or_union_members(parser)) {
         return false;
       }
@@ -2923,14 +2929,43 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
         (!strcmp("inline", this_token.string))) {
       continue;
     }
-    if ((type == this_token.kind) && (!strcmp("union", this_token.string) ||
-                                      !strcmp("struct", this_token.string) ||
-                                      !strcmp("enum", this_token.string))) {
-      if (!handled_compound_type(parser, user_input, &this_token)) {
-        __fpurge(parser->out_stream);
-        return 0;
+    if (type == this_token.kind) {
+      if ((!strcmp("union", this_token.string) ||
+           !strcmp("struct", this_token.string) ||
+           !strcmp("enum", this_token.string))) {
+        if (!handled_compound_type(parser, user_input, &this_token)) {
+          __fpurge(parser->out_stream);
+          return 0;
+        }
       }
-    }
+      /*
+       * If the totality of the function parameters is "void", the output stage
+       * will report that there are no parameters.   If, on the other hand, we
+       * are parsing a function pointer and one of the parameters is declared as
+       * "void *", there are function parameters.
+       */
+      if (!strcmp("void", this_token.string)) {
+        if (parser->prev && parser->prev->is_function) {
+          char hold_param[MAXTOKENLEN];
+          trim_leading_whitespace(user_input + parser->cursor, &hold_param[0]);
+          if ('*' != hold_param[0]) {
+            /* "(void)" is allowable as a function parameter list. */
+            if (!has_any_name_chars(user_input + parser->cursor)) {
+              parser->prev->has_function_params = false;
+              return increm;
+            } else {
+              /*
+               * "void" is not allowable as the type of a named function
+               * parameter.
+               */
+              fprintf(parser->err_stream, "Only pointers or empty parameter "
+                                          "lists may have type void\n");
+              return 0;
+            }
+          }
+        }
+      } /* strcmp("void") */
+    } /* type == this_token.kind */
     /*
      * If there is no enum instance name, only a type declaration, then do not
      * place the encountered enumerator on the stack. Set
@@ -3040,6 +3075,17 @@ bool input_parsing_successful(struct parser_props *parser, char inputstr[]) {
 #endif
   if (!pop_all(parser)) {
     return false;
+  }
+  /*
+   * If the function parameter list contains only "void", there is no error in
+   * process_secondary_params(), so it doesn't free subparsers.   However, since
+   * there are no function parameters, pop_stack's handled_function_parameters()
+   * never runs and calls process_subsidiary_parsers() to free the parser.
+   * Therefore release the dangling parser resources directly.
+   */
+  if (parser->is_function && !parser->has_function_params &&
+      strstr(user_input, "void") && strchr(user_input, '(')) {
+    release_parser_resources(parser);
   }
   fprintf(parser->out_stream, "\n");
   fflush(parser->out_stream);

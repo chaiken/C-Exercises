@@ -1156,18 +1156,26 @@ bool first_identifier_is_enumerator(const struct parser_props *parser,
  * accompanied by another type into "unsigned int".  Returns true if the
  * reclassification took place.
  */
-bool reclassified_unsigned_qualifier(struct parser_props *parser) {
+bool reclassified_qualifier(struct parser_props *parser) {
   int cursor = 0;
   if (!parser || !parser->stacklen) {
     return false;
   }
   cursor = parser->stacklen - 1;
   while (cursor >= 0) {
-    if ((qualifier == parser->stack[cursor].kind) &&
-        (!strcmp(parser->stack[cursor].string, "unsigned"))) {
+    if (qualifier == parser->stack[cursor].kind) {
+      /*
+       * Overwrite with a longer string, so no need to clear the existing one.
+       */
+      if (!strcmp(parser->stack[cursor].string, "unsigned")) {
+        strlcpy(parser->stack[cursor].string, "unsigned int",
+                strlen("unsigned int") + 1);
+      }
+      if (!strcmp(parser->stack[cursor].string, "long")) {
+        strlcpy(parser->stack[cursor].string, "long int",
+                strlen("long int") + 1);
+      }
       parser->stack[cursor].kind = type;
-      strlcpy(parser->stack[cursor].string, "unsigned int",
-              strlen("unsigned int") + 1);
       parser->have_type = true;
       return true;
     }
@@ -2762,10 +2770,10 @@ bool finish_token(struct parser_props *parser, const char *offset_decl,
     }
     if (!parser->have_type) {
       /*
-       * If the "unsigned" qualifier appeared without an additional type
-       * indication, turn it into a type.
+       * If the "unsigned" or "long" qualifiers appear without an additional
+       * type indication, turn them into a type.
        */
-      if (!reclassified_unsigned_qualifier(parser)) {
+      if (!reclassified_qualifier(parser)) {
         fprintf(parser->err_stream, "Input lacks required type.\n");
         return false;
       }

@@ -1447,7 +1447,8 @@ TEST_F(ParserSuite, FunctionReturnsStruct) {
   EXPECT_THAT(
       StdoutMatches(
           "__SND_DLSYM_VERSION is a(n) function which returns struct "
-          "snd_dlsym_link and takes param(s) snd_dlsym_ is a(n) long and name "
+          "snd_dlsym_link and takes param(s) snd_dlsym_ is a(n) long int and "
+          "name "
           "is a(n) pointer to char and version is a(n) pointer to char and "
           "which has static storage duration and internal linkage"),
       IsTrue());
@@ -3148,11 +3149,11 @@ TEST_F(ParserSuite, ParseFunctionOutputUnsignedLongFunctionReturn) {
                     "unsigned long old, unsigned long new, int size);";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(
-      StdoutMatches(
-          "__cmpxchg is a(n) inline function which returns unsigned long and "
-          "takes param(s) ptr is a(n) pointer to volatile void and old is a(n) "
-          "unsigned long and new is a(n) unsigned long and size is a(n) int "
-          "and which has static storage duration and internal linkage"),
+      StdoutMatches("_cmpxchg is a(n) inline function which returns unsigned "
+                    "long int and takes param(s) ptr is a(n) pointer to "
+                    "volatile void and old is a(n) unsigned long int and new "
+                    "is a(n) unsigned long int and size is a(n) int and which "
+                    "has static storage duration and internal linkage"),
       IsTrue());
   //clang-format on
 }
@@ -4403,4 +4404,57 @@ TEST_F(ParserSuite, ParseContinuationLineCompleteNoInitialization) {
   char inputstr[] = " int32_t _u8_get_index; \\";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
   EXPECT_THAT(StdoutMatches("_u8_get_index is a(n) int32_t"), IsTrue());
+}
+
+TEST_F(ParserSuite, ParseLongUnsignedInt) {
+  char inputstr[] =
+      "typedef void (*btf_trace_devlink_hwmsg)(void *, const struct devlink *, "
+      "bool, long unsigned int, const u8 *, size_t);";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("btf_trace_devlink_hwmsg is a(n) alias for pointer to a "
+                    "function which returns void and takes param(s) pointer to "
+                    "void and pointer to const struct devlink and bool and "
+                    "unsigned long int and pointer to const u8 and size_t"),
+      IsTrue());
+}
+
+TEST_F(ParserSuite, ParseLongUnsignedNoInt) {
+  char inputstr[] =
+      "extern long unsigned selinux_restorecon_get_skipped_errors(void);";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("selinux_restorecon_get_skipped_errors is a(n) function "
+                    "which returns long unsigned int  and takes no params and "
+                    "which has static storage duration and external linkage"),
+      IsTrue());
+}
+
+TEST_F(ParserSuite, ParseUnsignedLongInt) {
+  char inputstr[] =
+      "extern unsigned long int stdc_bit_floor_ul (unsigned long int __x);";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(
+      StdoutMatches(
+          "stdc_bit_floor_ul is a(n) function which returns long unsigned int "
+          "and takes param(s) __x is a(n) long unsigned int and which has "
+          "static storage duration and external linkage"),
+      IsTrue());
+}
+
+TEST_F(ParserSuite, ParseUnsignedLongNoInt) {
+  char inputstr[] = "typedef unsigned long snd_pcm_uframes_t;";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("snd_pcm_uframes_t is a(n) alias for unsigned long int"),
+      IsTrue());
+}
+
+TEST_F(ParserSuite, ParseLongLongNoInt) {
+  char inputstr[] = "volatile unsigned long long _argvec[11];";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(
+      StdoutMatches(
+          "_argvec is a(n) array of 11 long unsigned volatile long int"),
+      IsTrue());
 }

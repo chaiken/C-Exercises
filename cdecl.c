@@ -1175,6 +1175,10 @@ bool reclassified_qualifier(struct parser_props *parser) {
         strlcpy(parser->stack[cursor].string, "long int",
                 strlen("long int") + 1);
       }
+      if (!strcmp(parser->stack[cursor].string, "short")) {
+        strlcpy(parser->stack[cursor].string, "short int",
+                strlen("long int") + 1);
+      }
       parser->stack[cursor].kind = type;
       parser->have_type = true;
       return true;

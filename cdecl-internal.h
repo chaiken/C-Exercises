@@ -17,7 +17,6 @@ const char typechars[] = {'1', '2', '3', '4', '6', '8', 'a', 'b',
                           'n', 'o', 'r', 's', 't', 'u'};
 const char *types[] = {
     "char",
-    "short",
     "int",
     "float",
     "double",
@@ -73,9 +72,10 @@ const char *types[] = {
     "atomic_uintmax",
     "wchar_t",
 };
-const char *qualifiers[] = {"const",  "volatile", "static",   "*",
-                            "extern", "unsigned", "restrict", "atomic",
-                            "inline", "long"};
+const char *qualifiers[] = {
+    "const",    "volatile", "static", "*",    "extern", "unsigned",
+    "restrict", "atomic",   "inline", "long", "short",
+};
 enum token_class { invalid = 0, type, qualifier, identifier, length, typedefn };
 enum specifier_state { UNKNOWN, UNSPECIFIED, SPECIFIED };
 const char *kind_names[] = {"invalid",    "type",   "qualifier",

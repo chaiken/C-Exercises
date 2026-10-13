@@ -4458,3 +4458,10 @@ TEST_F(ParserSuite, ParseLongLongNoInt) {
           "_argvec is a(n) array of 11 long unsigned volatile long int"),
       IsTrue());
 }
+
+TEST_F(ParserSuite, ParseUnsignedShortInt) {
+  char inputstr[] = "typedef unsigned short int __u_short_t;";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("_u_short_t is a(n) alias for short unsigned int"),
+              IsTrue());
+}

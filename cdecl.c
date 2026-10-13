@@ -1208,13 +1208,15 @@ bool qualifier_is_compatible_with_type(const struct parser_props *parser,
   cursor = parser->stacklen - 1;
   while (cursor >= 0) {
     if (qualifier == parser->stack[cursor].kind) {
-      if (!strcmp(parser->stack[cursor].string, "unsigned")) {
+      if (!strcmp(parser->stack[cursor].string, "unsigned") ||
+          !strcmp(parser->stack[cursor].string, "signed")) {
         if (!strcmp(type, "char") || !strcmp(type, "short") ||
             !strcmp(type, "long") || !strcmp(type, "int")) {
           return true;
         } else {
           fprintf(parser->err_stream,
-                  "Type %s and qualifier unsigned are incompatible.\n", type);
+                  "Type %s and qualifier %s are incompatible.\n", type,
+                  parser->stack[cursor].string);
           return false;
         }
       }

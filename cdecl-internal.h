@@ -74,7 +74,7 @@ const char *types[] = {
 };
 const char *qualifiers[] = {
     "const",    "volatile", "static", "*",    "extern", "unsigned",
-    "restrict", "atomic",   "inline", "long", "short",
+    "restrict", "atomic",   "inline", "long", "short",  "signed",
 };
 enum token_class { invalid = 0, type, qualifier, identifier, length, typedefn };
 enum specifier_state { UNKNOWN, UNSPECIFIED, SPECIFIED };

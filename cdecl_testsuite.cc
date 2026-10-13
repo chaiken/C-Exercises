@@ -4465,3 +4465,18 @@ TEST_F(ParserSuite, ParseUnsignedShortInt) {
   EXPECT_THAT(StdoutMatches("_u_short_t is a(n) alias for short unsigned int"),
               IsTrue());
 }
+
+TEST_F(ParserSuite, ParseSignedChar) {
+  char inputstr[] = "typedef signed char               int_fast8_t;";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches("int_fast8_t is a(n) alias for signed char"),
+              IsTrue());
+}
+
+TEST_F(ParserSuite, ParseSignedFloat) {
+  char inputstr[] = "signed float nonsense;";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  EXPECT_THAT(
+      StderrMatches("Type float and qualifier signed are incompatible."),
+      IsTrue());
+}

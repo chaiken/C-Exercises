@@ -321,6 +321,38 @@ bool has_any_name_chars_before(const char *s, const char delimiter) {
   return has_any_name_chars(delimited);
 }
 
+/*
+ * Check if there are non-blank characters after an ellipsis, or if
+ * there is more than one ellipsis.  Variadic functions must have
+ * exactly one ellipsis, and only at the end.  Any non-blank
+ * characters preceding an ellipsis must be separated by a comma.
+ */
+bool has_any_nonblank_chars_after(char *s, const char delimiter) {
+  if (!(s && strlen(s))) {
+    return false;
+  }
+  char *delimp = NULL;
+  size_t delimlen = MAXTOKENLEN - 1;
+  char delimited[MAXTOKENLEN];
+  _cleanup_(freep) char *truncated = (char *)malloc(MAXTOKENLEN);
+  if (!tokenize_function_params(&truncated, s, delimiter)) {
+    return false;
+  }
+  delimp = strstr(truncated, "...");
+  if (!delimp)
+    return false;
+  /* "..." is the entire string. */
+  if (3 == strlen(delimp)) {
+    return false;
+  }
+  if ((strlen(delimp) - 3) < delimlen) {
+    delimlen = strlen(delimp) - 3;
+  }
+  memset(&delimited, '\0', MAXTOKENLEN);
+  strlcpy(delimited, delimp + 3, delimlen + 1);
+  return !(is_all_blanks(delimited));
+}
+
 /* A true return value means no errors. */
 bool check_for_array_dimensions(struct parser_props *parser,
                                 const char *offset_decl) {
@@ -1351,6 +1383,13 @@ bool load_next_secondary_param(struct parser_props *const current_parser,
   return true;
 }
 
+static void advance_past_whitespace(struct parser_props *parser,
+                                    const char *input) {
+  while (isblank(*(input + parser->cursor))) {
+    parser->cursor++;
+  }
+}
+
 /*
  * When processing a struct with a function pointer member with no
  * parameters, advance past "();". has_any_name_chars_before() is needed because
@@ -1403,6 +1442,30 @@ static bool next_separator_is_inside_delims(const struct parser_props *parser,
   return (startp < sepp);
 }
 
+enum variadic_state { V_NONE, V_VALID, V_ERROR };
+
+enum variadic_state check_for_variadic(struct parser_props *parser,
+                                       char *progress_ptr, bool is_last_param) {
+  char *ellipsisp = NULL;
+  _cleanup_(freep) char *first_non_blank = (char *)malloc(MAXTOKENLEN);
+  ellipsisp = strstr(progress_ptr, "...");
+  if (ellipsisp) {
+    if (has_any_nonblank_chars_after(ellipsisp, parser->end_delim) ||
+        has_any_name_chars_before(progress_ptr, '.')) {
+      fprintf(parser->err_stream,
+              "The declaration of a variadic function "
+              "uses an ellipsis only as the last parameter.\n");
+      return V_ERROR;
+    } else if (is_last_param) {
+      parser->cursor += trim_leading_whitespace(progress_ptr, first_non_blank);
+      /* for "..." */
+      parser->cursor += 3;
+      return V_VALID;
+    }
+  }
+  return V_NONE;
+}
+
 /*
  * Spawn a new parser for each function parameter or struct member and
  * link it into a list whose head is the top-level parser.  Note that
@@ -1414,7 +1477,6 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
   struct parser_props *params_parser = NULL;
   struct parser_props *tail_parser = get_tail_parser(parser);
   char *progress_ptr = NULL;
-  _cleanup_(freep) char *first_non_blank = (char *)malloc(MAXTOKENLEN);
   /*
    * Create a pointer which the code doesn't otherwise need as a peg
    * on which to hang the function's error handler.  The approach is
@@ -1430,6 +1492,7 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
   const char *final_err_string = parser->has_function_params
                                      ? "last function parameter"
                                      : "last struct or union member";
+  enum variadic_state v_state = V_NONE;
   if (!parser->has_function_params && !parser->has_struct_or_union_members) {
     return true;
   }
@@ -1447,6 +1510,21 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
     if (has_any_name_chars(progress_ptr)) {
       if (parser->end_delim && (parser->end_delim == *progress_ptr)) {
         break;
+      }
+      advance_past_whitespace(parser, user_input);
+      progress_ptr = user_input + parser->cursor;
+      /*
+       * Check for junk between the previous parameter and the delimiter.
+       * It's necessary to make an expection for "()" because otherwise function
+       * pointers, which have not yet been detected, will fail.
+       */
+      if (!(is_following_name_char(*progress_ptr) ||
+            (parser->separator == *progress_ptr) || ('(' == *progress_ptr) ||
+            (')' == *progress_ptr))) {
+        fprintf(parser->err_stream,
+                "Unexpected characters found before delimiter: %s\n",
+                progress_ptr);
+        return false;
       }
       advance_past_separator(parser, user_input);
       progress_ptr = user_input + parser->cursor;
@@ -1481,21 +1559,22 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
         return false;
       }
       progress_ptr = user_input + parser->cursor;
-      /*
-       * Since the ellipsis must come last in a function parameter list,
-       * any conformant declaration must be finished.
-       */
-      if (strstr(progress_ptr, "...")) {
-        params_parser->parent->is_variadic = true;
-        parser->cursor +=
-            trim_leading_whitespace(progress_ptr, first_non_blank);
-        /* for "..." */
-        parser->cursor += 3;
-        progress_ptr = user_input + parser->cursor;
-        return true;
-      }
       /* All done with struct, union or functions params or members. */
       if (!has_any_name_chars_before(progress_ptr, parser->end_delim)) {
+        /*
+         * Well-formed variadic expressions reach this point since the ellipsis
+         * comes last in the functions parameter list.
+         */
+        //        if (parser->parent && parser->parent->is_function) {
+        v_state = check_for_variadic(parser, progress_ptr, true);
+        if (V_ERROR == v_state) {
+          return false;
+        }
+        if (V_VALID == v_state) {
+          progress_ptr = user_input + parser->cursor;
+          params_parser->parent->is_variadic = true;
+        }
+        //        }
         break;
       }
 #ifdef DEBUG
@@ -1503,10 +1582,13 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
 #endif
     } else if (parser->has_function_params ||
                parser->has_struct_or_union_members) {
+      if (V_ERROR == check_for_variadic(parser, progress_ptr, false)) {
+        return false;
+      }
       /*
        * There is only one remaining parameter without a separator.
-       * While the trailing comma in a list of function parameters is optional,
-       * each struct member declaration must end with a semicolon.
+       * While the trailing comma in a list of function parameters is
+       * optional, each struct member declaration must end with a semicolon.
        * Pass progress_ptr rather than user_input since the params parser only
        * processes what's inside the delimiters.  Comma-separated declarator
        * lists may not have an end_delim.

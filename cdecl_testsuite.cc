@@ -3572,7 +3572,10 @@ TEST_F(ParserSuite, ParseNestedAnonymousUnionMismatchedDelimiters) {
 TEST_F(ParserSuite, ParseNestedAnonymousUnionMismatchedDelimiters2) {
   char inputstr[] = "struct v { int m; union u { int i; char *j; ) obj; };";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
-  EXPECT_THAT(StderrMatches("Failed to load last struct or union member  union "
+  EXPECT_THAT(StderrMatches("Expression ends with erroneous output:"),
+              IsTrue());
+  EXPECT_THAT(StderrMatches("char *j; ) obj;"), IsTrue());
+  EXPECT_THAT(StderrMatches("Failed to load last struct or union member union "
                             "u { int i; char *j; ) obj;"),
               IsTrue());
   release_parser_resources(&parser);
@@ -3589,9 +3592,11 @@ TEST_F(ParserSuite, ParseNestedStructMissingSemicolon) {
 TEST_F(ParserSuite, ParseNestedStructMissingSemicolon2) {
   char inputstr[] = "struct v { struct { int i; char *j; } obj; int m };";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
-  EXPECT_THAT(StderrMatches("Failed to load last struct or union member  "
-                            "struct { int i; char *j; } obj; int m"),
+  EXPECT_THAT(StderrMatches("Failed to process last struct or union member"),
               IsTrue());
+  EXPECT_THAT(StderrMatches("Failed to load last struct or union member"),
+              IsTrue());
+  EXPECT_THAT(StderrMatches("struct { int i; char *j; } obj; int m"), IsTrue());
   release_parser_resources(&parser);
 }
 
@@ -4484,26 +4489,60 @@ TEST_F(ParserSuite, ParseSignedFloat) {
 TEST_F(ParserSuite, ParseVariadic) {
   char inputstr[] = "extern long int syscall (long int __sysno, ...);";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
-  EXPECT_THAT(StdoutMatches(
-                  "syscall is a(n) variadic function which returns long int "
-                  "and which has static storage duration and external linkage"),
-              IsTrue());
+  EXPECT_THAT(parser.is_variadic, IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("syscall is a(n) variadic function which returns long int "
+                    "and takes param(s) __sysno is a(n) long int and which has "
+                    "static storage duration and external linkage"),
+      IsTrue());
 }
 
 // Okay in C23 per https://www.cppreference.com/c/language/variadic
 TEST_F(ParserSuite, ParseNoCharsFunctionParams) {
   char inputstr[] = "extern long int syscall (...);";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  EXPECT_THAT(parser.is_variadic, IsFalse());
   EXPECT_THAT(StderrMatches("No valid name characters found in ...)"),
               IsTrue());
 }
 
-TEST_F(ParserSuite, ParseBadVariadic) {
+TEST_F(ParserSuite, ParseMoreComplexVariadic) {
+  char inputstr[] =
+      "extern int execle (const char *__path, const char *__arg, ...);";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(parser.is_variadic, IsTrue());
+  EXPECT_THAT(
+      StdoutMatches("execle is a(n) variadic function which returns int and "
+                    "takes param(s) __path is a(n) pointer to const char and "
+                    "__arg is a(n) pointer to const char and which has static "
+                    "storage duration and external linkage"),
+      IsTrue());
+}
+
+TEST_F(ParserSuite, ParseBadVariadicTrailingParam) {
   char inputstr[] =
       "extern long int syscall (long int __sysno, ..., const int version);";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
-  EXPECT_THAT(
-      StderrMatches(
-          "Expression ends with erroneous output: , const int version)"),
-      IsTrue());
+  EXPECT_THAT(parser.is_variadic, IsFalse());
+  EXPECT_THAT(StderrMatches("Unexpected characters found before delimiter: "
+                            "..., const int version)"),
+              IsTrue());
+}
+
+TEST_F(ParserSuite, ParseBadVariadic2) {
+  char inputstr[] = "extern long int syscall (long int __sysno, ..., ...);";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  EXPECT_THAT(parser.is_variadic, IsFalse());
+  EXPECT_THAT(StderrMatches("The declaration of a variadic function uses an "
+                            "ellipsis only as the last parameter."),
+              IsTrue());
+}
+
+TEST_F(ParserSuite, ParseBadVariadic3) {
+  char inputstr[] = "extern long int syscall (char *start...);";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  EXPECT_THAT(parser.is_variadic, IsFalse());
+  EXPECT_THAT(StderrMatches("The declaration of a variadic function uses an "
+                            "ellipsis only as the last parameter."),
+              IsTrue());
 }

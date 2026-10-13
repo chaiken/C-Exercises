@@ -21,14 +21,19 @@ gcc -E "$1" | \
     grep -v include | \
     # exclude compiler attributes.
     grep -v __att | \
+    grep -v __extension__ | \
+    grep -v __THROW | \
+    grep -v __nonnull | \
+    grep -v asm | \
+    grep -v __builtin | \
     # Remove blank lines.
     tr -d "\n" | \
     sed -e 's/;/;\n/g' | \
     sed -e 's/([1-9])//g' | \
-    sed -e 's/__extension__//g' | \
     # collapse multiple spaces
-    sed -e 's/[[:space:]]+/ /g' | \
     sed -e 's/))//g' | \
+    sed -e 's/[[:blank:]]+//g' | \
+    sed -e 's/[[:cntrl:]]+;/;/g' | \
     # Read the content one line at a time by unsetting the Internal Field Separator.
     while IFS= read -r line; \
       do echo Input: "$line"; \

@@ -4480,3 +4480,22 @@ TEST_F(ParserSuite, ParseSignedFloat) {
       StderrMatches("Type float and qualifier signed are incompatible."),
       IsTrue());
 }
+
+TEST_F(ParserSuite, ParseVariadic) {
+  char inputstr[] = "extern long int syscall (long int __sysno, ...);";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches(
+                  "syscall is a(n) variadic function which returns long int "
+                  "and which has static storage duration and external linkage"),
+              IsTrue());
+}
+
+TEST_F(ParserSuite, ParseBadVariadic) {
+  char inputstr[] =
+      "extern long int syscall (long int __sysno, ..., const int version);";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  EXPECT_THAT(
+      StderrMatches(
+          "Expression ends with erroneous output: , const int version)"),
+      IsTrue());
+}

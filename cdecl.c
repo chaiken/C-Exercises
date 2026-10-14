@@ -128,6 +128,7 @@ void reset_parser(struct parser_props *parser) {
   parser->is_declarator_list = false;
   parser->is_inline = false;
   parser->is_comment = false;
+  parser->is_variadic = false;
   parser->has_enum_constants = false;
   parser->cursor = 0;
   parser->enumerator_list[0] = '\0';
@@ -1413,7 +1414,7 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
   struct parser_props *params_parser = NULL;
   struct parser_props *tail_parser = get_tail_parser(parser);
   char *progress_ptr = NULL;
-
+  _cleanup_(freep) char *first_non_blank = (char *)malloc(MAXTOKENLEN);
   /*
    * Create a pointer which the code doesn't otherwise need as a peg
    * on which to hang the function's error handler.  The approach is
@@ -1472,6 +1473,19 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
         return false;
       }
       progress_ptr = user_input + parser->cursor;
+      /*
+       * Since the ellipsis must come last in a function parameter list,
+       * any conformant declaration must be finished.
+       */
+      if (strstr(progress_ptr, "...")) {
+        params_parser->parent->is_variadic = true;
+        parser->cursor +=
+            trim_leading_whitespace(progress_ptr, first_non_blank);
+        /* for "..." */
+        parser->cursor += 3;
+        progress_ptr = user_input + parser->cursor;
+        return true;
+      }
       /* All done with struct, union or functions params or members. */
       if (!has_any_name_chars_before(progress_ptr, parser->end_delim)) {
         break;
@@ -2347,6 +2361,9 @@ bool pop_stack(struct parser_props *parser, bool no_enum_instance,
         fprintf(parser->out_stream, "inline ");
       }
       if (parser->is_function && (!parser->is_function_ptr)) {
+        if (parser->is_variadic) {
+          fprintf(parser->out_stream, "variadic ");
+        }
         fprintf(parser->out_stream, "function which returns ");
       }
       if (!handled_bitfield(parser)) {
@@ -3030,7 +3047,8 @@ size_t load_stack(struct parser_props *parser, char *user_input) {
   }
   if ((parser->cursor < strlen(user_input)) &&
       (has_any_name_chars(user_input + parser->cursor))) {
-    if ((parser->has_function_params && strchr(user_input, ')')) ||
+    if ((parser->has_function_params && strchr(user_input, ')') &&
+         (!parser->is_variadic)) ||
         (parser->has_struct_or_union_members && strchr(user_input, '}')) ||
         (parser->num_identifiers &&
          parser->ident.is_bitfield[parser->num_identifiers - 1])) {

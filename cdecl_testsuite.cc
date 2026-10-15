@@ -4490,6 +4490,13 @@ TEST_F(ParserSuite, ParseVariadic) {
               IsTrue());
 }
 
+TEST_F(ParserSuite, ParseMoreComplex) {
+  char inputstr[] =
+      "extern int execle (const char *__path, const char *__arg, ...)";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsTrue());
+  EXPECT_THAT(StdoutMatches(""), IsTrue());
+}
+
 TEST_F(ParserSuite, ParseBadVariadic) {
   char inputstr[] =
       "extern long int syscall (long int __sysno, ..., const int version);";

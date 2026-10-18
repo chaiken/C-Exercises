@@ -4490,6 +4490,14 @@ TEST_F(ParserSuite, ParseVariadic) {
               IsTrue());
 }
 
+// Okay in C23 per https://www.cppreference.com/c/language/variadic
+TEST_F(ParserSuite, ParseNoCharsFunctionParams) {
+  char inputstr[] = "extern long int syscall (...);";
+  ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
+  EXPECT_THAT(StderrMatches("No valid name characters found in ...)"),
+              IsTrue());
+}
+
 TEST_F(ParserSuite, ParseBadVariadic) {
   char inputstr[] =
       "extern long int syscall (long int __sysno, ..., const int version);";

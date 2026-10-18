@@ -1456,14 +1456,22 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
        */
       params_parser = make_parser(tail_parser);
       params_parser->parent = parser;
+    } else if (!params_parser) {
+      /*
+       * If functions parameters contain only non-name characters, no subsidiary
+       * parser is ever spawned.
+       */
+      fprintf(parser->err_stream,
+              "No valid name characters found in %s at %d\n", progress_ptr,
+              __LINE__);
+      return false;
     }
     /*
      * There may be more than one function parameter or struct member yet to
      * process.
      */
     if (!next_separator_is_inside_delims(parser, progress_ptr)) {
-      if (params_parser &&
-          !load_next_secondary_param(params_parser, progress_ptr,
+      if (!load_next_secondary_param(params_parser, progress_ptr,
                                      parser->separator, err_string)) {
         /*
          * Automated cleanup causes use-after-free when the parser is not the

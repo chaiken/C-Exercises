@@ -1854,6 +1854,97 @@ TEST_F(ParserSuite, SimpleFunction) {
   EXPECT_THAT(parser.stack[1].string, StrEq("sqrt"));
 }
 
+TEST_F(ParserSuite, SimpleFunctionBadParams) {
+  char user_input[MAXTOKENLEN];
+  const char *probe = "double sqrt(double .)";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input);
+  EXPECT_THAT(consumed, Eq(0));
+  EXPECT_THAT(StderrMatches("Failed to load last function parameter double ."),
+              IsTrue());
+  release_parser_resources(&parser);
+}
+
+TEST_F(ParserSuite, SimpleFunctionBadParams1) {
+  char user_input[MAXTOKENLEN];
+  const char *probe = "double sqrt(double .a)";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input);
+  EXPECT_THAT(consumed, Eq(0));
+  EXPECT_THAT(StderrMatches("Failed to load last function parameter double .a"),
+              IsTrue());
+  release_parser_resources(&parser);
+}
+
+TEST_F(ParserSuite, SimpleFunctionBadParams2) {
+  char user_input[MAXTOKENLEN];
+  const char *probe = "double sqrt(double a .)";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input);
+  EXPECT_THAT(consumed, Eq(0));
+  EXPECT_THAT(parser.is_function, IsFalse());
+  EXPECT_THAT(
+      StderrMatches("Expression ends with erroneous output: (double a .)"),
+      IsTrue());
+  release_parser_resources(&parser);
+}
+
+TEST_F(ParserSuite, SimpleFunctionBadParams3) {
+  char user_input[MAXTOKENLEN];
+  const char *probe = "double sqrt(double .)";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input);
+  EXPECT_THAT(consumed, Eq(0));
+  EXPECT_THAT(StderrMatches("Failed to load last function parameter double ."),
+              IsTrue());
+  release_parser_resources(&parser);
+}
+
+TEST_F(ParserSuite, SimpleFunctionBadParams4) {
+  char user_input[MAXTOKENLEN];
+  const char *probe = "double sqrt(.)";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input);
+  EXPECT_THAT(consumed, Eq(0));
+  EXPECT_THAT(StderrMatches("Expression ends with erroneous output:  sqrt(.)"),
+              IsTrue());
+  release_parser_resources(&parser);
+}
+
+TEST_F(ParserSuite, SimpleFunctionBadParams5) {
+  char user_input[MAXTOKENLEN];
+  const char *probe = "double sqrt(.a)";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input);
+  EXPECT_THAT(consumed, Eq(0));
+  EXPECT_THAT(StderrMatches("Expression ends with erroneous output:"),
+              IsTrue());
+  EXPECT_THAT(StderrMatches(" (.a)"), IsTrue());
+  release_parser_resources(&parser);
+}
+
+TEST_F(ParserSuite, SimpleFunctionBadParams6) {
+  char user_input[MAXTOKENLEN];
+  const char *probe = "double sqrt(a.)";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input);
+  EXPECT_THAT(consumed, Eq(0));
+  EXPECT_THAT(StderrMatches("Expression ends with erroneous output:"),
+              IsTrue());
+  EXPECT_THAT(StderrMatches(" (a.)"), IsTrue());
+  release_parser_resources(&parser);
+}
+
+TEST_F(ParserSuite, SimpleFunctionBadParams7) {
+  char user_input[MAXTOKENLEN];
+  const char *probe = "double sqrt(a,?)";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input);
+  EXPECT_THAT(consumed, Eq(0));
+  EXPECT_THAT(StderrMatches("Input lacks required type or element"), IsTrue());
+  release_parser_resources(&parser);
+}
+
 TEST_F(ParserSuite, SimpleFunctionBadDelims) {
   char user_input[MAXTOKENLEN];
   const char *probe = "double sqrt(";
@@ -4494,8 +4585,9 @@ TEST_F(ParserSuite, ParseVariadic) {
 TEST_F(ParserSuite, ParseNoCharsFunctionParams) {
   char inputstr[] = "extern long int syscall (...);";
   ASSERT_THAT(input_parsing_successful(&parser, inputstr), IsFalse());
-  EXPECT_THAT(StderrMatches("No valid name characters found in ...)"),
-              IsTrue());
+  EXPECT_THAT(
+      StderrMatches("Expression ends with erroneous output:  syscall (...)"),
+      IsTrue());
 }
 
 TEST_F(ParserSuite, ParseBadVariadic) {

@@ -398,6 +398,16 @@ bool check_for_function_ptr(struct parser_props *parser,
   return true;
 }
 
+void configure_parser_as_function(struct parser_props *parser) {
+  parser->is_function = true;
+  /* Reverse false interpretation of struct, union or enum return values. */
+  parser->is_struct_or_union = false;
+  parser->is_enum = false;
+  parser->start_delim = '(';
+  parser->end_delim = ')';
+  parser->separator = ',';
+}
+
 /* A true return value means no errors. */
 bool check_for_function_parameters(struct parser_props *parser,
                                    const char *offset_decl) {
@@ -414,18 +424,23 @@ bool check_for_function_parameters(struct parser_props *parser,
   if ('(' != *(offset_decl + trimnum)) {
     return true;
   }
+  trimnum++;
+  /* Empty parameter list is legal. */
+  if (')' == *(offset_decl + trimnum)) {
+    configure_parser_as_function(parser);
+    return true;
+  }
+  /* There is junk at the start of the function parameters. */
+  if (strlen(offset_decl + trimnum) &&
+      !has_any_name_chars(offset_decl + trimnum)) {
+    return false;
+  }
   const char *params_end = strstr(offset_decl + trimnum, ")");
   if (!params_end) {
     fprintf(parser->err_stream, "Malformed function declaration.\n");
     return false;
   }
-  parser->is_function = true;
-  /* Reverse false interpretation of struct, union or enum return values. */
-  parser->is_struct_or_union = false;
-  parser->is_enum = false;
-  parser->start_delim = '(';
-  parser->end_delim = ')';
-  parser->separator = ',';
+  configure_parser_as_function(parser);
   /* No function parameters since types are at least 3 chars long. */
   if (3 > (params_end - (offset_decl + trimnum))) {
     return true;

@@ -2495,6 +2495,20 @@ enum token_class get_kind(const char *intoken) {
   return identifier;
 }
 
+static bool is_allowed_char(const char nextchar) {
+  const char delimiters[] = {'[', ']', '{', '}', '(', ')', ',', ';', ':'};
+  if (is_following_name_char(nextchar) || (is_type_char(nextchar)) ||
+      (isblank(nextchar)) || ('*' == nextchar)) {
+    return true;
+  }
+  for (size_t i = 0; i < ARRAY_SIZE(delimiters); i++) {
+    if (delimiters[i] == nextchar) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /* Moves to the right through the declaration, returning one space- or
  * delimiter-separated token at a time.
  * The parameter this_token returns the next token in the string.
@@ -2532,7 +2546,7 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
     return 0;
   }
   if (num_remaining_chars > (MAXTOKENLEN - 1)) {
-    fprintf(stderr, "\nToken too long %s.\n", declstring);
+    fprintf(parser->err_stream, "\nToken too long %s.\n", declstring);
     return 0;
   }
   /* Bail out on comments. */
@@ -2643,6 +2657,9 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
           return 0;
         } else if ((',' == nextchar) && parser->is_declarator_list) {
           tokenoffset++;
+        } else if (!is_allowed_char(nextchar)) {
+          fprintf(parser->err_stream, "Nonsense char %c found\n", nextchar);
+          return 0;
         }
         break; /* end of if (is_following_name_char(nextchar)) */
       } else if (((trimnum == tokenoffset) || (0 == tokenoffset)) &&

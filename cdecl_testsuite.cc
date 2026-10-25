@@ -314,12 +314,12 @@ TEST_F(TokenizerSuite, IgnoreUnallowedCharsStdintNoType) {
 TEST_F(TokenizerSuite, IgnoreUnallowedCharsHasType) {
   parser.have_type = true;
   char input[] = "f&asdf";
-  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(1));
-  EXPECT_THAT(this_token.string, StrEq("f"));
-  EXPECT_THAT(this_token.kind, Eq(identifier));
+  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(0));
+  EXPECT_THAT(this_token.kind, Eq(invalid));
 }
 
 TEST_F(TokenizerSuite, IgnoreUnallowedCharsHasTypeBadFirst) {
+
   parser.have_type = true;
   char input[] = "2fasdf";
   EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(0));

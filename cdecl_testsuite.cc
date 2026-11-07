@@ -1859,7 +1859,7 @@ TEST_F(ParserSuite, SimpleFunctionBadParams) {
   const char *probe = "double sqrt(double .)";
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input);
-  EXPECT_THAT(consumed, Eq(0));
+  ASSERT_THAT(consumed, Eq(0));
   EXPECT_THAT(StderrMatches("Failed to load last function parameter double ."),
               IsTrue());
   release_parser_resources(&parser);
@@ -1870,7 +1870,7 @@ TEST_F(ParserSuite, SimpleFunctionBadParams1) {
   const char *probe = "double sqrt(double .a)";
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input);
-  EXPECT_THAT(consumed, Eq(0));
+  ASSERT_THAT(consumed, Eq(0));
   EXPECT_THAT(StderrMatches("Failed to load last function parameter double .a"),
               IsTrue());
   release_parser_resources(&parser);
@@ -1881,7 +1881,7 @@ TEST_F(ParserSuite, SimpleFunctionBadParams2) {
   const char *probe = "double sqrt(double a .)";
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input);
-  EXPECT_THAT(consumed, Eq(0));
+  ASSERT_THAT(consumed, Eq(0));
   EXPECT_THAT(parser.is_function, IsFalse());
   EXPECT_THAT(
       StderrMatches("Expression ends with erroneous output: (double a .)"),
@@ -1894,7 +1894,7 @@ TEST_F(ParserSuite, SimpleFunctionBadParams3) {
   const char *probe = "double sqrt(double .)";
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input);
-  EXPECT_THAT(consumed, Eq(0));
+  ASSERT_THAT(consumed, Eq(0));
   EXPECT_THAT(StderrMatches("Failed to load last function parameter double ."),
               IsTrue());
   release_parser_resources(&parser);
@@ -1905,7 +1905,7 @@ TEST_F(ParserSuite, SimpleFunctionBadParams4) {
   const char *probe = "double sqrt(.)";
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input);
-  EXPECT_THAT(consumed, Eq(0));
+  ASSERT_THAT(consumed, Eq(0));
   EXPECT_THAT(StderrMatches("Expression ends with erroneous output:  sqrt(.)"),
               IsTrue());
   release_parser_resources(&parser);
@@ -1913,35 +1913,53 @@ TEST_F(ParserSuite, SimpleFunctionBadParams4) {
 
 TEST_F(ParserSuite, SimpleFunctionBadParams5) {
   char user_input[MAXTOKENLEN];
-  const char *probe = "double sqrt(.a)";
+  const char *probe = "double sqrt(int .a)";
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input);
-  EXPECT_THAT(consumed, Eq(0));
-  EXPECT_THAT(StderrMatches("Expression ends with erroneous output:"),
-              IsTrue());
-  EXPECT_THAT(StderrMatches(" (.a)"), IsTrue());
+  ASSERT_THAT(consumed, Eq(0));
+  EXPECT_THAT(StderrMatches("Failed to load last function param"), IsTrue());
+  EXPECT_THAT(StderrMatches("int .a"), IsTrue());
   release_parser_resources(&parser);
 }
 
 TEST_F(ParserSuite, SimpleFunctionBadParams6) {
   char user_input[MAXTOKENLEN];
-  const char *probe = "double sqrt(a.)";
+  const char *probe = "double sqrt(int a.)";
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input);
-  EXPECT_THAT(consumed, Eq(0));
-  EXPECT_THAT(StderrMatches("Expression ends with erroneous output:"),
-              IsTrue());
-  EXPECT_THAT(StderrMatches(" (a.)"), IsTrue());
+  ASSERT_THAT(consumed, Eq(0));
+  EXPECT_THAT(StderrMatches("Failed to load last function param"), IsTrue());
+  EXPECT_THAT(StderrMatches("int a.)"), IsTrue());
   release_parser_resources(&parser);
 }
 
 TEST_F(ParserSuite, SimpleFunctionBadParams7) {
   char user_input[MAXTOKENLEN];
-  const char *probe = "double sqrt(a,?)";
+  const char *probe = "double sqrt(int a,?)";
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input);
-  EXPECT_THAT(consumed, Eq(0));
+  ASSERT_THAT(consumed, Eq(0));
   EXPECT_THAT(StderrMatches("Input lacks required type or element"), IsTrue());
+  release_parser_resources(&parser);
+}
+
+TEST_F(ParserSuite, SimpleFunctionBadParams8) {
+  char user_input[MAXTOKENLEN];
+  const char *probe = "double sqrt(int a?)";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input);
+  ASSERT_THAT(consumed, Eq(0));
+  EXPECT_THAT(StderrMatches("Input lacks required type or element"), IsTrue());
+  release_parser_resources(&parser);
+}
+
+TEST_F(ParserSuite, SimpleFunctionBadParams9) {
+  char user_input[MAXTOKENLEN];
+  const char *probe = "double sqrt(int a,const)";
+  strlcpy(user_input, probe, strlen(probe) + 1);
+  std::size_t consumed = load_stack(&parser, user_input);
+  ASSERT_THAT(consumed, Eq(0));
+  EXPECT_THAT(StderrMatches("Failed to load last function param"), IsTrue());
   release_parser_resources(&parser);
 }
 

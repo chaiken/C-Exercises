@@ -1511,6 +1511,12 @@ bool process_secondary_params(struct parser_props *parser, char *user_input) {
       }
       /* All done with struct, union or functions params or members. */
       if (!has_any_name_chars_before(progress_ptr, parser->end_delim)) {
+        if (parser->is_function && (parser->end_delim != *progress_ptr) &&
+            (!isblank(*progress_ptr))) {
+          fprintf(parser->err_stream,
+                  "Function parameters have trailing junk: %s\n", progress_ptr);
+          return false;
+        }
         break;
       }
 #ifdef DEBUG
@@ -2600,6 +2606,7 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
     }
     return tokenoffset;
   }
+  tokenoffset += trim_leading_whitespace(declstring + tokenoffset, trimmed);
   nextchar = *(declstring + tokenoffset);
   /* The token has multiple characters, so copy them all. */
   for (int copied_ctr = 0; copied_ctr < (int)(num_remaining_chars - trimnum);
@@ -2623,6 +2630,8 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
             parser->has_enum_constants = true;
             /* Move past curly braces. */
             tokenoffset++;
+            tokenoffset +=
+                trim_leading_whitespace(declstring + tokenoffset, trimmed);
             nextchar = *(declstring + tokenoffset);
             continue;
           }
@@ -2643,6 +2652,17 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
           return 0;
         } else if ((',' == nextchar) && parser->is_declarator_list) {
           tokenoffset++;
+        } else if (('(' == nextchar) || (')' == nextchar) ||
+                   ('[' == nextchar) || (']' == nextchar) ||
+                   (';' == nextchar) || ('{' == nextchar) ||
+                   ('}' == nextchar) || (';' == nextchar) ||
+                   (',' == nextchar) || (':' == nextchar) ||
+                   (isblank(nextchar))) {
+          break;
+        } else {
+          fprintf(parser->err_stream, "Junk trailing declaration: %s\n",
+                  declstring + tokenoffset);
+          return 0;
         }
         break; /* end of if (is_following_name_char(nextchar)) */
       } else if (((trimnum == tokenoffset) || (0 == tokenoffset)) &&
@@ -2656,6 +2676,9 @@ size_t gettoken(struct parser_props *parser, const char *declstring,
        * We are looking for a type but we might first see a qualifier composed
        * of name_chars.
        */
+      if ('*' == nextchar) {
+        break;
+      }
       if (!is_following_name_char(nextchar) && !is_type_char(nextchar)) {
         break;
       }

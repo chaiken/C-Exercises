@@ -314,9 +314,8 @@ TEST_F(TokenizerSuite, IgnoreUnallowedCharsStdintNoType) {
 TEST_F(TokenizerSuite, IgnoreUnallowedCharsHasType) {
   parser.have_type = true;
   char input[] = "f&asdf";
-  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(1));
-  EXPECT_THAT(this_token.string, StrEq("f"));
-  EXPECT_THAT(this_token.kind, Eq(identifier));
+  EXPECT_THAT(gettoken(&parser, input, &this_token), Eq(0));
+  EXPECT_THAT(this_token.kind, Eq(invalid));
 }
 
 TEST_F(TokenizerSuite, IgnoreUnallowedCharsHasTypeBadFirst) {
@@ -1882,9 +1881,9 @@ TEST_F(ParserSuite, SimpleFunctionBadParams2) {
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input);
   ASSERT_THAT(consumed, Eq(0));
-  EXPECT_THAT(parser.is_function, IsFalse());
+  EXPECT_THAT(StderrMatches("Junk trailing declaration:  ."), IsTrue());
   EXPECT_THAT(
-      StderrMatches("Expression ends with erroneous output: (double a .)"),
+      StderrMatches("Failed to load last function parameter double a ."),
       IsTrue());
   release_parser_resources(&parser);
 }
@@ -1929,7 +1928,7 @@ TEST_F(ParserSuite, SimpleFunctionBadParams6) {
   std::size_t consumed = load_stack(&parser, user_input);
   ASSERT_THAT(consumed, Eq(0));
   EXPECT_THAT(StderrMatches("Failed to load last function param"), IsTrue());
-  EXPECT_THAT(StderrMatches("int a.)"), IsTrue());
+  EXPECT_THAT(StderrMatches("int a."), IsTrue());
   release_parser_resources(&parser);
 }
 
@@ -1939,7 +1938,8 @@ TEST_F(ParserSuite, SimpleFunctionBadParams7) {
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input);
   ASSERT_THAT(consumed, Eq(0));
-  EXPECT_THAT(StderrMatches("Input lacks required type or element"), IsTrue());
+  EXPECT_THAT(StderrMatches("Function parameters have trailing junk: ?)"),
+              IsTrue());
   release_parser_resources(&parser);
 }
 
@@ -1949,7 +1949,9 @@ TEST_F(ParserSuite, SimpleFunctionBadParams8) {
   strlcpy(user_input, probe, strlen(probe) + 1);
   std::size_t consumed = load_stack(&parser, user_input);
   ASSERT_THAT(consumed, Eq(0));
-  EXPECT_THAT(StderrMatches("Input lacks required type or element"), IsTrue());
+  EXPECT_THAT(StderrMatches("Junk trailing declaration: ?"), IsTrue());
+  EXPECT_THAT(StderrMatches("Failed to load last function parameter int a?"),
+              IsTrue());
   release_parser_resources(&parser);
 }
 
@@ -2027,7 +2029,7 @@ TEST_F(ParserSuite, LoadStackCommaTerminatorFunction) {
   free(parser.next);
 }
 
-TEST_F(ParserSuite, LoadStackCommaTerminatorFunctionSpaces) {
+TEST_F(ParserSuite, LoadStackExtraComma) {
   char user_input[MAXTOKENLEN];
   const char *probe =
       "uint64_t hash( char *str,  uint64_t seed, size_t len,, )";
@@ -2035,28 +2037,9 @@ TEST_F(ParserSuite, LoadStackCommaTerminatorFunctionSpaces) {
 
   // tokenize_secondary_params() in process_secondary_params() overwrites the
   // first comma with NULL, dropping the rest of the string.
-  EXPECT_THAT(load_stack(&parser, user_input),
-              Eq(strlen(probe) - strlen(", )")));
-  show_parser_list(&parser, __LINE__);
-  ASSERT_THAT(parser.next, Not(IsNull()));
-  EXPECT_THAT(parser.next->next, Not(IsNull()));
-  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string uint64_t"),
+  EXPECT_THAT(load_stack(&parser, user_input), Eq(0));
+  EXPECT_THAT(StderrMatches("Function parameters have trailing junk: , )"),
               IsTrue());
-  EXPECT_THAT(
-      StdoutMatches("Token number 1 has kind identifier and string seed"),
-      IsTrue());
-  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string char"),
-              IsTrue());
-  EXPECT_THAT(StdoutMatches("Token number 1 has kind qualifier and string *"),
-              IsTrue());
-  EXPECT_THAT(
-      StdoutMatches("Token number 2 has kind identifier and string str"),
-      IsTrue());
-  EXPECT_THAT(StdoutMatches("Token number 0 has kind type and string uint64_t"),
-              IsTrue());
-  EXPECT_THAT(
-      StdoutMatches("Token number 1 has kind identifier and string hash"),
-      IsTrue());
   // Otherwise freed by pop_all().
   release_parser_resources(&parser);
 }

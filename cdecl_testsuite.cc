@@ -431,6 +431,7 @@ TEST(HandleTrailingDelimSuite, DelimWithSpaces) {
 /* finish_token() observes "enum " and sets parser.is_enum = true. */
 TEST(CheckForEnumerators, WellFormedSimple) {
   struct parser_props parser;
+  initialize_parser(&parser);
   const char *offset_decl = "State state";
   initialize_parser(&parser);
   parser.is_enum = true;
@@ -440,6 +441,7 @@ TEST(CheckForEnumerators, WellFormedSimple) {
 
 TEST(CheckForEnumerators, WellFormedEnumerators) {
   struct parser_props parser;
+  initialize_parser(&parser);
   const char *offset_decl = "State state { SOLID, LIQUID}";
   initialize_parser(&parser);
   parser.is_enum = true;
@@ -449,6 +451,7 @@ TEST(CheckForEnumerators, WellFormedEnumerators) {
 
 TEST(CheckForEnumerators, MismatchedDelims) {
   struct parser_props parser;
+  initialize_parser(&parser);
   const char *offset_decl = "State state {";
   initialize_parser(&parser);
   parser.is_enum = true;
@@ -703,6 +706,7 @@ bool reset_stream_is_ok(FILE *stream) {
 
 TEST(CheckForDeclaratorListTest, OneDeclarator) {
   struct parser_props parser;
+  initialize_parser(&parser);
   const char *user_input = "double hash[4]";
   check_for_declarator_list(&parser, user_input);
   EXPECT_THAT(parser.is_declarator_list, IsFalse());
@@ -710,6 +714,7 @@ TEST(CheckForDeclaratorListTest, OneDeclarator) {
 
 TEST(CheckForDeclaratorListTest, TwoDeclarators) {
   struct parser_props parser;
+  initialize_parser(&parser);
   const char *user_input = "double hash[4], sum";
   check_for_declarator_list(&parser, user_input);
   EXPECT_THAT(parser.is_declarator_list, IsTrue());
@@ -717,6 +722,7 @@ TEST(CheckForDeclaratorListTest, TwoDeclarators) {
 
 TEST(CheckForDeclaratorListTest, Function) {
   struct parser_props parser;
+  initialize_parser(&parser);
   const char *user_input = "double hash(uint64_t seed, const char *key)";
   check_for_declarator_list(&parser, user_input);
   EXPECT_THAT(parser.is_declarator_list, IsFalse());
@@ -724,6 +730,7 @@ TEST(CheckForDeclaratorListTest, Function) {
 
 TEST(CheckForDeclaratorListTest, DeclaratorAndFunctionLast) {
   struct parser_props parser;
+  initialize_parser(&parser);
   const char *user_input =
       "double sum, hash(uint64_t seed, const char *key, uint8_t flags)";
   check_for_declarator_list(&parser, user_input);
@@ -732,6 +739,7 @@ TEST(CheckForDeclaratorListTest, DeclaratorAndFunctionLast) {
 
 TEST(CheckForDeclaratorListTest, DeclaratorAndFunctionFirst) {
   struct parser_props parser;
+  initialize_parser(&parser);
   const char *user_input =
       "double hash(uint64_t seed, const char *key, uint8_t flags), sum";
   check_for_declarator_list(&parser, user_input);
@@ -740,6 +748,7 @@ TEST(CheckForDeclaratorListTest, DeclaratorAndFunctionFirst) {
 
 TEST(CheckForDeclaratorListTest, FunctionPtr) {
   struct parser_props parser;
+  initialize_parser(&parser);
   const char *user_input = "int (*open) (struct inode *blk, struct file *dir);";
   check_for_declarator_list(&parser, user_input);
   EXPECT_THAT(parser.is_declarator_list, IsFalse());
@@ -747,6 +756,7 @@ TEST(CheckForDeclaratorListTest, FunctionPtr) {
 
 TEST(CheckForDeclaratorListTest, Enum) {
   struct parser_props parser;
+  initialize_parser(&parser);
   const char *user_input = "enum State {GAS, LIQUID}";
   check_for_declarator_list(&parser, user_input);
   EXPECT_THAT(parser.is_declarator_list, IsFalse());
@@ -754,6 +764,7 @@ TEST(CheckForDeclaratorListTest, Enum) {
 
 TEST(CheckForDeclaratorListTest, Bitfields) {
   struct parser_props parser;
+  initialize_parser(&parser);
   const char *user_input = "bool rx_support:1, tx_support:1;";
   check_for_declarator_list(&parser, user_input);
   EXPECT_THAT(parser.is_declarator_list, IsTrue());
